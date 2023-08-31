@@ -22,6 +22,8 @@ import { Owned } from "./abstract/Owned.sol";
 // TODO: How to handle rev shares?
 // TODO: Who is the owner of the contract? Creator or Tangible?
 // TODO: How is rent sent to this contract? Time basis? What asset?
+// TODO: How to handle storage? Does this contract have to pay for storage?
+// TODO: Are there any other rewards besides rent? If a deposit happens we should auto claim their other rewards for them
 
 // NOTE: Make sure rev share and rent managers are updated properly
 // NOTE: Test how proxy contracts can be implemented.
@@ -66,6 +68,9 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     event DepositedTNFT(address prevOwner, address indexed tnft, uint256 indexed tokenId);
 
+    event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
+
+
 
     // ~ Constructor ~
 
@@ -93,7 +98,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @notice This method allows a user to deposit their TNFT in exchange for Basket tokens.
      */
-    function depositNft(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
+    function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         // TODO: Require _tangibleNFT's tnfttype is == to tnftType
         // TODO: Verify token is of safe feature or type

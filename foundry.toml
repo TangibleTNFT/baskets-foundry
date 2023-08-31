@@ -7,6 +7,7 @@ libs = ["lib"]
 
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@openzeppelin-upgrades/=lib/openzeppelin-contracts/openzeppelin-contracts-upgradeable",
     "@tangible/=lib/contracts-inside-team/contracts",
     "@chainlink/=lib/chainlink"
-    ]
+]
