@@ -9,6 +9,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { Basket } from "../src/Baskets.sol";
 import { BasketDeployer } from "../src/BasketsDeployer.sol";
 import "./MumbaiAddresses.sol";
+import "./Utility.sol";
 
 // tangible contract imports
 import { FactoryProvider } from "@tangible/FactoryProvider.sol";
@@ -31,34 +32,6 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
-
-interface ITangibleNFTExt is ITangibleNFT {
-    /// @dev Returns the feature status of a `tokenId`.
-    function tokenFeatureAdded (uint256 tokenId, uint256 feature) external view returns (FeatureInfo memory);
-    function getFingerprintsSize() external view returns (uint256);
-    function getFingerprints() external view returns (uint256[] memory);
-}
-
-interface IPriceOracleExt {
-    function updateStock(uint256 fingerprint, uint256 weSellAtStock) external;
-    function setTangibleWrapperAddress(address oracle) external;
-    function createItem(
-        uint256 fingerprint,
-        uint256 weSellAt,
-        uint256 lockedAmount,
-        uint256 weSellAtStock,
-        uint16 currency,
-        uint16 location
-    ) external;
-}
-
-interface IFactoryExt {
-    function setRequireWhitelistCategory(ITangibleNFT tnft, bool required) external;
-}
-
-interface IPriceManagerExt {
-    function oracleForCategory(ITangibleNFT) external returns (IPriceOracle);
-}
 
 contract MumbaiBasketsTest is Test {
     Basket public basket;
@@ -87,11 +60,17 @@ contract MumbaiBasketsTest is Test {
 
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
 
+    // ~ Types and Features ~
+
     uint256 public constant RE_TNFTTYPE = 2;
+
     uint256 public constant RE_FINGERPRINT_1 = 2032;
     uint256 public constant RE_FINGERPRINT_2 = 2033;
     uint256 public constant RE_FINGERPRINT_3 = 2034;
     uint256 public constant RE_FINGERPRINT_4 = 2084;
+
+    uint256 public constant RE_FEATURE_1 = 5555;
+    uint256 public constant RE_FEATURE_2 = 4444;
     
     uint256 public constant GOLD_TNFTTYPE = 1;
 
@@ -128,6 +107,19 @@ contract MumbaiBasketsTest is Test {
             1,            // stock
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
             uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        );
+        vm.stopPrank();
+
+        vm.startPrank(factoryOwner);
+        // add feature to metadata contract
+        ITNFTMetadataExt(address(metadata)).addFeatures(
+            _asSingletonArrayUint(RE_FEATURE_1),
+            _asSingletonArrayString("Beach Homes")
+        );
+        // add feature to TNFTtype in metadata contract
+        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(
+            RE_TNFTTYPE,
+            _asSingletonArrayUint(RE_FEATURE_1)
         );
         vm.stopPrank();
 
@@ -168,6 +160,33 @@ contract MumbaiBasketsTest is Test {
 
     // ~ Utility ~
 
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayString(string memory element) private pure returns (string[] memory) {
+        string[] memory array = new string[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice This method adds feature metadata to a tokenId on a tnft contract
+    function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256 _feature) public {
+        vm.prank(TANGIBLE_LABS);
+        // add feature to tnft contract
+        ITangibleNFTExt(_tnft).addMetadata(
+            _tokenId,
+            _asSingletonArrayUint(_feature)
+        );
+    }
+
+    /// @notice This method runs through the same USDValue logic as the Basket::depositTNFT
     function _emitGetUsdValueOfNft(address _tnft, uint256 _tokenId) internal {
         
         // ~ get Tnft Native Value ~
@@ -232,6 +251,9 @@ contract MumbaiBasketsTest is Test {
 
     // ~ Unit Tests ~
 
+
+    // Note: Deposit Functionality ----
+
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_mumbai_depositTNFT() public {
 
@@ -266,24 +288,93 @@ contract MumbaiBasketsTest is Test {
         assertEq(deposited[0].tokenId, 1);
     }
 
-    // TODO: Test addFeatureSupport
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    function test_mumbai_depositTNFT_feature() public {
+        basket.addFeatureSupport(RE_FEATURE_1);
 
+        // Pre-state check
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+
+        // Execute a deposit
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        vm.expectRevert("TNFT missing features");
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+
+        // add feature to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
+
+        // Execute a deposit
+        vm.startPrank(JOE);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+    }
+
+
+    // Note: Feature Management ----
+
+    /// @notice This verifies state changes and restrictions for addFeatureSupport()
     function test_mumbai_addFeatureSupport() public {
-        uint256 _feature = 111;
 
         // Pre-state check.
-        assertEq(basket.featureSupported(_feature), false);
+        assertEq(basket.featureSupported(RE_FEATURE_1), false);
         uint256[] memory features = basket.getFeaturesSupported();
         assertEq(features.length, 0);
 
         // Execute addFeatureSupport
-        basket.addFeatureSupport(_feature);
+        basket.addFeatureSupport(RE_FEATURE_1);
 
         // Post-state check.
-        assertEq(basket.featureSupported(_feature), true);
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
         features = basket.getFeaturesSupported();
         assertEq(features.length, 1);
-        assertEq(features[0], _feature);
+        assertEq(features[0], RE_FEATURE_1);
+    }
+
+    /// @notice This verifies state changes and restrictions for addFeatureSupport()
+    function test_mumbai_addFeatureSupport_afterDeposit() public {
+
+        // Pre-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), false);
+        uint256[] memory features = basket.getFeaturesSupported();
+        assertEq(features.length, 0);
+
+        // Joe makes deposit of TNFT
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Add feature whilst basket holds incompatible TNFT - > reverts
+        vm.expectRevert("Incompatible TNFT in Basket");
+        basket.addFeatureSupport(RE_FEATURE_1);
+
+        // Post-state check 1.
+        assertEq(basket.featureSupported(RE_FEATURE_1), false);
+        features = basket.getFeaturesSupported();
+        assertEq(features.length, 0);
+
+        // Add feature to TNFT contract
+        _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
+
+        // Add feature -> success
+        basket.addFeatureSupport(RE_FEATURE_1);
+
+        // Post-state check 2.
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        features = basket.getFeaturesSupported();
+        assertEq(features.length, 1);
+
     }
 
     // TODO: Test removeFeatureSupport

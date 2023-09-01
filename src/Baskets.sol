@@ -8,7 +8,7 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
+import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -23,8 +23,9 @@ import { Owned } from "./abstract/Owned.sol";
 // TODO: How to handle rev shares?
 // TODO: Who is the owner of the contract? Creator or Tangible?
 // TODO: How is rent sent to this contract? Time basis? What asset?
-// TODO: How to handle storage? Does this contract have to pay for storage?
-// TODO: Are there any other rewards besides rent? If a deposit happens we should auto claim their other rewards for them
+// TODO: How to handle storage? Does this contract have to pay for storage? TBA
+// TODO: Are there any other rewards besides rent? No
+// TODO: How to handle total value? TBA
 
 // NOTE: Make sure rev share and rent managers are updated properly
 // NOTE: Test how proxy contracts can be implemented.
@@ -50,7 +51,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     uint256 public immutable tnftType;
 
-    uint256[] public supportedFeatures; // supported features
+    uint256[] public supportedFeatures;
 
     mapping(uint256 => bool) public featureSupported;
 
@@ -62,8 +63,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     address[] public supportedRentToken; // rent token list
 
-    uint256 public totalValueOfTNFTs;
-
     ICurrencyFeedV2 public currencyFeed;
 
     ITNFTMetadata public metadata;
@@ -74,6 +73,10 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     event DepositedTNFT(address prevOwner, address indexed tnft, uint256 indexed tokenId);
 
     event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
+
+    event featureSupportAdded(uint256 feature);
+
+    event featureSupportRemoved(uint256 feature);
 
 
 
@@ -107,13 +110,28 @@ contract Basket is ERC20, FactoryModifiers, Owned {
      */
     function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
-        require(ITangibleNFT(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
+        require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
-        if(supportedFeatures.length != 0) {
-            // TODO: Verify token is of safe feature or type
+        uint256 length = supportedFeatures.length;
+        if(length > 0) {
+            // if contract supports features, make sure tokenId has a supported feature
+            bool supported;
+            for (uint256 i; i < length;) {
+                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
+                if (featureData.added) {
+                    supported = true;
+                    break;
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+            require(supported, "TNFT missing features");
         }
 
-        uint256 usdValue = _getUSDValueOfTnft(_tangibleNFT, _tokenId);
+        (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, _tokenId);
+
+        uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
 
         uint256 sharePrice = getSharePrice();
@@ -125,9 +143,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         tokenDeposited[_tangibleNFT][_tokenId] = true;
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId));
 
-        (string memory currency, uint256 value, uint8 decimals) = _getTnftNativeValue(_tangibleNFT, _tokenId);
-
-        currencyBalance[currency] += (value * 1e18) / 10 ** decimals;
+        currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals;
         if (!currencySupported[currency]) {
             currencySupported[currency] = true;
             supportedCurrency.push(currency);
@@ -145,23 +161,64 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         
     }
 
+    /**
+     * @notice This method adds a feature subcategory to this Basket.
+     */
     function addFeatureSupport(uint256 _feature) external onlyOwner {
         require(!featureSupported[_feature], "Feature already supported");
         require(metadata.featureInType(tnftType, _feature), "Feature not supported in type");
 
+        // Verify tokens that are already in basket have feature
+        for (uint256 i; i < depositedTnfts.length;) {
+            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[i].tnft).tokenFeatureAdded(
+                depositedTnfts[i].tokenId,
+                _feature
+            );
+            require (featureData.added, "Incompatible TNFT in Basket");
+            unchecked {
+                ++i;
+            }
+        }
+
         supportedFeatures.push(_feature);
         featureSupported[_feature] = true;
 
-        // TODO: Add event
+        emit featureSupportAdded(_feature);
     }
 
     function removeFeatureSupport(uint256 _feature) external onlyOwner {
-        // ensure it's already supported
-        // ensure there are no basket tokens in this contract that have this feature
-        // remove it to array of supported
-        // remove it from mapping
+        require(featureSupported[_feature], "Feature already supported");
 
-        // TODO: Add event
+        // find where feautre exists in suppotedFeatures array
+        (uint256 index,) = _isSupportedFeature(_feature);
+        uint256 lengthFeatures = supportedFeatures.length;
+
+        // remove feature from array
+        supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
+        supportedFeatures.pop();
+
+        // set feature is no longer supported
+        featureSupported[_feature] = false;
+
+        // if there are still features in the array, ensure all TNFT features are supported
+        lengthFeatures = supportedFeatures.length; // update
+        if(length > 0) {
+            for (uint256 i; i < depositedTnfts.length;) {
+                // for each token, make sure it's feature is supported
+                uint256[] memory features = ITangibleNFT(depositedTnfts[i].tnft).getTokenFeatures(tokenId); // TODO: Revisit
+                for (uint256 j; j < features.length;) {
+                    require(featureSupported[features[i]], "Incompatible TNFT");
+                    unchecked {
+                        ++j;
+                    }
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        emit featureSupportRemoved(_feature);
     }
 
     function modifyRentTokenSupport(address _token, bool _support) external onlyFactoryOwner { // TODO: TEST
@@ -175,11 +232,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             supportedRentToken[index] = supportedRentToken[supportedRentToken.length - 1];
             supportedRentToken.pop();
         }
-    }
-
-    /// NOTE: TESTING PURPOSES ONLY
-    function updateTotalValue(uint256 _totalValue) external onlyOwner {
-        totalValueOfTNFTs = _totalValue;
     }
 
     /**
@@ -212,8 +264,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             }
         }
 
-        collateralValue += totalValueOfTNFTs;
-
         // Get value of all rent accrued by this contract
         for (uint256 i; i < supportedRentToken.length;) {
             IERC20Metadata rentToken = IERC20Metadata(supportedRentToken[i]);
@@ -239,14 +289,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
 
     // ~ Internal Functions ~
-
-    /**
-     * @dev Get FingerPrint and USD value of given token id
-     */
-    function _getUSDValueOfTnft(address _tangibleNFT, uint256 _tnftTokenId) internal returns (uint256 usdValue) { //view
-        (string memory currency, uint256 value, uint8 decimals) = _getTnftNativeValue(_tangibleNFT, _tnftTokenId);
-        usdValue = _getUSDValue(currency, value, decimals);
-    }
 
     /**
      * @dev Get value of TNFT in native currency
@@ -292,6 +334,13 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     function _isSupportedRentToken(address _token) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < supportedRentToken.length;) {
             if (supportedRentToken[i] == _token) return (i, true);
+        }
+        return (0, false);
+    }
+
+    function _isSupportedFeature(uint256 _feature) internal view returns (uint256 index, bool exists) {
+        for(uint256 i; i < supportedFeatures.length;) {
+            if (supportedFeatures[i] == _feature) return (i, true);
         }
         return (0, false);
     }
