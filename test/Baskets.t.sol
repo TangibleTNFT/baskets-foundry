@@ -17,6 +17,7 @@ import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.so
 import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
 import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
 import { TNFTMarketplaceV2 } from "@tangible/MarketplaceV2.sol";
+import { TangibleNFTDeployerV2 } from "@tangible/TangibleNFTDeployerV2.sol";
 
 // tangible interface imports
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
@@ -29,6 +30,8 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
 // chainlinkRWAOracle -> 0x731209585143011778C56BDfaAf87d341adE7C07
 
+// Polygon RPC: https://rpc.ankr.com/polygon
+
 interface ITangibleOracle {
     function createItem(
         uint256 fingerprint,
@@ -38,6 +41,13 @@ interface ITangibleOracle {
         uint16 currency,
         uint16 location
     ) external;
+    function transferOwnership(
+        address to
+    ) external;
+    function setTangibleWrapperAddress(
+        address oracleWrapper
+    ) external;
+    function acceptOwnership() external;
 }
 
 contract BasketsTest is Test {
@@ -52,6 +62,7 @@ contract BasketsTest is Test {
     TangiblePriceManagerV2 public priceManager;
     RealtyOracleTangibleV2 public realEstateOracle;
     TNFTMarketplaceV2 public marketplace;
+    TangibleNFTDeployerV2 public tnftDeployer;
 
     address public constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 
@@ -84,6 +95,11 @@ contract BasketsTest is Test {
         factoryProvider = new FactoryProvider();
         factoryProvider.initialize(address(factory));
 
+        // Deplot tnft deployer
+        tnftDeployer = new TangibleNFTDeployerV2(
+            address(factoryProvider)
+        );
+
         // Deploy Marketplace
         marketplace = new TNFTMarketplaceV2(
             address(factoryProvider)
@@ -111,6 +127,7 @@ contract BasketsTest is Test {
             address(factoryProvider)
         );
 
+        // Deploy TangibleNFTV2
         tnft = new TangibleNFTV2(
             address(factoryProvider),
             "TangibleREstate",
@@ -122,13 +139,14 @@ contract BasketsTest is Test {
             TNFTTYPE
         );
 
-        // Deploy basket
+        // Deploy Basket
         basket = new Basket(
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),
-            1, // tnftType
-            address(currencyFeed)
+            TNFTTYPE,
+            address(currencyFeed),
+            address(metadata)
         );
 
 
@@ -138,35 +156,51 @@ contract BasketsTest is Test {
         factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER, address(priceManager));
         factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META, address(metadata));
         factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE, address(marketplace));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER, address(tnftDeployer));
 
-        factory.setCategory(
+        metadata.addTNFTType(
+            TNFTTYPE,
+            "RealEstateType1",
+            false // TODO: Revisit -> This should be true -> Will deploy rent manager
+        );
+
+        vm.prank(TANGIBLE_LABS);
+        ITangibleNFT newTnft = factory.newCategory(
             "TangibleREstate",
-            ITangibleNFT(address(tnft)),
-            IRentManager(address(888)), // TODO: Revisit -> rentManager
+            "RLTY",
+            BASE_URI,
+            false,
+            false,
             address(realEstateOracle),
-            address(this)
+            false,
+            TNFTTYPE
         );
 
-        tnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
+        newTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
 
-        vm.prank(TANGIBLE_ORACLE_OWNER);
+        vm.startPrank(TANGIBLE_ORACLE_OWNER);
+        // ITangibleOracle(TANGIBLE_ORACLE).transferOwnership(TANGIBLE_LABS);
+        // vm.startPrank(TANGIBLE_LABS);
+        // ITangibleOracle(TANGIBLE_ORACLE).acceptOwnership();
+        ITangibleOracle(TANGIBLE_ORACLE).setTangibleWrapperAddress(address(realEstateOracle));
         ITangibleOracle(TANGIBLE_ORACLE).createItem(
-            FINGERPRINT, // fingerprint
-            50000000,    // weSellAt
-            0,           // lockedAmount
-            1,           // stock
-            uint16(826),         // currency -> GBP ISO NUMERIC CODE TODO: VERIFY
-            uint16(136)          // country -> Cayman Islands, UK ISO NUMERIC CODE TODO: VERIFY
+            FINGERPRINT,  // fingerprint
+            50000000,     // weSellAt
+            0,            // lockedAmount
+            1,            // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE TODO: VERIFY
+            uint16(136)   // country -> Cayman Islands, UK ISO NUMERIC CODE TODO: VERIFY
         );
+        vm.stopPrank();
 
         IVoucher.MintVoucher memory voucher = IVoucher.MintVoucher(
-            ITangibleNFT(address(tnft)),   // token
-            1,                             // mintCount
-            1,                             // price     // TODO: Verify
-            TANGIBLE_LABS,                 // vendor
-            JOE,                           // buyer
-            FINGERPRINT,                   // fingerprint
-            true                           // sendToVender
+            ITangibleNFT(address(newTnft)),  // token
+            1,                               // mintCount
+            1,                               // price     // TODO: Verify
+            TANGIBLE_LABS,                   // vendor
+            JOE,                             // buyer
+            FINGERPRINT,                     // fingerprint
+            true                             // sendToVender
         );
 
         vm.prank(TANGIBLE_LABS);
@@ -189,13 +223,13 @@ contract BasketsTest is Test {
     // ~ Initial State Test ~
 
     /// @notice Initial state test.
-    function test_basket_init_state() public {}
+    function test_mainnet_init_state() public {}
 
 
     // ~ Unit Tests ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_baskets_depositTNFT() public {
+    function test_mainnet_depositTNFT() public {
         assertTrue(true);
     }
 
