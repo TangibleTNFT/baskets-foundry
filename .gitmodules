@@ -8,7 +8,7 @@
 
 [submodule "lib/contacts-inside-team"]
 	path = lib/contracts-inside-team
-	url = https://github.com/TangibleTNFT/contracts-inside-team/tree/auditFractions/contracts
+	url = https://github.com/TangibleTNFT/contracts-inside-team/tree/auditFractions/
 
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
