@@ -26,6 +26,8 @@ import { Owned } from "./abstract/Owned.sol";
 // TODO: How to handle storage? Does this contract have to pay for storage? TBA
 // TODO: Are there any other rewards besides rent? No
 // TODO: How to handle total value? TBA
+// TODO: If the contract supports a feature, it does not supercede the tnftType correct?
+    // meaning... even if I support a feature, it's all the same type, just a subcategory of that type.
 
 // NOTE: Make sure rev share and rent managers are updated properly
 // NOTE: Test how proxy contracts can be implemented.
@@ -51,9 +53,9 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     uint256 public immutable tnftType;
 
-    uint256[] public supportedFeatures;
-
     mapping(uint256 => bool) public featureSupported;
+
+    bool public activelySupportingFeature;
 
     string[] public supportedCurrency;
 
@@ -74,9 +76,9 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
 
-    event featureSupportAdded(uint256 feature);
+    event FeatureSupportAdded(uint256 feature);
 
-    event featureSupportRemoved(uint256 feature);
+    event FeatureSupportRemoved(uint256 feature);
 
 
 
@@ -112,13 +114,12 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
-        uint256 length = supportedFeatures.length;
-        if(length > 0) {
+        if(activelySupportingFeature) {
             // if contract supports features, make sure tokenId has a supported feature
+            uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
             bool supported;
-            for (uint256 i; i < length;) {
-                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-                if (featureData.added) {
+            for (uint256 i; i < features.length;) {
+                if (featureSupported[features[i]]) {
                     supported = true;
                     break;
                 }
@@ -126,7 +127,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
                     ++i;
                 }
             }
-            require(supported, "TNFT missing features");
+            require(supported, "TNFT missing feature");
         }
 
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, _tokenId);
@@ -165,60 +166,41 @@ contract Basket is ERC20, FactoryModifiers, Owned {
      * @notice This method adds a feature subcategory to this Basket.
      */
     function addFeatureSupport(uint256 _feature) external onlyOwner {
-        require(!featureSupported[_feature], "Feature already supported");
+        require(!activelySupportingFeature, "Feature already supported");
         require(metadata.featureInType(tnftType, _feature), "Feature not supported in type");
+
+        activelySupportingFeature = true;
+        featureSupported[_feature] = true;
 
         // Verify tokens that are already in basket have feature
         for (uint256 i; i < depositedTnfts.length;) {
-            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[i].tnft).tokenFeatureAdded(
-                depositedTnfts[i].tokenId,
-                _feature
-            );
-            require (featureData.added, "Incompatible TNFT in Basket");
+            uint256[] memory features = ITangibleNFT(depositedTnfts[i].tnft).getTokenFeatures(depositedTnfts[i].tokenId);
+            bool supported;
+            for (uint256 j; j < features.length;) {
+                if (featureSupported[features[j]]) {
+                    supported = true;
+                    break;
+                }
+                unchecked {
+                    ++j;
+                }
+            }
+            require(supported, "Incompatible TNFT in Basket");
             unchecked {
                 ++i;
             }
         }
 
-        supportedFeatures.push(_feature);
-        featureSupported[_feature] = true;
-
-        emit featureSupportAdded(_feature);
+        emit FeatureSupportAdded(_feature);
     }
 
     function removeFeatureSupport(uint256 _feature) external onlyOwner {
-        require(featureSupported[_feature], "Feature already supported");
+        require(featureSupported[_feature], "Feature not supported");
 
-        // find where feautre exists in suppotedFeatures array
-        (uint256 index,) = _isSupportedFeature(_feature);
-        uint256 lengthFeatures = supportedFeatures.length;
-
-        // remove feature from array
-        supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
-        supportedFeatures.pop();
-
-        // set feature is no longer supported
+        activelySupportingFeature = false;
         featureSupported[_feature] = false;
 
-        // if there are still features in the array, ensure all TNFT features are supported
-        lengthFeatures = supportedFeatures.length; // update
-        if(length > 0) {
-            for (uint256 i; i < depositedTnfts.length;) {
-                // for each token, make sure it's feature is supported
-                uint256[] memory features = ITangibleNFT(depositedTnfts[i].tnft).getTokenFeatures(tokenId); // TODO: Revisit
-                for (uint256 j; j < features.length;) {
-                    require(featureSupported[features[i]], "Incompatible TNFT");
-                    unchecked {
-                        ++j;
-                    }
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        emit featureSupportRemoved(_feature);
+        emit FeatureSupportRemoved(_feature);
     }
 
     function modifyRentTokenSupport(address _token, bool _support) external onlyFactoryOwner { // TODO: TEST
@@ -283,8 +265,8 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         return depositedTnfts;
     }
 
-    function getFeaturesSupported() public view returns (uint256[] memory) {
-        return supportedFeatures;
+    function getSupportedRentTokens() public view returns (address[] memory) {
+        return supportedRentToken;
     }
 
 
@@ -334,13 +316,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     function _isSupportedRentToken(address _token) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < supportedRentToken.length;) {
             if (supportedRentToken[i] == _token) return (i, true);
-        }
-        return (0, false);
-    }
-
-    function _isSupportedFeature(uint256 _feature) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < supportedFeatures.length;) {
-            if (supportedFeatures[i] == _feature) return (i, true);
         }
         return (0, false);
     }

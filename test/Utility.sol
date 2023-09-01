@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
+address constant USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
 
 interface ITangibleNFTExt is ITangibleNFT {
     /// @dev Returns the feature status of a `tokenId`.

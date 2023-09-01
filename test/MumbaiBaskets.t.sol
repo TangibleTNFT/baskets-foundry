@@ -49,15 +49,12 @@ contract MumbaiBasketsTest is Test {
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
 
+    // ~ Actors ~
 
-    // Actors
     address public constant JOE = address(bytes20(bytes("Joe")));
-    address public constant ADMIN = address(bytes20(bytes("Admin")));
-    //address public constant TANGIBLE_LABS = address(bytes20(bytes("Tangible Labs Multisig")));
-
+    //address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public factoryOwner = IOwnable(address(factoryV2)).contractOwner();
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
-
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
 
     // ~ Types and Features ~
@@ -233,7 +230,7 @@ contract MumbaiBasketsTest is Test {
 
     // ~ Initial State Test ~
 
-    /// @notice Initial state test.
+    /// @notice Initial state test. TODO: Add more asserts
     function test_mumbai_init_state() public {
         // verify realEstateTnft
         assertEq(realEstateTnft.tokensFingerprint(1), RE_FINGERPRINT_1); // 2032
@@ -299,7 +296,7 @@ contract MumbaiBasketsTest is Test {
         // Execute a deposit
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), 1);
-        vm.expectRevert("TNFT missing features");
+        vm.expectRevert("TNFT missing feature");
         basket.depositTNFT(address(realEstateTnft), 1);
         vm.stopPrank();
 
@@ -328,17 +325,18 @@ contract MumbaiBasketsTest is Test {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
-        uint256[] memory features = basket.getFeaturesSupported();
-        assertEq(features.length, 0);
+        assertEq(basket.activelySupportingFeature(), false);
 
         // Execute addFeatureSupport
         basket.addFeatureSupport(RE_FEATURE_1);
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
-        features = basket.getFeaturesSupported();
-        assertEq(features.length, 1);
-        assertEq(features[0], RE_FEATURE_1);
+        assertEq(basket.activelySupportingFeature(), true);
+
+        // Try to add another feature -> revert
+        vm.expectRevert("Feature already supported");
+        basket.addFeatureSupport(RE_FEATURE_2);
     }
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport()
@@ -346,8 +344,6 @@ contract MumbaiBasketsTest is Test {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
-        uint256[] memory features = basket.getFeaturesSupported();
-        assertEq(features.length, 0);
 
         // Joe makes deposit of TNFT
         vm.startPrank(JOE);
@@ -361,23 +357,68 @@ contract MumbaiBasketsTest is Test {
 
         // Post-state check 1.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
-        features = basket.getFeaturesSupported();
-        assertEq(features.length, 0);
 
         // Add feature to TNFT contract
         _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
+
+        uint256[] memory features = ITangibleNFT(address(realEstateTnft)).getTokenFeatures(1);
+
+        emit log_named_uint("features", features[0]);
 
         // Add feature -> success
         basket.addFeatureSupport(RE_FEATURE_1);
 
         // Post-state check 2.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
-        features = basket.getFeaturesSupported();
-        assertEq(features.length, 1);
-
     }
 
-    // TODO: Test removeFeatureSupport
-    // TODO: Test modifyRentTokenSupport
+    /// @notice This verifies state changes and restrictions for removeFeatureSupport()
+    function test_mumbai_removeFeatureSupport() public {
+        basket.addFeatureSupport(RE_FEATURE_1);
+
+        // Pre-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(basket.activelySupportingFeature(), true);
+
+        // Execute removeFeatureSupport
+        basket.removeFeatureSupport(RE_FEATURE_1);
+
+        // Post-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), false);
+        assertEq(basket.activelySupportingFeature(), false);
+
+        // Try to remove feature again -> revert
+        vm.expectRevert("Feature not supported");
+        basket.removeFeatureSupport(RE_FEATURE_1);
+    }
+
+
+    // Note: Rent Management ----
+
+    /// @notice This verifies state changes and restrictions for modifyRentTokenSupport()
+    function test_mumbai_modifyRentTokenSupport() public {
+        // Pre-state check.
+        address[] memory rentTokens = basket.getSupportedRentTokens();
+        assertEq(rentTokens.length, 0);
+
+        // Remove token -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Not supported");
+        basket.modifyRentTokenSupport(USDC, false);
+
+        // Add token -> Success
+        vm.prank(factoryOwner);
+        basket.modifyRentTokenSupport(USDC, true);
+
+        // Post-state check.
+        rentTokens = basket.getSupportedRentTokens();
+        assertEq(rentTokens.length, 1);
+        assertEq(rentTokens[0], USDC);
+
+        // Add token again -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Already supported");
+        basket.modifyRentTokenSupport(USDC, true);
+    }
 
 }
