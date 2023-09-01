@@ -18,11 +18,11 @@ import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
 import { Owned } from "./abstract/Owned.sol";
+import { IBasket } from "./IBaskets.sol";
 
 // TODO: How to handle rent? rent is redeemed when the TNFT is redeemed
-// TODO: How to handle rev shares?
 // TODO: Who is the owner of the contract? Creator or Tangible?
-// TODO: How is rent sent to this contract? Time basis? What asset?
+// TODO: How is rent sent to this contract? Time basis? What asset(s)?
 // TODO: How to handle storage? Does this contract have to pay for storage? TBA
 // TODO: Are there any other rewards besides rent? No
 // TODO: How to handle total value? TBA
@@ -51,23 +51,23 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
     mapping(address => mapping(uint256 => bool)) public tokenDeposited;
 
-    uint256 public immutable tnftType;
-
     mapping(uint256 => bool) public featureSupported;
-
-    bool public activelySupportingFeature;
-
-    string[] public supportedCurrency;
 
     mapping(string => bool) public currencySupported;
 
     mapping(string => uint256) public currencyBalance;
 
-    address[] public supportedRentToken; // rent token list
+    string[] public supportedCurrency;
+
+    address[] public supportedRentToken;
+
+    uint256 public immutable tnftType;
 
     ICurrencyFeedV2 public currencyFeed;
 
     ITNFTMetadata public metadata;
+
+    bool public activelySupportingFeature;
 
 
     // ~ Events ~
@@ -92,13 +92,14 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         string memory _symbol,
         address _factoryProvider,
         uint256 _tnftType,
-        address _currencyFeed, // TODO: add modify func
-        address _metadata // TODO: add modify func
+        address _currencyFeed,
+        address _metadata
     )
         ERC20(_name, _symbol) 
         FactoryModifiers(_factoryProvider) 
         Owned(msg.sender) 
     {
+        // TODO: Verify no 0 address and verify tnftmetadata supports tnftType
         tnftType = _tnftType;
         currencyFeed = ICurrencyFeedV2(_currencyFeed);
         metadata = ITNFTMetadata(_metadata);
@@ -216,6 +217,16 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         }
     }
 
+    function modifyCurrencyFeed(address _newCurrencyFeed) external onlyFactoryOwner {
+        require(_newCurrencyFeed != address(0), "Invalid input");
+        currencyFeed = ICurrencyFeedV2(_newCurrencyFeed);
+    }
+
+    function modifyTnftMetadata(address _newMetadata) external onlyFactoryOwner {
+        require(_newMetadata != address(0), "Invalid input");
+        metadata = ITNFTMetadata(_newMetadata);
+    }
+
     /**
      * @notice Allows address(this) to receive ERC721 tokens.
      */
@@ -236,29 +247,29 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             return 1e18;
         }
         // Total value of collateral assets on basket, in 18 decimals
-        uint256 collateralValue;
-
-        // Get value of each real estate by currency
-        for (uint256 i; i < supportedCurrency.length;) {
-            collateralValue += _getUSDValue(supportedCurrency[i], currencyBalance[supportedCurrency[i]], 18);
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Get value of all rent accrued by this contract
-        for (uint256 i; i < supportedRentToken.length;) {
-            IERC20Metadata rentToken = IERC20Metadata(supportedRentToken[i]);
-            collateralValue += _getUSDValue(rentToken.symbol(), rentToken.balanceOf(address(this)), rentToken.decimals());
-
-            unchecked {
-                ++i;
-            }
-        }
+        uint256 collateralValue = getTotalValueOfBasket();
 
         sharePrice = (collateralValue * 10 ** decimals()) / totalSupply();
 
         require(sharePrice != 0, "share is 0");
+    }
+
+    function getTotalValueOfBasket() public view returns (uint256 totalValue) {
+        // Get value of each real estate by currency
+        for (uint256 i; i < supportedCurrency.length;) {
+            totalValue += _getUSDValue(supportedCurrency[i], currencyBalance[supportedCurrency[i]], 18);
+            unchecked {
+                ++i;
+            }
+        }
+        // Get value of all rent accrued by this contract
+        for (uint256 i; i < supportedRentToken.length;) {
+            IERC20Metadata rentToken = IERC20Metadata(supportedRentToken[i]);
+            totalValue += _getUSDValue(rentToken.symbol(), rentToken.balanceOf(address(this)), rentToken.decimals());
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function getDepositedTnfts() public view returns (TokenData[] memory) {

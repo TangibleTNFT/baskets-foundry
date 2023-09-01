@@ -34,9 +34,10 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
 contract MumbaiBasketsTest is Test {
+
     Basket public basket;
     BasketDeployer public basketDeployer;
-    //FactoryProvider public factoryProvider;
+
 
     //contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
@@ -84,16 +85,16 @@ contract MumbaiBasketsTest is Test {
         );
 
         vm.startPrank(ORACLE_OWNER);
-        // set tangibleWrapper to be real estate oracle.
+        // set tangibleWrapper to be real estate oracle on chainlink oracle.
         IPriceOracleExt(address(chainlinkRWAOracle)).setTangibleWrapperAddress(
             address(realEstateOracle)
         );
-        // fingerprint create new item with fingerprint.
+        // create new item with fingerprint.
         IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
             RE_FINGERPRINT_1,  // fingerprint
             500_000_000,     // weSellAt
             0,            // lockedAmount
-            2,            // stock
+            10,           // stock
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
             uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
@@ -101,7 +102,7 @@ contract MumbaiBasketsTest is Test {
             RE_FINGERPRINT_2,  // fingerprint
             600_000_000,     // weSellAt
             0,            // lockedAmount
-            1,            // stock
+            10,           // stock
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
             uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
@@ -263,11 +264,12 @@ contract MumbaiBasketsTest is Test {
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
 
-        // Execute a deposit
+        // emit deposit logic 
         _emitGetUsdValueOfNft(address(realEstateTnft), 1);
 
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), 1);
+        // Execute a deposit
         basket.depositTNFT(address(realEstateTnft), 1);
         vm.stopPrank();
 
@@ -361,9 +363,10 @@ contract MumbaiBasketsTest is Test {
         // Add feature to TNFT contract
         _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
 
+        // Verify feature was added to TNFT
         uint256[] memory features = ITangibleNFT(address(realEstateTnft)).getTokenFeatures(1);
-
         emit log_named_uint("features", features[0]);
+        assertEq(features[0], RE_FEATURE_1);
 
         // Add feature -> success
         basket.addFeatureSupport(RE_FEATURE_1);
