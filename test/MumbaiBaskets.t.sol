@@ -232,7 +232,7 @@ contract MumbaiBasketsTest is Test {
     // ~ Initial State Test ~
 
     /// @notice Initial state test. TODO: Add more asserts
-    function test_mumbai_init_state() public {
+    function test_baskets_init_state() public {
         // verify realEstateTnft
         assertEq(realEstateTnft.tokensFingerprint(1), RE_FINGERPRINT_1); // 2032
 
@@ -253,7 +253,7 @@ contract MumbaiBasketsTest is Test {
     // Note: Deposit Functionality ----
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_mumbai_depositTNFT() public {
+    function test_baskets_depositTNFT() public {
 
         // Pre-state check
         assertEq(realEstateTnft.balanceOf(JOE), 1);
@@ -288,7 +288,7 @@ contract MumbaiBasketsTest is Test {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_mumbai_depositTNFT_feature() public {
+    function test_baskets_depositTNFT_feature() public {
         basket.addFeatureSupport(RE_FEATURE_1);
 
         // Pre-state check
@@ -323,7 +323,7 @@ contract MumbaiBasketsTest is Test {
     // Note: Feature Management ----
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport()
-    function test_mumbai_addFeatureSupport() public {
+    function test_baskets_addFeatureSupport() public {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
@@ -342,7 +342,7 @@ contract MumbaiBasketsTest is Test {
     }
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport()
-    function test_mumbai_addFeatureSupport_afterDeposit() public {
+    function test_baskets_addFeatureSupport_afterDeposit() public {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
@@ -376,7 +376,7 @@ contract MumbaiBasketsTest is Test {
     }
 
     /// @notice This verifies state changes and restrictions for removeFeatureSupport()
-    function test_mumbai_removeFeatureSupport() public {
+    function test_baskets_removeFeatureSupport() public {
         basket.addFeatureSupport(RE_FEATURE_1);
 
         // Pre-state check.
@@ -399,7 +399,7 @@ contract MumbaiBasketsTest is Test {
     // Note: Rent Management ----
 
     /// @notice This verifies state changes and restrictions for modifyRentTokenSupport()
-    function test_mumbai_modifyRentTokenSupport() public {
+    function test_baskets_modifyRentTokenSupport() public {
         // Pre-state check.
         address[] memory rentTokens = basket.getSupportedRentTokens();
         assertEq(rentTokens.length, 0);

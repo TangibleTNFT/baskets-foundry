@@ -12,7 +12,7 @@ import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
-import { ITangiblePriceManager, IPriceManagerExt } from "@tangible/interfaces/ITangiblePriceManager.sol";
+import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
@@ -286,13 +286,13 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @dev Get value of TNFT in native currency
      */
-    function _getTnftNativeValue(address _tangibleNFT, uint256 _tnftTokenId) internal returns (string memory currency, uint256 value, uint8 decimals) { // view
+    function _getTnftNativeValue(address _tangibleNFT, uint256 _tnftTokenId) internal view returns (string memory currency, uint256 value, uint8 decimals) {
         uint256 fingerPrint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tnftTokenId); 
         address factory = IFactoryProvider(factoryProvider).factory();
 
         ITangiblePriceManager priceManager = IFactory(factory).priceManager();
         //IPriceOracle oracle = priceManager.getPriceOracleForCategory(ITangibleNFT(_tangibleNFT));
-        IPriceOracle oracle = IPriceManagerExt(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
+        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
 
         uint256 currencyNum;
         (value, currencyNum) = oracle.marketPriceNativeCurrency(fingerPrint);
