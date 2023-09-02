@@ -161,11 +161,65 @@ contract TnftMetadataTest is Test {
         assertEq(metadata.featureIndexInList(FEATURE_2), 1);
         assertEq(metadata.featureIndexInList(FEATURE_3), 2);
         assertEq(metadata.featureIndexInList(FEATURE_4), 3);
+    }
+
+    /// @notice Verifies restrictions and state changes of addFeatures with multiple features (using fuzzing)
+    function test_TnftMetadata_addFeatures_multiple_fuzzing(uint256 _amountFeatures) public {
+        _amountFeatures = bound(_amountFeatures, 1, 1_000); // Make sure _amountFeatures is >= 1 but <= 1_000
+
+        // create feature array
+        uint256[] memory featureArr = new uint256[](_amountFeatures);
+        // create description array
+        string[] memory descArr = new string[](_amountFeatures);
+
+        // initialize array with all features and descriptions
+        for (uint256 i; i < _amountFeatures; ++i) {
+            featureArr[i] = i;
+            descArr[i] = string(abi.encodePacked(keccak256(abi.encode(i))));
+            //descArr[i] = string(abi.encodePacked("This is description for feature ", i));
+        }
+
+        // Pre-state check.
+        TNFTMetadata.FeatureInfo memory feature;
+        uint256[] memory features = metadata.getFeatureList();
+        assertEq(features.length, 0);
+        for (uint256 i; i < _amountFeatures; ++i) {
+            (feature.added, feature.description) = metadata.featureInfo(featureArr[i]);
+            assertEq(feature.added, false);
+            assertEq(feature.description, "");
+            assertEq(metadata.featureIndexInList(featureArr[i]), 0);
+        }
+
+
+        // Execute addFeatures 
+        metadata.addFeatures(
+            featureArr,
+            descArr
+        );
+
+        // Post-state check.
+        features = metadata.getFeatureList();
+        assertEq(features.length, _amountFeatures);
+        for (uint256 i; i < _amountFeatures; ++i) {
+            assertEq(features[i], featureArr[i]);
+            (feature.added, feature.description) = metadata.featureInfo(featureArr[i]);
+            assertEq(feature.added, true);
+            assertEq(feature.description, descArr[i]);
+            assertEq(metadata.featureIndexInList(featureArr[i]), i);
+        }
 
     }
 
     /// @notice Verifies restrictions and state changes of modifyFeatures
     function test_TnftMetadata_modifyFeature() public {
+
+        // Modify an unadded feature -> revert
+        vm.expectRevert("Add first!");
+        metadata.modifyFeature(
+            _asSingletonArrayUint(FEATURE_1),
+            _asSingletonArrayString(DESC_2)
+        );
+
         // Execute addFeatures 
         metadata.addFeatures(
             _asSingletonArrayUint(FEATURE_1),
@@ -192,6 +246,7 @@ contract TnftMetadataTest is Test {
 
     /// @notice Verifies restrictions and state changes of modifyFeatures with multiple features
     function test_TnftMetadata_modifyFeature_multiple() public {
+
         // create features array
         uint256[] memory featureArray = new uint256[](4);
         featureArray[0] = FEATURE_1;
@@ -260,18 +315,204 @@ contract TnftMetadataTest is Test {
         assertEq(feature.description, newDesc4);
     }
 
-    /// @notice Verifies restrictions and state changes of removeFeatures
-    function test_TnftMetadata_removeFeatures() public {
-        
-    }
-
     /// @notice Verifies restrictions and state changes of addTNFTType
     function test_TnftMetadata_addTNFTType() public {
-        
+
+        // Pre-state check.
+        TNFTMetadata.TNFTType memory typeData;
+        (typeData.added, typeData.paysRent, typeData.description) = metadata.tnftTypes(TYPE_1);
+        assertEq(typeData.added, false);
+        assertEq(typeData.description, "");
+        assertEq(typeData.paysRent, false);
+        uint256[] memory types = metadata.getTNFTTypes();
+        assertEq(types.length, 0);
+
+        // Execute addTNFTType
+        metadata.addTNFTType(TYPE_1, "This is type 1", false);
+
+        // Post-state check.
+        (typeData.added, typeData.paysRent, typeData.description) = metadata.tnftTypes(TYPE_1);
+        assertEq(typeData.added, true);
+        assertEq(typeData.description, "This is type 1");
+        assertEq(typeData.paysRent, false);
+        types = metadata.getTNFTTypes();
+        assertEq(types.length, 1);
+
+        // Add type again -> revert
+        vm.expectRevert("already exists");
+        metadata.addTNFTType(TYPE_1, "This is type 1", false);
     }
 
     /// @notice Verifies restrictions and state changes of addFeaturesForTNFTType
     function test_TnftMetadata_addFeaturesForTNFTType() public {
+
+        // Add feature to non existent type -> revert
+        vm.expectRevert("tnftType doesn't exist");
+        metadata.addFeaturesForTNFTType(
+            TYPE_1,
+            _asSingletonArrayUint(FEATURE_1)
+        );
+
+        // Add TNFTType
+        metadata.addTNFTType(TYPE_1, "This is type 1", false);
+
+        // Add non existent feature to type -> revert
+        vm.expectRevert("feature doesn't exist");
+        metadata.addFeaturesForTNFTType(
+            TYPE_1,
+            _asSingletonArrayUint(FEATURE_1)
+        );
+
+        // add feature
+        metadata.addFeatures(
+            _asSingletonArrayUint(FEATURE_1),
+            _asSingletonArrayString(DESC_1)
+        );
+
+        // Pre-state check
+        uint256[] memory typeFeats = metadata.getTNFTTypesFeatures(TYPE_1);
+        assertEq(typeFeats.length, 0);
+        TNFTMetadata.FeatureInfo memory feature = metadata.getFeatureInfo(FEATURE_1);
+        assertEq(feature.tnftTypes.length, 0);
+        assertEq(feature.indexInTypes.length, 0);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_1), false);
+
+        // Execute addFeaturesForTNFTType -> success
+        metadata.addFeaturesForTNFTType(
+            TYPE_1,
+            _asSingletonArrayUint(FEATURE_1)
+        );
+
+        // Post-state check
+        typeFeats = metadata.getTNFTTypesFeatures(TYPE_1);
+        assertEq(typeFeats.length, 1);
+        assertEq(typeFeats[0], FEATURE_1);
+        feature = metadata.getFeatureInfo(FEATURE_1);
+        assertEq(feature.tnftTypes.length, 1);
+        assertEq(feature.tnftTypes[0], TYPE_1);
+        assertEq(feature.indexInTypes.length, 1);
+        assertEq(feature.indexInTypes[0], 0);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_1), true);
+    }
+
+    /// @notice Verifies restrictions and state changes of addFeaturesForTNFTType with multiple features
+    function test_TnftMetadata_addFeaturesForTNFTType_multiple() public {
+
+        // create array of multiple features
+        uint256[] memory featureArray = new uint256[](4);
+        featureArray[0] = FEATURE_1;
+        featureArray[1] = FEATURE_2;
+        featureArray[2] = FEATURE_3;
+        featureArray[3] = FEATURE_4;
+
+        // create description array
+        string[] memory stringArray = new string[](4);
+        stringArray[0] = DESC_1;
+        stringArray[1] = DESC_2;
+        stringArray[2] = DESC_3;
+        stringArray[3] = DESC_4;
+
+        // Add TNFTType
+        metadata.addTNFTType(TYPE_1, "This is type 1", false);
+
+        // add features
+        metadata.addFeatures(
+            featureArray,
+            stringArray
+        );
+
+        // Pre-state check
+        uint256[] memory typeFeats = metadata.getTNFTTypesFeatures(TYPE_1);
+        assertEq(typeFeats.length, 0);
+        TNFTMetadata.FeatureInfo memory feature = metadata.getFeatureInfo(FEATURE_1);
+        assertEq(feature.tnftTypes.length, 0);
+        assertEq(feature.indexInTypes.length, 0);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_1), false);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_2), false);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_3), false);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_4), false);
+
+        // Execute addFeaturesForTNFTType -> success
+        metadata.addFeaturesForTNFTType(
+            TYPE_1,
+            featureArray
+        );
+
+        // Post-state check
+        typeFeats = metadata.getTNFTTypesFeatures(TYPE_1);
+        assertEq(typeFeats.length, 4);
+        assertEq(typeFeats[0], FEATURE_1);
+        assertEq(typeFeats[1], FEATURE_2);
+        assertEq(typeFeats[2], FEATURE_3);
+        assertEq(typeFeats[3], FEATURE_4);
+        feature = metadata.getFeatureInfo(FEATURE_1);
+        assertEq(feature.tnftTypes.length, 1);
+        assertEq(feature.tnftTypes[0], TYPE_1);
+        assertEq(feature.indexInTypes.length, 1);
+        assertEq(feature.indexInTypes[0], 0);
+        feature = metadata.getFeatureInfo(FEATURE_2);
+        assertEq(feature.tnftTypes.length, 1);
+        assertEq(feature.tnftTypes[0], TYPE_1);
+        assertEq(feature.indexInTypes.length, 1);
+        assertEq(feature.indexInTypes[0], 1);
+        feature = metadata.getFeatureInfo(FEATURE_3);
+        assertEq(feature.tnftTypes.length, 1);
+        assertEq(feature.tnftTypes[0], TYPE_1);
+        assertEq(feature.indexInTypes.length, 1);
+        assertEq(feature.indexInTypes[0], 2);
+        feature = metadata.getFeatureInfo(FEATURE_4);
+        assertEq(feature.tnftTypes.length, 1);
+        assertEq(feature.tnftTypes[0], TYPE_1);
+        assertEq(feature.indexInTypes.length, 1);
+        assertEq(feature.indexInTypes[0], 3);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_1), true);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_2), true);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_3), true);
+        assertEq(metadata.featureInType(TYPE_1, FEATURE_4), true);
+    }
+
+    /// @notice Verifies restrictions and state changes of removeFeatures
+    function test_TnftMetadata_removeFeatures() public {
+
+        // Remove feature that doesnt exist yet -> revert
+        vm.expectRevert("Add first!");
+        metadata.removeFeatures(
+            _asSingletonArrayUint(FEATURE_1)
+        );
+
+        // Add feature to remove
+        metadata.addFeatures(
+            _asSingletonArrayUint(FEATURE_1),
+            _asSingletonArrayString(DESC_1)
+        );
+
+        // Pre-state check.
+        TNFTMetadata.FeatureInfo memory feature;
+        (feature.added, feature.description) = metadata.featureInfo(FEATURE_1);
+        assertEq(feature.added, true);
+        assertEq(feature.description, DESC_1);
+        uint256[] memory features = metadata.getFeatureList();
+        assertEq(features.length, 1);
+        assertEq(features[0], FEATURE_1);
+
+        // Execute removeFeature -> success
+        metadata.removeFeatures(
+            _asSingletonArrayUint(FEATURE_1)
+        );
+
+        
+        // Post-state check.
+        (feature.added, feature.description) = metadata.featureInfo(FEATURE_1);
+        assertEq(feature.added, false);
+        assertEq(feature.description, "");
+        features = metadata.getFeatureList();
+        assertEq(features.length, 0);
+    }
+
+    /// @notice Verifies restrictions and state changes of removeFeatures with multiple features
+    function test_TnftMetadata_removeFeatures_fromTNFTType() public {
         
     }
+
+    
 }

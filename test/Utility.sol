@@ -12,6 +12,7 @@ interface ITangibleNFTExt is ITangibleNFT {
     function getFingerprintsSize() external view returns (uint256);
     function getFingerprints() external view returns (uint256[] memory);
     function addMetadata(uint256 tokenId, uint256[] calldata _features) external;
+    function fingerprintAdded(uint256) external returns (bool);
 }
 
 interface IPriceOracleExt {
