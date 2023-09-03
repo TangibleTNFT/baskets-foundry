@@ -74,6 +74,8 @@ contract TnftMetadataTest is Test {
 
 
     // ~ Unit Tests ~
+    
+    // ~ addFeatures ~
 
     /// @notice Verifies restrictions and state changes of addFeatures
     function test_TnftMetadata_addFeatures() public {
@@ -213,6 +215,8 @@ contract TnftMetadataTest is Test {
 
     }
 
+    // ~ modifyFeature ~
+
     /// @notice Verifies restrictions and state changes of modifyFeatures
     function test_TnftMetadata_modifyFeature() public {
 
@@ -318,6 +322,8 @@ contract TnftMetadataTest is Test {
         assertEq(feature.description, newDesc4);
     }
 
+    // ~ addTNFTType ~
+
     /// @notice Verifies restrictions and state changes of addTNFTType
     function test_TnftMetadata_addTNFTType() public {
 
@@ -345,6 +351,8 @@ contract TnftMetadataTest is Test {
         vm.expectRevert("already exists");
         metadata.addTNFTType(TYPE_1, "This is type 1", false);
     }
+
+    // ~ addFeaturesForTNFTType ~
 
     /// @notice Verifies restrictions and state changes of addFeaturesForTNFTType
     function test_TnftMetadata_addFeaturesForTNFTType() public {
@@ -472,6 +480,8 @@ contract TnftMetadataTest is Test {
         assertEq(metadata.featureInType(TYPE_1, FEATURE_3), true);
         assertEq(metadata.featureInType(TYPE_1, FEATURE_4), true);
     }
+
+    // ~ removeFeatures ~
 
     /// @notice Verifies restrictions and state changes of removeFeatures
     function test_TnftMetadata_removeFeatures() public {
@@ -653,7 +663,7 @@ contract TnftMetadataTest is Test {
 
     /// @notice Verifies restrictions and state changes of removeFeatures when feature is in type with multiple features using fuzzing
     function test_TnftMetadata_removeFeatures_fromTNFTType_fuzzing(uint256 _features, uint256 _featuresToRemove) public {
-        _features = bound(_features, 1, 100);
+        _features = bound(_features, 1, 1_000);
         _featuresToRemove = bound(_featuresToRemove, 1, _features);
 
         emit log_named_uint("Amount of features being added to type:", _features);
@@ -718,11 +728,7 @@ contract TnftMetadataTest is Test {
 
             assertEq(metadata.featureInType(TYPE_1, featuresToRemove[i]), false);
         }
-
-
-
         
     }
-
-    
+  
 }
