@@ -302,16 +302,16 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @dev Get USD Value of given currency and amount, base 1e18
      */
-    function _getUSDValue(string memory currency, uint256 amount, uint8 amountDecimals) internal view returns (uint256) {
-        (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
-        return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** amountDecimals;
+    function _getUSDValue(string memory _currency, uint256 _amount, uint8 _amountDecimals) internal view returns (uint256) {
+        (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(_currency);
+        return (price * _amount * 10 ** 18) / 10 ** priceDecimals / 10 ** _amountDecimals;
     }
 
     /**
      * @dev Get USD Price of given currency from ChainLink
      */
-    function _getUsdExchangeRate(string memory currency) internal view returns (uint256, uint256) {
-        AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(currency);
+    function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
+        AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
         
         (, int256 price, , , ) = priceFeed.latestRoundData();
         if (price < 0) price = 0;

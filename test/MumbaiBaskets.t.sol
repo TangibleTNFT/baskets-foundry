@@ -219,20 +219,20 @@ contract MumbaiBasketsTest is Test {
         
         // fetch fingerprint of product/property
         uint256 fingerprint = ITangibleNFT(_tnft).tokensFingerprint(_tokenId);
-        emit log_named_uint("fingerprint", fingerprint);
+        //emit log_named_uint("fingerprint", fingerprint);
 
         // using fingerprint, fetch the value of the property in it's respective currency
         (uint256 value, uint256 currencyNum) = realEstateOracle.marketPriceNativeCurrency(fingerprint);
         emit log_named_uint("market value", value);
-        emit log_named_uint("currencyNum", currencyNum);
+        //emit log_named_uint("currencyNum", currencyNum);
 
         // Fetch the string ISO code for currency
         string memory currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
-        emit log_named_string("currencyAlpha", currency);
+        //emit log_named_string("currencyAlpha", currency);
 
         // get decimal representation of property value
         uint256 oracleDecimals = realEstateOracle.decimals();
-        emit log_named_uint("oracle decimals", oracleDecimals);
+        //emit log_named_uint("oracle decimals", oracleDecimals);
         
         // ~ get USD Exchange rate ~
 
@@ -246,7 +246,7 @@ contract MumbaiBasketsTest is Test {
 
         // get decimal representation of exchange rate
         uint256 priceDecimals = priceFeed.decimals();
-        emit log_named_uint("price feed decimals", priceDecimals);
+        //emit log_named_uint("price feed decimals", priceDecimals);
  
         // ~ get USD Value of property ~
 
