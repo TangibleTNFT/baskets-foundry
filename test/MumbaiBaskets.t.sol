@@ -43,7 +43,8 @@ contract MumbaiBasketsTest is Test {
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
     ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
-    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_ChainlinkOracle);
+    //IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_ChainlinkOracle);
+    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
     IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
@@ -133,6 +134,8 @@ contract MumbaiBasketsTest is Test {
             RE_FINGERPRINT_1,                       // fingerprint
             true                                    // sendToVender
         );
+
+        emit log_named_address("Oracle for category", address(priceManager.oracleForCategory(realEstateTnft)));
 
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));

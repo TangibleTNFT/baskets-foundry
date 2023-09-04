@@ -1,25 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-address constant Mumbai_BalanceBatchReader     = 0x0f08a4b9552190cBaF160cE1114d3Cf74960cc88;
+// ~ Mumbai Deployment 1 ~
+
+// address constant Mumbai_BalanceBatchReader     = 0x0f08a4b9552190cBaF160cE1114d3Cf74960cc88;
+// address constant Mumbai_ChainLinkOracle        = 0xB548edFC1592d16520D76020FEAc95364A7e177d;
+// address constant Mumbai_ChainLinkOracleGBP     = 0x3D2657603F37A15c26c62C403c6C61DA58f060B0;
+// address constant Mumbai_FactoryV2              = 0x94fbC8cebB514d9955Be361a45e64Dd3280f6804;
+// address constant Mumbai_FactoryProvider        = 0xc5B3419E3F26EffC87ffD25C3904c7b709D860b3;
+// address constant Mumbai_CurrencyFeedV2         = 0x49c12660D66c3E4C0cE86bBd99E603E3cDA33BA8;
+// address constant Mumbai_GoldOracleTangibleV2   = 0x8f1307e6762e1e11C3084cc9a3e9c743fe65BAaD;
+// address constant Mumbai_RealtyOracleTangibleV2 = 0x5DfF047286D16c7c05aAcDf26ad9C9d0803Ca985;
+// address constant Mumbai_TangibleV3TokenOracle  = 0xE97CA96cD34bC1eF7E978c29Bd88564E7A772e19;
+// address constant Mumbai_Exchange               = 0xc472644D8123E61300227958A566Af4c2eB6d775;
+// address constant Mumbai_SellFeeDistributorV2   = 0xA73aE76f6602042733C13265131acA63B2482C39;
+// address constant Mumbai_TnftDeployerV2         = 0x7aE198C21dE5fb3f6cdE704021E4C389af98E5A9;
+// address constant Mumbai_PriceManager           = 0xf1409DfA93bB027f13521b43A5e276e570A5d799;
+// address constant Mumbai_RentManagerDeployer    = 0x6953adF29d3153C22Dc4f148129BE4e45896ADC5;
+// address constant Mumbai_TNFTMetadata           = 0xB50C4c6986B951EBa89Ee531B87FAbfc72138389;
+// address constant Mumbai_OnSaleTracker          = 0xc5bdaE7413F4E45C7cE241451b45b74a504e2119;
+// address constant Mumbai_Marketplace            = 0xD5b454baB4A25D2247e059bF2268bc9681FEA110;
+// address constant Mumbai_TangibleGoldBarsTnft   = 0xe9aD5421a1DB07287350D34C29D649CE1fFf1fb4;
+// address constant Mumbai_TangibleREstateTnft    = 0xc056d4d7Bdb5b632b2cdfDA81C0A0E98567e5C77;
+// address constant Mumbai_TangibleProfile        = 0x917F2eB11F252cb45B241D625D50b2E22AA1F882;
+// address constant Mumbai_TangibleReaderHelper   = 0x99924F7CDBF56AdC1505Cf58f3E94cF35b637E99;
+address constant Mumbai_ChainlinkOracle        = 0xbE2F59A77eb5D38FE4E14c8E5284e72E07f74cee;
+
+// ~ Mumbai Deployment 2 ~
+
+address constant Mumbai_BalanceBatchReader     = 0x6A1467D4c8dDe056424d2221331886D71Fe8cBf0;
+address constant Mumbai_MockMatrix             = 0x7A5771eC1EdCe2AD0f2d63F7952EE10db95E66Cc;
+address constant Mumbai_USDUSDOracle           = 0xa6310dE7b3B310404bd007e5AED7647C9aDA898C;
 address constant Mumbai_ChainLinkOracle        = 0xB548edFC1592d16520D76020FEAc95364A7e177d;
 address constant Mumbai_ChainLinkOracleGBP     = 0x3D2657603F37A15c26c62C403c6C61DA58f060B0;
-address constant Mumbai_FactoryV2              = 0x94fbC8cebB514d9955Be361a45e64Dd3280f6804;
+address constant Mumbai_FactoryV2              = 0x14AE79854B9b63F2c5e0Fd740fAd8282b91a217A;
 address constant Mumbai_FactoryProvider        = 0xc5B3419E3F26EffC87ffD25C3904c7b709D860b3;
-address constant Mumbai_CurrencyFeedV2         = 0x49c12660D66c3E4C0cE86bBd99E603E3cDA33BA8;
-address constant Mumbai_GoldOracleTangibleV2   = 0x8f1307e6762e1e11C3084cc9a3e9c743fe65BAaD;
-address constant Mumbai_RealtyOracleTangibleV2 = 0x5DfF047286D16c7c05aAcDf26ad9C9d0803Ca985;
-address constant Mumbai_TangibleV3TokenOracle  = 0xE97CA96cD34bC1eF7E978c29Bd88564E7A772e19;
-address constant Mumbai_Exchange               = 0xc472644D8123E61300227958A566Af4c2eB6d775;
-address constant Mumbai_SellFeeDistributorV2   = 0xA73aE76f6602042733C13265131acA63B2482C39;
-address constant Mumbai_TnftDeployerV2         = 0x7aE198C21dE5fb3f6cdE704021E4C389af98E5A9;
-address constant Mumbai_PriceManager           = 0xf1409DfA93bB027f13521b43A5e276e570A5d799;
-address constant Mumbai_RentManagerDeployer    = 0x6953adF29d3153C22Dc4f148129BE4e45896ADC5;
-address constant Mumbai_TNFTMetadata           = 0xB50C4c6986B951EBa89Ee531B87FAbfc72138389;
-address constant Mumbai_OnSaleTracker          = 0xc5bdaE7413F4E45C7cE241451b45b74a504e2119;
-address constant Mumbai_Marketplace            = 0xD5b454baB4A25D2247e059bF2268bc9681FEA110;
-address constant Mumbai_TangibleGoldBarsTnft   = 0xe9aD5421a1DB07287350D34C29D649CE1fFf1fb4;
-address constant Mumbai_TangibleREstateTnft    = 0xc056d4d7Bdb5b632b2cdfDA81C0A0E98567e5C77;
-address constant Mumbai_TangibleProfile        = 0x917F2eB11F252cb45B241D625D50b2E22AA1F882;
-address constant Mumbai_TangibleReaderHelper   = 0x99924F7CDBF56AdC1505Cf58f3E94cF35b637E99;
-address constant Mumbai_ChainlinkOracle        = 0xbE2F59A77eb5D38FE4E14c8E5284e72E07f74cee;
+address constant Mumbai_CurrencyFeedV2         = 0xE2b23ACC8B25a90b0f7a16033B5a2495dfea338e;
+address constant Mumbai_GoldOracleTangibleV2   = 0x8502303CCB947176D1b5e1b8496483524Dcaef2c;
+address constant Mumbai_RealtyOracleTangibleV2 = 0x0852edA93D812f804652502bD181a75c0b2D6584;
+address constant Mumbai_TangibleV3TokenOracle  = 0x4D4932397F4D0508e709ADAd73292707c93F464c;
+address constant Mumbai_Exchange               = 0xC58439a5c23e41310a606a22cE72B79439Ac2c99;
+address constant Mumbai_SellFeeDistributorV2   = 0x1Ba8F132596dE707d0d69ec895C592734aF79ad4;
+address constant Mumbai_TnftDeployerV2         = 0x5b0fE44EAbC306CDe90dB0af60739D8123757ff4;
+address constant Mumbai_PriceManager           = 0xbF6a4d73662444b759CD8A30DD4Ded7165bd69b0;
+address constant Mumbai_RentManagerDeployer    = 0xe61be104CBaCC4876283041435D15f252003Fc96;
+address constant Mumbai_TNFTMetadata           = 0xAe296cA58E2e8f4EbddDAB31cCA9698E5473F294;
+address constant Mumbai_OnSaleTracker          = 0x8069F201d7Aaf31a9D77efBAffB6CB4d45b9F5a7;
+address constant Mumbai_Marketplace            = 0x622302D13bdA7dD331E28ea69a7974A4ad58DA92;
+address constant Mumbai_TangibleGoldBarsTnft   = 0x59efb756b01969Fb92f2C615894B8AD084a644E6;
+address constant Mumbai_TangibleREstateTnft    = 0x17c606257483B965Fa6a7bA4E570Ce17aDebdF4C;
+address constant Mumbai_TangibleProfile        = 0x6b24fd66fe7e4820a06fE8a748b2848d5715ba71;
+address constant Mumbai_TangibleReaderHelper   = 0xb2Cc97983a948f63872aD37784729902547Bf6f8;
