@@ -26,8 +26,6 @@ import { IBasket } from "./IBaskets.sol";
 // TODO: How to handle storage? Does this contract have to pay for storage? TBA
 // TODO: Are there any other rewards besides rent? No
 // TODO: How to handle total value? TBA
-// TODO: If the contract supports a feature, it does not supercede the tnftType correct?
-    // meaning... even if I support a feature, it's all the same type, just a subcategory of that type.
 
 // NOTE: Make sure rev share and rent managers are updated properly
 // NOTE: Test how proxy contracts can be implemented.
