@@ -83,7 +83,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     // ~ Constructor ~
 
     /**
-     * @notice Initializes Baskets contract.
+     * @notice Initializes Basket contract.
      */
     constructor(
         string memory _name,
@@ -97,7 +97,13 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         FactoryModifiers(_factoryProvider) 
         Owned(msg.sender) 
     {
-        // TODO: Verify no 0 address and verify tnftmetadata supports tnftType
+        require(_factoryProvider != address(0), "FactoryProvider == address(0)");
+        require(_currencyFeed != address(0), "CurrencyFeed == address(0)");
+        require(_metadata != address(0), "TNFTMetadata == address(0)");
+
+        (bool added,,) = ITNFTMetadata(_metadata).tnftTypes(_tnftType);
+        require(added, "Invalid tnftType");
+
         tnftType = _tnftType;
         currencyFeed = ICurrencyFeedV2(_currencyFeed);
         metadata = ITNFTMetadata(_metadata);
@@ -129,7 +135,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
         if(activelySupportingFeature) {
-            // if contract supports features, make sure tokenId has a supported feature
+            // if contract supports a feature, make sure tokenId has that feature
             uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
             bool supported;
             for (uint256 i; i < features.length;) {
@@ -340,6 +346,9 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     function _isSupportedRentToken(address _token) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < supportedRentToken.length;) {
             if (supportedRentToken[i] == _token) return (i, true);
+            unchecked {
+                ++i;
+            }
         }
         return (0, false);
     }

@@ -38,7 +38,7 @@ contract TnftMetadataTest is Test {
     function setUp() public {
         // Deploy Factory
         factory = new FactoryV2(
-            USDC,
+            MUMBAI_USDC,
             TANGIBLE_LABS
         );
 

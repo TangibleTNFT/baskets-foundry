@@ -4,7 +4,8 @@ pragma solidity ^0.8.13;
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
-address constant USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
+address constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
+address constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
 
 interface ITangibleNFTExt is ITangibleNFT {
     /// @dev Returns the feature status of a `tokenId`.
@@ -26,13 +27,6 @@ interface IPriceOracleExt {
         uint16 currency,
         uint16 location
     ) external;
-    function transferOwnership(
-        address to
-    ) external;
-    function setTangibleWrapperAddress(
-        address oracleWrapper
-    ) external;
-    function acceptOwnership() external;
 }
 
 interface IFactoryExt {

@@ -48,10 +48,8 @@ contract BasketsTest is Test {
     TNFTMarketplaceV2 public marketplace;
     TangibleNFTDeployerV2 public tnftDeployer;
 
-    address public constant USDC_MAINNET = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
-
-    address public constant POLYGON_CHAINLINK_GBPUSD_PRICE_FEED = 0x099a2540848573e94fb1Ca0Fa420b00acbBc845a;
-    address public constant POLYGON_CHAINLINK_USDCUSD_PRICE_FEED = 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7;
+    //address public constant POLYGON_CHAINLINK_GBPUSD_PRICE_FEED = 0x099a2540848573e94fb1Ca0Fa420b00acbBc845a;
+    //address public constant POLYGON_CHAINLINK_USDCUSD_PRICE_FEED = 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7;
 
     address public constant TANGIBLE_ORACLE = 0x7A5771eC1EdCe2AD0f2d63F7952EE10db95E66Cc;
     address public constant TANGIBLE_ORACLE_OWNER = 0x7179B719EEd8c2C60B498d2A2d04f868fb655F22;
@@ -60,7 +58,7 @@ contract BasketsTest is Test {
 
     uint256 constant public FINGERPRINT = 2222;
     uint256 constant public TNFTTYPE = 1;
-    uint256[] public featuresArray;
+    //uint256[] public featuresArray;
 
     // Actors
     address public constant JOE = address(bytes20(bytes("Joe")));
@@ -71,7 +69,7 @@ contract BasketsTest is Test {
 
         // Deploy Factory
         factory = new FactoryV2(
-            USDC,
+            MUMBAI_USDC,
             TANGIBLE_LABS
         );
 
@@ -136,20 +134,24 @@ contract BasketsTest is Test {
 
         // ~ configuration ~
 
+        // set contracts on Factory
         factory.setContract(FactoryV2.FACT_ADDRESSES.LABS, TANGIBLE_LABS);
         factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER, address(priceManager));
         factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META, address(metadata));
         factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE, address(marketplace));
         factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER, address(tnftDeployer));
 
+        // Add TNFTType on TNFTMetadata contract
         metadata.addTNFTType(
             TNFTTYPE,
             "RealEstateType1",
             false // TODO: Revisit -> This should be true -> Will deploy rent manager
         );
 
+
+        // Create new category with TNFTType on the Factory -> deploying TangibleNFT contract
         vm.prank(TANGIBLE_LABS);
-        ITangibleNFT newTnft = factory.newCategory(
+        ITangibleNFT realEstateTnft = factory.newCategory(
             "TangibleREstate",
             "RLTY",
             BASE_URI,
@@ -160,17 +162,16 @@ contract BasketsTest is Test {
             TNFTTYPE
         );
 
+        // Add fingerprints to TNFT contract
         vm.prank(TANGIBLE_LABS);
-        newTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
+        realEstateTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
 
+        // Add TNFTType oracle to chainlinkRWA oracle and create item -> stocking item
         vm.startPrank(TANGIBLE_ORACLE_OWNER);
-        // ITangibleOracle(TANGIBLE_ORACLE).transferOwnership(TANGIBLE_LABS);
-        // vm.startPrank(TANGIBLE_LABS);
-        // ITangibleOracle(TANGIBLE_ORACLE).acceptOwnership();
         IPriceOracleExt(TANGIBLE_ORACLE).setTangibleWrapperAddress(address(realEstateOracle));
         IPriceOracleExt(TANGIBLE_ORACLE).createItem(
             FINGERPRINT,  // fingerprint
-            50000000,     // weSellAt
+            500_000_000,  // weSellAt
             0,            // lockedAmount
             1,            // stock
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
@@ -178,8 +179,9 @@ contract BasketsTest is Test {
         );
         vm.stopPrank();
 
+        // create mint voucher
         IVoucher.MintVoucher memory voucher = IVoucher.MintVoucher(
-            ITangibleNFT(address(newTnft)),  // token
+            ITangibleNFT(address(realEstateTnft)),  // token
             1,                               // mintCount
             0,                               // price
             TANGIBLE_LABS,                   // vendor
@@ -188,8 +190,27 @@ contract BasketsTest is Test {
             true                             // sendToVender
         );
 
+        // use voucher to obtain TNFT
         vm.prank(TANGIBLE_LABS);
         factory.mint(voucher);
+
+        // transfer token to JOE
+        vm.prank(TANGIBLE_LABS);
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 1);
+        assertEq(realEstateTnft.balanceOf(TANGIBLE_LABS), 0);
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+
+        // labels
+        vm.label(address(factory), "FACTORY");
+        vm.label(address(realEstateTnft), "RealEstate_TNFT");
+        vm.label(address(realEstateOracle), "RealEstate_ORACLE");
+        vm.label(TANGIBLE_ORACLE, "CHAINLINK_ORACLE");
+        vm.label(address(marketplace), "MARKETPLACE");
+        vm.label(address(factoryProvider), "FACTORY_PROVIDER");
+        vm.label(address(priceManager), "PRICE_MANAGER");
+        vm.label(address(basket), "BASKET");
+        vm.label(address(currencyFeed), "CURRENCY_FEED");
+        vm.label(JOE, "JOE");
         
     }
 

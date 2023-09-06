@@ -600,6 +600,7 @@ contract MumbaiBasketsTest is Test {
 
     /// @notice This verifies state changes and restrictions for modifyRentTokenSupport()
     function test_mumbai_modifyRentTokenSupport() public {
+
         // Pre-state check.
         address[] memory rentTokens = basket.getSupportedRentTokens();
         assertEq(rentTokens.length, 0);
@@ -607,21 +608,81 @@ contract MumbaiBasketsTest is Test {
         // Remove token -> revert
         vm.prank(factoryOwner);
         vm.expectRevert("Not supported");
-        basket.modifyRentTokenSupport(USDC, false);
+        basket.modifyRentTokenSupport(MUMBAI_USDC, false);
 
-        // Add token -> Success
+        // Add USDC -> Success
         vm.prank(factoryOwner);
-        basket.modifyRentTokenSupport(USDC, true);
+        basket.modifyRentTokenSupport(MUMBAI_USDC, true);
 
-        // Post-state check.
+        // Post-state check 1.
         rentTokens = basket.getSupportedRentTokens();
         assertEq(rentTokens.length, 1);
-        assertEq(rentTokens[0], USDC);
+        assertEq(rentTokens[0], MUMBAI_USDC);
 
-        // Add token again -> revert
+        // Add USDC again -> revert
         vm.prank(factoryOwner);
         vm.expectRevert("Already supported");
-        basket.modifyRentTokenSupport(USDC, true);
+        basket.modifyRentTokenSupport(MUMBAI_USDC, true);
+
+        // Add DAI
+        vm.prank(factoryOwner);
+        basket.modifyRentTokenSupport(MUMBAI_DAI, true);
+
+        // Post-state check 2.
+        rentTokens = basket.getSupportedRentTokens();
+        assertEq(rentTokens.length, 2);
+        assertEq(rentTokens[0], MUMBAI_USDC);
+        assertEq(rentTokens[1], MUMBAI_DAI);
+
+        // Remove DAI
+        vm.prank(factoryOwner);
+        basket.modifyRentTokenSupport(MUMBAI_DAI, false);
+
+        // Post-state check 2.
+        rentTokens = basket.getSupportedRentTokens();
+        assertEq(rentTokens.length, 1);
+        assertEq(rentTokens[0], MUMBAI_USDC);
+    }
+
+
+    // Note: Setters ----
+
+    function test_mumbai_modifyCurrencyFeed() public {
+        address newCurrencyFeed = address(222);
+        
+        // Pre-state check.
+        assertEq(address(basket.currencyFeed()), address(currencyFeed));
+
+        // Try to set currencyFeed to address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Invalid input");
+        basket.modifyCurrencyFeed(address(0));
+
+        // Update currencyFeed
+        vm.prank(factoryOwner);
+        basket.modifyCurrencyFeed(newCurrencyFeed);
+
+        // Post-state check.
+        assertEq(address(basket.currencyFeed()), newCurrencyFeed);
+    }
+
+    function test_mumbai_modifyTnftMetadata() public {
+        address newTnftMetadata = address(222);
+        
+        // Pre-state check.
+        assertEq(address(basket.metadata()), address(metadata));
+
+        // Try to set metadata to address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Invalid input");
+        basket.modifyTnftMetadata(address(0));
+
+        // Update metadata
+        vm.prank(factoryOwner);
+        basket.modifyTnftMetadata(newTnftMetadata);
+
+        // Post-state check.
+        assertEq(address(basket.metadata()), newTnftMetadata);
     }
 
 }
