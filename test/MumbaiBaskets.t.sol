@@ -182,6 +182,8 @@ contract MumbaiBasketsTest is Test {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
+        vm.label(JOE, "JOE");
+        vm.label(NIK, "NIK");
     }
 
     // ~ Utility ~
@@ -254,6 +256,35 @@ contract MumbaiBasketsTest is Test {
         UsdValue = (uint(price) * value * 10 ** 18) / 10 ** priceDecimals / 10 ** oracleDecimals;
         emit log_named_uint("USD Value", UsdValue);
 
+    }
+
+    function _createToken(address tnft, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
+        uint256 preBal = IERC721(tnft).balanceOf(TANGIBLE_LABS);
+
+        // create mint voucher for RE_FP_1
+        IVoucher.MintVoucher memory voucher = IVoucher.MintVoucher(
+            ITangibleNFT(tnft),  // token
+            _mintCount,          // mintCount
+            0,                   // price -> since token is going to vendor, dont need price
+            TANGIBLE_LABS,       // vendor
+            address(0),          // buyer
+            _fingerprint,        // fingerprint
+            true                 // sendToVender
+        );
+
+        // mint token
+        vm.prank(TANGIBLE_LABS);
+        uint256[] memory tokenIds = factoryV2.mint(voucher);
+        assertEq(IERC721(tnft).balanceOf(TANGIBLE_LABS), preBal + _mintCount);
+
+        // transfer token to NIK
+        for (uint256 i; i < _mintCount; ++i) {
+            vm.prank(TANGIBLE_LABS);
+            IERC721(tnft).transferFrom(TANGIBLE_LABS, _receiver, tokenIds[i]);
+        }
+        assertEq(IERC721(tnft).balanceOf(TANGIBLE_LABS), preBal);
+
+        return tokenIds;
     }
 
 
@@ -418,6 +449,74 @@ contract MumbaiBasketsTest is Test {
         // Post-state check
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
+    }
+
+    /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
+    function test_mumbai_batchDepositTNFT() public {
+        uint256 preBal = realEstateTnft.balanceOf(JOE);
+        uint256 amountTNFTs = 3;
+
+        uint256[] memory tokenIds = _createToken(address(realEstateTnft), amountTNFTs, RE_FINGERPRINT_1, JOE);
+        address[] memory tnfts = new address[](amountTNFTs);
+        for (uint256 i; i < tokenIds.length; ++i) {
+            tnfts[i] = address(realEstateTnft);
+        }
+
+        // Pre-state check
+        assertEq(realEstateTnft.balanceOf(JOE), preBal + amountTNFTs);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(), 0);
+        for (uint256 i; i < amountTNFTs; ++i) {
+            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), false);
+        }
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+
+        // emit deposit logic 
+        uint256 usdValue = _emitGetUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
+        uint256 sharePrice = basket.getSharePrice();
+
+        // Execute a batch deposit
+        vm.startPrank(JOE);
+        for (uint256 i; i < amountTNFTs; ++i) {
+            realEstateTnft.approve(address(basket), tokenIds[i]);
+        }
+        uint256[] memory shares = basket.batchDepositTNFT(tnfts, tokenIds);
+        vm.stopPrank();
+
+        emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
+        emit log_named_uint("SHARE PRICE", sharePrice);
+
+        uint256 totalShares;
+        for (uint i; i < amountTNFTs; ++i) {
+            totalShares += shares[i];
+        }
+
+        // Post-state check
+        assertEq(
+            (basket.balanceOf(JOE) * sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(realEstateTnft.balanceOf(JOE), preBal);
+        assertEq(realEstateTnft.balanceOf(address(basket)), amountTNFTs);
+
+        assertEq(basket.balanceOf(JOE), usdValue * amountTNFTs);
+        assertEq(basket.balanceOf(JOE), totalShares);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
+        for (uint256 i; i < amountTNFTs; ++i) {
+            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
+        }
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, amountTNFTs);
+        for (uint256 i; i < amountTNFTs; ++i) {
+            assertEq(deposited[i].tnft, address(realEstateTnft));
+            assertEq(deposited[i].tokenId, tokenIds[i]);
+        }
     }
 
 

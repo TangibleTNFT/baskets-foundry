@@ -106,10 +106,25 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     
     // ~ External Functions ~
 
+    // TODO: Test
+    function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
+        uint256 length = _tangibleNFTs.length;
+        require(length == _tokenIds.length, "Arrays not same size");
+
+        basketShares = new uint256[](length);
+
+        for (uint256 i; i < length;) {
+            basketShares[i] = depositTNFT(_tangibleNFTs[i], _tokenIds[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     /**
      * @notice This method allows a user to deposit their TNFT in exchange for Basket tokens.
      */
-    function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
+    function depositTNFT(address _tangibleNFT, uint256 _tokenId) public returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
@@ -155,7 +170,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens.
      */
-    function redeemNft(address _tangibleNFT, uint256 _tokenId) external {
+    function redeemTNFT(address _tangibleNFT, uint256 _tokenId) external {
         // calc value of TNFT(s) being redeemed
             // value of TNFT(s) / total value of Basket
         
