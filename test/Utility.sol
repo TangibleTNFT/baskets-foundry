@@ -26,6 +26,13 @@ interface IPriceOracleExt {
         uint16 currency,
         uint16 location
     ) external;
+    function transferOwnership(
+        address to
+    ) external;
+    function setTangibleWrapperAddress(
+        address oracleWrapper
+    ) external;
+    function acceptOwnership() external;
 }
 
 interface IFactoryExt {

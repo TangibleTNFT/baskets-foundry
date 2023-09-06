@@ -63,10 +63,10 @@ contract MumbaiBasketsTest is Test {
 
     uint256 public constant RE_TNFTTYPE = 2;
 
-    uint256 public constant RE_FINGERPRINT_1 = 2032;
-    uint256 public constant RE_FINGERPRINT_2 = 2033;
-    uint256 public constant RE_FINGERPRINT_3 = 2034;
-    uint256 public constant RE_FINGERPRINT_4 = 2084;
+    uint256 public constant RE_FINGERPRINT_1 = 2241;
+    uint256 public constant RE_FINGERPRINT_2 = 2242;
+    uint256 public constant RE_FINGERPRINT_3 = 2243;
+    uint256 public constant RE_FINGERPRINT_4 = 2244;
 
     uint256 public constant RE_FEATURE_1 = 5555;
     uint256 public constant RE_FEATURE_2 = 4444;
