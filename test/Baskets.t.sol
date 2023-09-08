@@ -121,6 +121,8 @@ contract BasketsTest is Test {
             TNFTTYPE
         );
 
+        uint256[] memory features = new uint256[](0);
+
         // Deploy Basket
         basket = new Basket(
             "Tangible Basket Token",
@@ -128,7 +130,8 @@ contract BasketsTest is Test {
             address(factoryProvider),
             TNFTTYPE,
             address(currencyFeed),
-            address(metadata)
+            MUMBAI_USDC,
+            features
         );
 
 

@@ -77,6 +77,8 @@ contract MumbaiBasketsTest is Test {
 
     function setUp() public {
 
+        uint256[] memory features = new uint256[](0);
+
         // Deploy Basket
         basket = new Basket(
             "Tangible Basket Token",
@@ -84,7 +86,8 @@ contract MumbaiBasketsTest is Test {
             address(factoryProvider),
             RE_TNFTTYPE,
             address(currencyFeed),
-            address(metadata)
+            MUMBAI_USDC,
+            features
         );
 
         vm.startPrank(ORACLE_OWNER);
@@ -355,6 +358,7 @@ contract MumbaiBasketsTest is Test {
         assertEq(deposited.length, 1);
         assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
@@ -642,47 +646,6 @@ contract MumbaiBasketsTest is Test {
         rentTokens = basket.getSupportedRentTokens();
         assertEq(rentTokens.length, 1);
         assertEq(rentTokens[0], MUMBAI_USDC);
-    }
-
-
-    // Note: Setters ----
-
-    function test_mumbai_modifyCurrencyFeed() public {
-        address newCurrencyFeed = address(222);
-        
-        // Pre-state check.
-        assertEq(address(basket.currencyFeed()), address(currencyFeed));
-
-        // Try to set currencyFeed to address(0) -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("Invalid input");
-        basket.modifyCurrencyFeed(address(0));
-
-        // Update currencyFeed
-        vm.prank(factoryOwner);
-        basket.modifyCurrencyFeed(newCurrencyFeed);
-
-        // Post-state check.
-        assertEq(address(basket.currencyFeed()), newCurrencyFeed);
-    }
-
-    function test_mumbai_modifyTnftMetadata() public {
-        address newTnftMetadata = address(222);
-        
-        // Pre-state check.
-        assertEq(address(basket.metadata()), address(metadata));
-
-        // Try to set metadata to address(0) -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("Invalid input");
-        basket.modifyTnftMetadata(address(0));
-
-        // Update metadata
-        vm.prank(factoryOwner);
-        basket.modifyTnftMetadata(newTnftMetadata);
-
-        // Post-state check.
-        assertEq(address(basket.metadata()), newTnftMetadata);
     }
 
 }

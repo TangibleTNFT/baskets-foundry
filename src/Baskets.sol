@@ -42,6 +42,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     struct TokenData {
         address tnft;
         uint256 tokenId;
+        uint256 fingerprint;
     }
 
     TokenData[] public depositedTnfts;
@@ -55,15 +56,15 @@ contract Basket is ERC20, FactoryModifiers, Owned {
 
     mapping(string => uint256) public currencyBalance;
 
-    string[] public supportedCurrency;
+    string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
 
     address[] public supportedRentToken;
 
-    uint256 public immutable tnftType;
+    IERC20Metadata public primaryRentToken; // USDC by default
 
     ICurrencyFeedV2 public currencyFeed;
 
-    ITNFTMetadata public metadata;
+    uint256 public immutable tnftType;
 
     bool public activelySupportingFeature;
 
@@ -83,7 +84,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     // ~ Constructor ~
 
     /**
-     * @notice Initializes Basket contract.
+     * @notice Initializes Basket contract. // TODO: Only a TNFT holder should be able to create basket, immediately deposits (do this in deployer)
      */
     constructor(
         string memory _name,
@@ -91,22 +92,35 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         address _factoryProvider,
         uint256 _tnftType,
         address _currencyFeed,
-        address _metadata
+        address _rentToken,
+        uint256[] memory _features
     )
         ERC20(_name, _symbol) 
         FactoryModifiers(_factoryProvider) 
         Owned(msg.sender) 
     {
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
-        require(_currencyFeed != address(0), "CurrencyFeed == address(0)");
-        require(_metadata != address(0), "TNFTMetadata == address(0)");
+        // TODO: Verify msg.sender is deployer or factory owner.
+        
+        if (_features.length != 0) activelySupportingFeature = true;
+        else {
+            // TODO: Test
+            for (uint256 i; i < _features.length;) {
+                addFeatureSupport(_features[i]);
+                unchecked {
+                    ++i;
+                }
+            }
+        }
 
-        (bool added,,) = ITNFTMetadata(_metadata).tnftTypes(_tnftType);
+        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
-        tnftType = _tnftType;
         currencyFeed = ICurrencyFeedV2(_currencyFeed);
-        metadata = ITNFTMetadata(_metadata);
+        primaryRentToken = IERC20Metadata(_rentToken);
+
+        tnftType = _tnftType;
     }
 
     
@@ -134,6 +148,8 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
+        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
+
         if(activelySupportingFeature) {
             // if contract supports a feature, make sure tokenId has that feature
             uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
@@ -150,7 +166,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             require(supported, "TNFT missing feature");
         }
 
-        (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, _tokenId);
+        (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
 
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
@@ -162,7 +178,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         _mint(msg.sender, basketShare);
 
         tokenDeposited[_tangibleNFT][_tokenId] = true;
-        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId));
+        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
 
         currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals;
         if (!currencySupported[currency]) {
@@ -185,9 +201,10 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @notice This method adds a feature subcategory to this Basket.
      */
-    function addFeatureSupport(uint256 _feature) external onlyOwner {
+    function addFeatureSupport(uint256 _feature) public onlyOwner {
         require(!activelySupportingFeature, "Feature already supported");
-        require(metadata.featureInType(tnftType, _feature), "Feature not supported in type");
+        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+        require(ITNFTMetadata(metadata).featureInType(tnftType, _feature), "Feature not supported in type");
 
         activelySupportingFeature = true;
         featureSupported[_feature] = true;
@@ -214,6 +231,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         emit FeatureSupportAdded(_feature);
     }
 
+    // TODO: Refactor
     function removeFeatureSupport(uint256 _feature) external onlyOwner {
         require(featureSupported[_feature], "Feature not supported");
 
@@ -234,16 +252,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             supportedRentToken[index] = supportedRentToken[supportedRentToken.length - 1];
             supportedRentToken.pop();
         }
-    }
-
-    function modifyCurrencyFeed(address _newCurrencyFeed) external onlyFactoryOwner {
-        require(_newCurrencyFeed != address(0), "Invalid input");
-        currencyFeed = ICurrencyFeedV2(_newCurrencyFeed);
-    }
-
-    function modifyTnftMetadata(address _newMetadata) external onlyFactoryOwner {
-        require(_newMetadata != address(0), "Invalid input");
-        metadata = ITNFTMetadata(_newMetadata);
     }
 
     /**
@@ -281,14 +289,9 @@ contract Basket is ERC20, FactoryModifiers, Owned {
                 ++i;
             }
         }
-        // Get value of all rent accrued by this contract
-        for (uint256 i; i < supportedRentToken.length;) {
-            IERC20Metadata rentToken = IERC20Metadata(supportedRentToken[i]);
-            totalValue += _getUSDValue(rentToken.symbol(), rentToken.balanceOf(address(this)), rentToken.decimals());
-            unchecked {
-                ++i;
-            }
-        }
+
+        // get value of rent accrued by this contract
+        //totalValue += _getUSDValue(primaryRentToken.symbol(), primaryRentToken.balanceOf(address(this)), primaryRentToken.decimals()); TODO: Revisit
     }
 
     function getDepositedTnfts() public view returns (TokenData[] memory) {
@@ -305,8 +308,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     /**
      * @dev Get value of TNFT in native currency
      */
-    function _getTnftNativeValue(address _tangibleNFT, uint256 _tnftTokenId) internal view returns (string memory currency, uint256 value, uint8 decimals) {
-        uint256 fingerPrint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tnftTokenId); 
+    function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
         address factory = IFactoryProvider(factoryProvider).factory();
 
         ITangiblePriceManager priceManager = IFactory(factory).priceManager();
@@ -314,7 +316,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
 
         uint256 currencyNum;
-        (value, currencyNum) = oracle.marketPriceNativeCurrency(fingerPrint);
+        (value, currencyNum) = oracle.marketPriceNativeCurrency(_fingerprint);
         currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
 
         decimals = oracle.decimals();
