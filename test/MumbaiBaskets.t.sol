@@ -68,8 +68,10 @@ contract MumbaiBasketsTest is Test {
     uint256 public constant RE_FINGERPRINT_3 = 2243;
     uint256 public constant RE_FINGERPRINT_4 = 2244;
 
-    uint256 public constant RE_FEATURE_1 = 5555;
-    uint256 public constant RE_FEATURE_2 = 4444;
+    uint256 public constant RE_FEATURE_1 = 111111;
+    uint256 public constant RE_FEATURE_2 = 222222;
+    uint256 public constant RE_FEATURE_3 = 333333;
+    uint256 public constant RE_FEATURE_4 = 444444;
     
     uint256 public constant GOLD_TNFTTYPE = 1;
     
@@ -457,6 +459,100 @@ contract MumbaiBasketsTest is Test {
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
     }
 
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    function test_mumbai_depositTNFT_feature_multiple() public { // TODO: Build a test case with multiple categories of varying feature support depositing
+        uint256[] memory featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_2;
+        featuresToAdd[1] = RE_FEATURE_3;
+        featuresToAdd[2] = RE_FEATURE_4;
+
+        string[] memory descriptionsToAdd = new string[](3);
+        descriptionsToAdd[0] = "Desc for feat 2";
+        descriptionsToAdd[1] = "Desc for feat 3";
+        descriptionsToAdd[2] = "Desc for feat 4";
+        
+        // add more features to tnftType
+        vm.startPrank(factoryOwner);
+        ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
+        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
+        vm.stopPrank();
+
+        // add feature support        
+        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(RE_FEATURE_2);
+        basket.addFeatureSupport(RE_FEATURE_3);
+
+        // Pre-state check
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(basket.featureSupported(RE_FEATURE_2), true);
+        assertEq(basket.featureSupported(RE_FEATURE_3), true);
+
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        vm.expectRevert("TNFT missing feature");
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check 1.
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+
+        // add feature 1 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
+
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        vm.expectRevert("TNFT missing feature");
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check 2.
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+
+        // add feature 2 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_2);
+
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        vm.expectRevert("TNFT missing feature");
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check 3.
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+
+        // add feature 3 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_3);
+
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check 4.
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
+
+        // add all featurs to TNFT 2
+        _addFeatureToCategory(address(realEstateTnft), 2, RE_FEATURE_1);
+        _addFeatureToCategory(address(realEstateTnft), 2, RE_FEATURE_2);
+        _addFeatureToCategory(address(realEstateTnft), 2, RE_FEATURE_3);
+        _addFeatureToCategory(address(realEstateTnft), 2, RE_FEATURE_4);
+        assertEq(basket.featureSupported(RE_FEATURE_4), false);
+
+        // Try to execute a deposit
+        vm.startPrank(NIK);
+        realEstateTnft.approve(address(basket), 2);
+        basket.depositTNFT(address(realEstateTnft), 2);
+        vm.stopPrank();
+
+        // Post-state check 5.
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
+    }
+
     /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
     function test_mumbai_batchDepositTNFT() public {
         uint256 preBal = realEstateTnft.balanceOf(JOE);
@@ -534,18 +630,82 @@ contract MumbaiBasketsTest is Test {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
-        assertEq(basket.activelySupportingFeature(), false);
+        uint256[] memory features = basket.getSupportedFeatures();
+        assertEq(features.length, 0);
 
         // Execute addFeatureSupport
         basket.addFeatureSupport(RE_FEATURE_1);
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
-        assertEq(basket.activelySupportingFeature(), true);
+        features = basket.getSupportedFeatures();
+        assertEq(features.length, 1);
+        assertEq(features[0], RE_FEATURE_1);
 
-        // Try to add another feature -> revert
+        // Try to add same feature again -> revert
+        vm.expectRevert("Feature already supported");
+        basket.addFeatureSupport(RE_FEATURE_1);
+
+        // Try to add another feature not supported in type -> revert
+        vm.expectRevert("Feature not supported in type");
+        basket.addFeatureSupport(RE_FEATURE_2);
+    }
+
+    /// @notice This verifies state changes and restrictions for addFeatureSupport() with multiple features
+    function test_mumbai_addFeatureSupport_multiple() public {
+        uint256[] memory featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_2;
+        featuresToAdd[1] = RE_FEATURE_3;
+        featuresToAdd[2] = RE_FEATURE_4;
+
+        string[] memory descriptionsToAdd = new string[](3);
+        descriptionsToAdd[0] = "Desc for feat 2";
+        descriptionsToAdd[1] = "Desc for feat 3";
+        descriptionsToAdd[2] = "Desc for feat 4";
+        
+        // add more features to tnftType
+        vm.startPrank(factoryOwner);
+        ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
+        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
+        vm.stopPrank();
+
+        // Pre-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), false);
+        assertEq(basket.featureSupported(RE_FEATURE_2), false);
+        assertEq(basket.featureSupported(RE_FEATURE_3), false);
+        assertEq(basket.featureSupported(RE_FEATURE_4), false);
+
+        uint256[] memory features = basket.getSupportedFeatures();
+        assertEq(features.length, 0);
+
+        // Execute addFeatureSupport
+        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(RE_FEATURE_2);
+        basket.addFeatureSupport(RE_FEATURE_3);
+        basket.addFeatureSupport(RE_FEATURE_4);
+
+        // Post-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(basket.featureSupported(RE_FEATURE_2), true);
+        assertEq(basket.featureSupported(RE_FEATURE_3), true);
+        assertEq(basket.featureSupported(RE_FEATURE_4), true);
+
+        features = basket.getSupportedFeatures();
+        assertEq(features.length, 4);
+        assertEq(features[0], RE_FEATURE_1);
+        assertEq(features[1], RE_FEATURE_2);
+        assertEq(features[2], RE_FEATURE_3);
+        assertEq(features[3], RE_FEATURE_4);
+
+        // Try to add same features again -> revert
+        vm.expectRevert("Feature already supported");
+        basket.addFeatureSupport(RE_FEATURE_1);
         vm.expectRevert("Feature already supported");
         basket.addFeatureSupport(RE_FEATURE_2);
+        vm.expectRevert("Feature already supported");
+        basket.addFeatureSupport(RE_FEATURE_3);
+        vm.expectRevert("Feature already supported");
+        basket.addFeatureSupport(RE_FEATURE_4);
     }
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport()
@@ -564,9 +724,6 @@ contract MumbaiBasketsTest is Test {
         vm.expectRevert("Incompatible TNFT in Basket");
         basket.addFeatureSupport(RE_FEATURE_1);
 
-        // Post-state check 1.
-        assertEq(basket.featureSupported(RE_FEATURE_1), false);
-
         // Add feature to TNFT contract
         _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
 
@@ -578,7 +735,7 @@ contract MumbaiBasketsTest is Test {
         // Add feature -> success
         basket.addFeatureSupport(RE_FEATURE_1);
 
-        // Post-state check 2.
+        // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
     }
 
@@ -588,14 +745,18 @@ contract MumbaiBasketsTest is Test {
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
-        assertEq(basket.activelySupportingFeature(), true);
+
+        uint256[] memory features = basket.getSupportedFeatures();
+        assertEq(features.length, 1);
+        assertEq(features[0], RE_FEATURE_1);
 
         // Execute removeFeatureSupport
         basket.removeFeatureSupport(RE_FEATURE_1);
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
-        assertEq(basket.activelySupportingFeature(), false);
+        features = basket.getSupportedFeatures();
+        assertEq(features.length, 0);
 
         // Try to remove feature again -> revert
         vm.expectRevert("Feature not supported");

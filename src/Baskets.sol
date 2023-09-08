@@ -52,6 +52,8 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
     mapping(uint256 => bool) public featureSupported;
 
+    uint256[] public supportedFeatures;
+
     mapping(string => bool) public currencySupported;
 
     mapping(string => uint256) public currencyBalance;
@@ -66,8 +68,7 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
     uint256 public immutable tnftType;
 
-    bool public activelySupportingFeature;
-
+    uint256 public featureLimit = 10;
 
     // ~ Events ~
 
@@ -108,8 +109,8 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
         tnftType = _tnftType;
         
-        if (_features.length != 0) activelySupportingFeature = true;
-        else {
+        // If _features is not empty, add features
+        if (_features.length > 0) {
             // TODO: Test
             for (uint256 i; i < _features.length;) {
                 addFeatureSupport(_features[i]);
@@ -148,20 +149,21 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
-        if(activelySupportingFeature) {
-            // if contract supports a feature, make sure tokenId has that feature
-            uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
-            bool supported;
-            for (uint256 i; i < features.length;) {
-                if (featureSupported[features[i]]) {
+        // if contract supports features, make sure tokenId has a supported feature
+        uint256 length = supportedFeatures.length;
+        if(length > 0) {
+            //uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
+            for (uint256 i; i < length;) {
+                bool supported;
+                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
+                if (featureData.added) {
                     supported = true;
-                    break;
                 }
+                require(supported, "TNFT missing feature");
                 unchecked {
                     ++i;
                 }
             }
-            require(supported, "TNFT missing feature");
         }
 
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
@@ -201,40 +203,44 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
      * @notice This method adds a feature subcategory to this Basket.
      */
     function addFeatureSupport(uint256 _feature) public onlyOwner {
-        require(!activelySupportingFeature, "Feature already supported");
+        require(supportedFeatures.length < featureLimit, "Too many features");
+        require(!featureSupported[_feature], "Feature already supported");
+
         address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
         require(ITNFTMetadata(metadata).featureInType(tnftType, _feature), "Feature not supported in type");
 
-        activelySupportingFeature = true;
-        featureSupported[_feature] = true;
-
         // Verify tokens that are already in basket have feature
         for (uint256 i; i < depositedTnfts.length;) {
-            uint256[] memory features = ITangibleNFT(depositedTnfts[i].tnft).getTokenFeatures(depositedTnfts[i].tokenId);
-            bool supported;
-            for (uint256 j; j < features.length;) {
-                if (featureSupported[features[j]]) {
-                    supported = true;
-                    break;
-                }
-                unchecked {
-                    ++j;
-                }
-            }
-            require(supported, "Incompatible TNFT in Basket");
+            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[i].tnft).tokenFeatureAdded(
+                depositedTnfts[i].tokenId,
+                _feature
+            );
+            require (featureData.added, "Incompatible TNFT in Basket");
             unchecked {
                 ++i;
             }
         }
 
+        supportedFeatures.push(_feature);
+        featureSupported[_feature] = true;
+
         emit FeatureSupportAdded(_feature);
     }
 
-    // TODO: Refactor
+    /**
+     * @notice This method removes a feature subcategory from this Basket.
+     */
     function removeFeatureSupport(uint256 _feature) external onlyOwner {
-        require(featureSupported[_feature], "Feature not supported");
+        (uint256 index, bool exists) = _isSupportedFeature(_feature);
+        require(exists, "Feature not supported");
 
-        activelySupportingFeature = false;
+        uint256 lengthFeatures = supportedFeatures.length;
+
+        // remove feature from array
+        supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
+        supportedFeatures.pop();
+
+        // set feature is no longer supported
         featureSupported[_feature] = false;
 
         emit FeatureSupportRemoved(_feature);
@@ -301,6 +307,10 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
         return supportedRentToken;
     }
 
+    function getSupportedFeatures() public view returns (uint256[] memory) {
+        return supportedFeatures;
+    }
+
 
     // ~ Internal Functions ~
 
@@ -339,6 +349,13 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
         if (price < 0) price = 0;
 
         return (uint256(price), priceFeed.decimals());
+    }
+
+    function _isSupportedFeature(uint256 _feature) internal view returns (uint256 index, bool exists) {
+        for(uint256 i; i < supportedFeatures.length;) {
+            if (supportedFeatures[i] == _feature) return (i, true);
+        }
+        return (0, false);
     }
 
     /**
