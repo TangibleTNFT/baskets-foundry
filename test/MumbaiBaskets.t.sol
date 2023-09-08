@@ -419,8 +419,10 @@ contract MumbaiBasketsTest is Test {
         assertEq(deposited.length, 2);
         assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, 2);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
@@ -520,6 +522,7 @@ contract MumbaiBasketsTest is Test {
         for (uint256 i; i < amountTNFTs; ++i) {
             assertEq(deposited[i].tnft, address(realEstateTnft));
             assertEq(deposited[i].tokenId, tokenIds[i]);
+            assertEq(deposited[i].fingerprint, RE_FINGERPRINT_1);
         }
     }
 
@@ -646,6 +649,39 @@ contract MumbaiBasketsTest is Test {
         rentTokens = basket.getSupportedRentTokens();
         assertEq(rentTokens.length, 1);
         assertEq(rentTokens[0], MUMBAI_USDC);
+    }
+
+
+    // Note: Owned2Step ----
+
+    function test_mumbai_transferOwnership() public {
+        
+        // Pre-state check
+        assertEq(basket.owner(), address(this));
+        assertEq(basket.newOwner(), address(0));
+
+        // Execute pushOwnership
+        basket.pushOwnership(JOE);
+
+        // Pre-state check
+        assertEq(basket.owner(), address(this));
+        assertEq(basket.newOwner(), JOE);
+
+        // Joe executes pullOwnership
+        vm.prank(JOE);
+        basket.pullOwnership();
+
+        // Pre-state check
+        assertEq(basket.owner(), JOE);
+        assertEq(basket.newOwner(), JOE);
+
+        // Joe attempts an onlyOwner function
+        vm.prank(JOE);
+        basket.pushOwnership(address(222));
+
+        // Previous owner (address(this)) can no longer call onlyOwner functions
+        vm.expectRevert("UNAUTHORIZED");
+        basket.pushOwnership(address(333));
     }
 
 }

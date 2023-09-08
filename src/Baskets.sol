@@ -17,7 +17,7 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
-import { Owned } from "./abstract/Owned.sol";
+import { Owned2Step } from "./abstract/Owned.sol";
 import { IBasket } from "./IBaskets.sol";
 
 // TODO: How to handle rent? rent is redeemed when the TNFT is redeemed
@@ -35,7 +35,7 @@ import { IBasket } from "./IBaskets.sol";
  * @author TangibleStore
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is ERC20, FactoryModifiers, Owned {
+contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
     // ~ State Variables ~
 
@@ -97,10 +97,16 @@ contract Basket is ERC20, FactoryModifiers, Owned {
     )
         ERC20(_name, _symbol) 
         FactoryModifiers(_factoryProvider) 
-        Owned(msg.sender) 
+        Owned2Step(msg.sender) 
     {
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
         // TODO: Verify msg.sender is deployer or factory owner.
+
+        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
+        require(added, "Invalid tnftType");
+
+        tnftType = _tnftType;
         
         if (_features.length != 0) activelySupportingFeature = true;
         else {
@@ -113,14 +119,8 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             }
         }
 
-        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
-        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
-        require(added, "Invalid tnftType");
-
         currencyFeed = ICurrencyFeedV2(_currencyFeed);
         primaryRentToken = IERC20Metadata(_rentToken);
-
-        tnftType = _tnftType;
     }
 
     
@@ -148,8 +148,6 @@ contract Basket is ERC20, FactoryModifiers, Owned {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
-        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
-
         if(activelySupportingFeature) {
             // if contract supports a feature, make sure tokenId has that feature
             uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
@@ -166,6 +164,7 @@ contract Basket is ERC20, FactoryModifiers, Owned {
             require(supported, "TNFT missing feature");
         }
 
+        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
 
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);

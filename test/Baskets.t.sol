@@ -121,19 +121,6 @@ contract BasketsTest is Test {
             TNFTTYPE
         );
 
-        uint256[] memory features = new uint256[](0);
-
-        // Deploy Basket
-        basket = new Basket(
-            "Tangible Basket Token",
-            "TBT",
-            address(factoryProvider),
-            TNFTTYPE,
-            address(currencyFeed),
-            MUMBAI_USDC,
-            features
-        );
-
 
         // ~ configuration ~
 
@@ -144,11 +131,24 @@ contract BasketsTest is Test {
         factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE, address(marketplace));
         factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER, address(tnftDeployer));
 
+
         // Add TNFTType on TNFTMetadata contract
         metadata.addTNFTType(
             TNFTTYPE,
             "RealEstateType1",
             false // TODO: Revisit -> This should be true -> Will deploy rent manager
+        );
+
+        // Deploy Basket
+        uint256[] memory features = new uint256[](0);
+        basket = new Basket(
+            "Tangible Basket Token",
+            "TBT",
+            address(factoryProvider),
+            TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            features
         );
 
 

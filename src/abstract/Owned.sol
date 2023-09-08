@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 /// @notice Simple single owner authorization mixin that follows the EIP-173 standard.
 /// @author Modified from Solmate (https://github.com/transmissions11/solmate/blob/main/src/auth/Owned.sol)
-abstract contract Owned {
+abstract contract Owned2Step {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -16,13 +16,14 @@ abstract contract Owned {
 
     address public owner;
 
+    address public newOwner;
+
     /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
     constructor(address _owner) {
         owner = _owner;
-
         emit OwnershipTransferred(address(0), _owner);
     }
 
@@ -30,16 +31,22 @@ abstract contract Owned {
                              OWNERSHIP LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "ZERO ADDRESS");
-
-        _transferOwnership(newOwner);
+    /**
+     * @notice This function assigns a new owner address to newOwner state var.
+     * @param newOwner_ Address we're assigning to newOwner.
+     */
+    function pushOwnership(address newOwner_) public onlyOwner {
+        require(newOwner_ != address(0), "Ownable: new owner is the zero address");
+        newOwner = newOwner_;
     }
 
-    function _transferOwnership(address newOwner) internal virtual {
+    /**
+     * @notice This function allows the new contract owner to assign itself as the contract owner.
+     */
+    function pullOwnership() public {
+        require(msg.sender == newOwner, "Ownable: must be new owner to pull");
+        emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
-
-        emit OwnershipTransferred(msg.sender, newOwner); 
     }
 
     function _onlyOwner() internal view virtual {
