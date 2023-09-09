@@ -7,7 +7,7 @@ import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 // local contracts
 import { Basket } from "../src/Baskets.sol";
 import { BasketDeployer } from "../src/BasketsDeployer.sol";
-import "./Utility.sol";
+import "./utils/Utility.sol";
 
 // tangible contract imports
 import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";

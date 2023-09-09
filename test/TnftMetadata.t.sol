@@ -9,8 +9,8 @@ import { FactoryProvider } from "@tangible/FactoryProvider.sol";
 
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
-import "./MumbaiAddresses.sol";
-import "./Utility.sol";
+import "./utils/MumbaiAddresses.sol";
+import "./utils/Utility.sol";
 
 contract TnftMetadataTest is Test, Utility {
     FactoryProvider public factoryProvider;

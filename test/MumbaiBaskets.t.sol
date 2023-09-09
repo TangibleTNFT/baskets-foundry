@@ -8,8 +8,8 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 // local contracts
 import { Basket } from "../src/Baskets.sol";
 import { BasketDeployer } from "../src/BasketsDeployer.sol";
-import "./MumbaiAddresses.sol";
-import "./Utility.sol";
+import "./utils/MumbaiAddresses.sol";
+import "./utils/Utility.sol";
 
 // tangible contract imports
 import { FactoryProvider } from "@tangible/FactoryProvider.sol";
