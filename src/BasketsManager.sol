@@ -10,7 +10,7 @@ import { IBasket } from "./IBaskets.sol";
 // TODO: Track all baskets deployed
 
 
-contract BasketDeployer is FactoryModifiers {
+contract BasketManager is FactoryModifiers {
 
     // ~ State Variables ~
 
@@ -51,7 +51,8 @@ contract BasketDeployer is FactoryModifiers {
         uint256[] memory _features
     ) external returns (IBasket) {
 
-        bytes32 hashedFeatures = keccak256(abi.encodePacked(_tnftType, sort(_features)));
+        bytes32 hashedFeatures = createHash(_tnftType, _features);
+
         require(checkBasketAvailability(hashedFeatures), "Basket already exists");
         
         Basket basket = new Basket(
@@ -89,6 +90,14 @@ contract BasketDeployer is FactoryModifiers {
         }
         return true;
     }
+
+    function createHash(uint256 _tnftType, uint256[] memory _features) public returns (bytes32 hashedFeatures) {
+        if (_features.length > 1) {
+            hashedFeatures = keccak256(abi.encodePacked(_tnftType, sort(_features)));
+        } else {
+            hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features));
+        }
+    }  
 
     function sort(uint[] memory data) public pure returns (uint[] memory) {
         _sort(data, int(0), int(data.length - 1));

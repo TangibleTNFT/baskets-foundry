@@ -6,7 +6,8 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
-import { BasketDeployer } from "../src/BasketsDeployer.sol";
+import { IBasket } from "../src/IBaskets.sol";
+import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -31,10 +32,10 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
-contract MumbaiBasketsTest is Test, Utility {
+contract BasketsManagerTest is Test, Utility {
 
     Basket public basket;
-    BasketDeployer public basketDeployer;
+    BasketManager public basketManager;
 
     //contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
@@ -65,8 +66,8 @@ contract MumbaiBasketsTest is Test, Utility {
 
         uint256[] memory features = new uint256[](0);
 
-        // Deploy BasketDeployer
-        basketDeployer = new BasketDeployer(address(factoryProvider));
+        // Deploy BasketManager
+        basketManager = new BasketManager(address(factoryProvider));
 
         basket = new Basket(
             "Tangible Basket Token",
@@ -162,18 +163,110 @@ contract MumbaiBasketsTest is Test, Utility {
     // ~ Initial State Test ~
 
     /// @notice Initial state test.
-    function test_basketDeployer_init_state() public {
+    function test_basketManager_init_state() public {
         // TODO
     }
 
 
     // ~ Unit Tests ~
 
+    /// @notice Verifies proper state changes when a basket is deployed with features
+    function test_basketManager_deployBasket() public {
+
+        // create features array
+        uint256[] memory features = new uint256[](2);
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        // Pre-state check.
+        address[] memory basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 0);
+
+        // deploy basket
+        IBasket _basket = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            features
+        );
+
+        // Post-state check
+        basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 1);
+        assertEq(basketsArray[0], address(_basket));
+
+        assertEq(
+            basketManager.hashedFeaturesForBasket(address(_basket)),
+            keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
+        );
+        assert(
+            basketManager.hashedFeaturesForBasket(address(_basket)) !=
+            keccak256(abi.encodePacked(RE_TNFTTYPE, features))
+        );
+
+        emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
+
+        // create new features array with same features in different order
+        features = new uint256[](2);
+        features[0] = RE_FEATURE_1;
+        features[1] = RE_FEATURE_2;
+
+        // deploy another basket with same features
+        vm.expectRevert("Basket already exists");
+        IBasket _basket2 = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            features
+        );
+    }
+
+    /// @notice Verifies proper state changes when a basket is deployed with no features
+    function test_basketManager_deployBasket_noFeatures() public {
+
+        // create features array
+        uint256[] memory features = new uint256[](0);
+
+        // Pre-state check.
+        address[] memory basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 0);
+
+        // deploy basket
+        IBasket _basket = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            features
+        );
+
+        // Post-state check
+        basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 1);
+        assertEq(basketsArray[0], address(_basket));
+
+        assertEq(
+            basketManager.hashedFeaturesForBasket(address(_basket)),
+            keccak256(abi.encodePacked(RE_TNFTTYPE))
+        );
+        assertEq(
+            basketManager.hashedFeaturesForBasket(address(_basket)),
+            keccak256(abi.encodePacked(RE_TNFTTYPE, features))
+        );
+
+        emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
+    }
+
     /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
-    function test_basketDeployer_quickSort() public {
+    function test_basketManager_quickSort() public {
 
         // Sort testArray1 of size 10.
-        uint256[] memory sortedArray = basketDeployer.sort(testArray1);
+        uint256[] memory sortedArray = basketManager.sort(testArray1);
 
         // Verify elements were sorted correctly.
         for (uint256 i; i < sortedArray.length; ++i) {
@@ -186,7 +279,7 @@ contract MumbaiBasketsTest is Test, Utility {
         featuresArray1[0] = RE_FEATURE_3;
 
         // Sort
-        sortedArray = basketDeployer.sort(featuresArray1);
+        sortedArray = basketManager.sort(featuresArray1);
 
         // Verify
         assertEq(sortedArray[0], RE_FEATURE_3);
@@ -197,7 +290,7 @@ contract MumbaiBasketsTest is Test, Utility {
         featuresArray2[1] = RE_FEATURE_2;
 
         // Sort
-        sortedArray = basketDeployer.sort(featuresArray2);
+        sortedArray = basketManager.sort(featuresArray2);
 
         // Verify
         assertEq(sortedArray[0], RE_FEATURE_2);
@@ -211,7 +304,7 @@ contract MumbaiBasketsTest is Test, Utility {
         featuresArray3[3] = RE_FEATURE_1;
 
         // Sort
-        sortedArray = basketDeployer.sort(featuresArray3);
+        sortedArray = basketManager.sort(featuresArray3);
 
         // Verify
         assertEq(sortedArray[0], RE_FEATURE_1);
@@ -219,10 +312,17 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(sortedArray[2], RE_FEATURE_3);
         assertEq(sortedArray[3], RE_FEATURE_4);
 
+        // Create features array of size 4.
+        uint256[] memory featuresArray4 = new uint256[](0);
+
+        // Sort
+        vm.expectRevert(); // reverts -> Cant sort empty array
+        sortedArray = basketManager.sort(featuresArray4);
+
     }
 
     /// @notice This test verifies the use of abi.encodePacked.
-    function test_basketDeployer_encodePacked() public {
+    function test_basketManager_encodePacked() public {
         uint256 tnftType = 2;
 
         // hash state array of randomized variables of size 10.
@@ -255,8 +355,8 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // verify hashed local array and hashed state array have the same hash value when sorted.
         assertEq(
-            keccak256(abi.encodePacked(tnftType, basketDeployer.sort(testArrayLocal))),
-            keccak256(abi.encodePacked(tnftType, basketDeployer.sort(testArray1)))
+            keccak256(abi.encodePacked(tnftType, basketManager.sort(testArrayLocal))),
+            keccak256(abi.encodePacked(tnftType, basketManager.sort(testArray1)))
         );
 
         bytes32 hashedCombo2 = keccak256(abi.encodePacked(tnftType));

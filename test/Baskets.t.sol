@@ -6,7 +6,7 @@ import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
-import { BasketDeployer } from "../src/BasketsDeployer.sol";
+import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/Utility.sol";
 
 // tangible contract imports
@@ -36,7 +36,7 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
 contract BasketsTest is Test, Utility {
     Basket public basket;
-    BasketDeployer public basketDeployer;
+    BasketManager public basketManager;
 
     FactoryProvider public factoryProvider;
     FactoryV2 public factory;

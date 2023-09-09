@@ -7,7 +7,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
-import { BasketDeployer } from "../src/BasketsDeployer.sol";
+import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -36,7 +36,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 contract MumbaiBasketsTest is Test, Utility {
 
     Basket public basket;
-    BasketDeployer public basketDeployer;
+    BasketManager public basketManager;
 
     //contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
