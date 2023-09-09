@@ -4,12 +4,16 @@ pragma solidity ^0.8.19;
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { Basket } from "./Baskets.sol";
-import { IBasket } from "./IBaskets.sol";
+import { IBasket } from "./interfaces/IBaskets.sol";
 
 
 // TODO: Track all baskets deployed
 
-
+/**
+ * @title BasketManager
+ * @author Chase Brown
+ * @notice This contract manages all deployed Basket contracts.
+ */
 contract BasketManager is FactoryModifiers {
 
     // ~ State Variables ~
@@ -42,6 +46,9 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Functions ~
 
+    /**
+     * @notice This method deploys a new Basket contract.
+     */
     function deployBasket(
         string memory _name,
         string memory _symbol,

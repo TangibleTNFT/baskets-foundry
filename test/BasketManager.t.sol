@@ -6,7 +6,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
-import { IBasket } from "../src/IBaskets.sol";
+import { IBasket } from "../src/interfaces/IBaskets.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
@@ -349,9 +349,17 @@ contract BasketsManagerTest is Test, Utility {
         // verify hashed local array and hashed state array have the same hash value.
         assertEq(hashedCombo, hashedCombo1);
 
-        // flip 2 elements
-        testArrayLocal[6] = 1;
-        testArrayLocal[7] = 10;
+        // flip elements
+        testArrayLocal[0] = 3;
+        testArrayLocal[1] = 1;
+        testArrayLocal[2] = 10;
+        testArrayLocal[3] = 5;
+        testArrayLocal[4] = 7;
+        testArrayLocal[5] = 4;
+        testArrayLocal[6] = 2;
+        testArrayLocal[7] = 9;
+        testArrayLocal[8] = 8;
+        testArrayLocal[9] = 6;
 
         // verify hashed local array and hashed state array have the same hash value when sorted.
         assertEq(

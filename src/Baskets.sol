@@ -18,7 +18,7 @@ import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
 import { Owned2Step } from "./abstract/Owned.sol";
-import { IBasket } from "./IBaskets.sol";
+import { IBasket } from "./interfaces/IBaskets.sol";
 
 // TODO: How to handle rent? rent is redeemed when the TNFT is redeemed
 // TODO: Who is the owner of the contract? Creator or Tangible?
@@ -32,7 +32,7 @@ import { IBasket } from "./IBaskets.sol";
 
 /**
  * @title Basket
- * @author TangibleStore
+ * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
 contract Basket is ERC20, FactoryModifiers, Owned2Step {
