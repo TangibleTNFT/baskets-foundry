@@ -70,6 +70,7 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
     uint256 public featureLimit = 10;
 
+
     // ~ Events ~
 
     event DepositedTNFT(address prevOwner, address indexed tnft, uint256 indexed tokenId);
@@ -202,7 +203,7 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method adds a feature subcategory to this Basket.
      */
-    function addFeatureSupport(uint256 _feature) public onlyOwner {
+    function addFeatureSupport(uint256 _feature) public onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
         require(supportedFeatures.length < featureLimit, "Too many features");
         require(!featureSupported[_feature], "Feature already supported");
 
@@ -230,7 +231,7 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method removes a feature subcategory from this Basket.
      */
-    function removeFeatureSupport(uint256 _feature) external onlyOwner {
+    function removeFeatureSupport(uint256 _feature) external onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
         (uint256 index, bool exists) = _isSupportedFeature(_feature);
         require(exists, "Feature not supported");
 

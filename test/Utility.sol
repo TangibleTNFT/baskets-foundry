@@ -4,8 +4,30 @@ pragma solidity ^0.8.13;
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
-address constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
-address constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+contract Utility {
+
+    // ~ Constants ~
+
+    address public constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
+    address public constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+
+    // ~ Types and Features ~
+
+    uint256 public constant RE_TNFTTYPE = 2;
+
+    uint256 public constant RE_FINGERPRINT_1 = 2241;
+    uint256 public constant RE_FINGERPRINT_2 = 2242;
+    uint256 public constant RE_FINGERPRINT_3 = 2243;
+    uint256 public constant RE_FINGERPRINT_4 = 2244;
+
+    uint256 public constant RE_FEATURE_1 = 111111;
+    uint256 public constant RE_FEATURE_2 = 222222;
+    uint256 public constant RE_FEATURE_3 = 333333;
+    uint256 public constant RE_FEATURE_4 = 444444;
+
+    uint256 public constant GOLD_TNFTTYPE = 1;
+
+}
 
 interface ITangibleNFTExt is ITangibleNFT {
     /// @dev Returns the feature status of a `tokenId`.

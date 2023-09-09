@@ -34,7 +34,7 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 // Polygon RPC: https://rpc.ankr.com/polygon
 
 
-contract BasketsTest is Test {
+contract BasketsTest is Test, Utility {
     Basket public basket;
     BasketDeployer public basketDeployer;
 

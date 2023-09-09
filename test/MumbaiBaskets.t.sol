@@ -33,7 +33,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
-contract MumbaiBasketsTest is Test {
+contract MumbaiBasketsTest is Test, Utility {
 
     Basket public basket;
     BasketDeployer public basketDeployer;
@@ -58,22 +58,6 @@ contract MumbaiBasketsTest is Test {
     address public factoryOwner = IOwnable(address(factoryV2)).contractOwner();
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
-
-    // ~ Types and Features ~
-
-    uint256 public constant RE_TNFTTYPE = 2;
-
-    uint256 public constant RE_FINGERPRINT_1 = 2241;
-    uint256 public constant RE_FINGERPRINT_2 = 2242;
-    uint256 public constant RE_FINGERPRINT_3 = 2243;
-    uint256 public constant RE_FINGERPRINT_4 = 2244;
-
-    uint256 public constant RE_FEATURE_1 = 111111;
-    uint256 public constant RE_FEATURE_2 = 222222;
-    uint256 public constant RE_FEATURE_3 = 333333;
-    uint256 public constant RE_FEATURE_4 = 444444;
-    
-    uint256 public constant GOLD_TNFTTYPE = 1;
     
     event log_named_bool(string key, bool val);
 

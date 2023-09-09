@@ -12,7 +12,7 @@ import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import "./MumbaiAddresses.sol";
 import "./Utility.sol";
 
-contract TnftMetadataTest is Test {
+contract TnftMetadataTest is Test, Utility {
     FactoryProvider public factoryProvider;
     FactoryV2 public factory;
     TNFTMetadata public metadata;
