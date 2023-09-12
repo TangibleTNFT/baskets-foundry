@@ -7,8 +7,6 @@ import { Basket } from "./Baskets.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
 
 
-// TODO: Track all baskets deployed
-
 /**
  * @title BasketManager
  * @author Chase Brown
@@ -60,6 +58,7 @@ contract BasketManager is FactoryModifiers {
 
         bytes32 hashedFeatures = createHash(_tnftType, _features);
 
+        // might not be necessary -> hash is checked when Basket is initialized
         require(checkBasketAvailability(hashedFeatures), "Basket already exists");
         
         Basket basket = new Basket(
@@ -69,7 +68,8 @@ contract BasketManager is FactoryModifiers {
             _tnftType,
             _currencyFeed,
             _rentToken,
-            _features
+            _features,
+            msg.sender
         );
 
         hashedFeaturesForBasket[address(basket)] = hashedFeatures;
@@ -88,7 +88,7 @@ contract BasketManager is FactoryModifiers {
         return baskets;
     }
 
-    function checkBasketAvailability(bytes32 featuresHash) public returns (bool) {
+    function checkBasketAvailability(bytes32 featuresHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
             if (hashedFeaturesForBasket[baskets[i]] == featuresHash) return false;
             unchecked {
@@ -98,13 +98,19 @@ contract BasketManager is FactoryModifiers {
         return true;
     }
 
-    function createHash(uint256 _tnftType, uint256[] memory _features) public returns (bytes32 hashedFeatures) {
+    function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
         if (_features.length > 1) {
             hashedFeatures = keccak256(abi.encodePacked(_tnftType, sort(_features)));
         } else {
             hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features));
         }
-    }  
+    }
+
+    function addBasket(address _basket) external onlyFactoryOwner {
+        (,bool exists) = _isBasket(_basket);
+        require(!exists);
+        baskets.push(_basket);
+    }
 
     function sort(uint[] memory data) public pure returns (uint[] memory) {
         _sort(data, int(0), int(data.length - 1));
@@ -137,6 +143,9 @@ contract BasketManager is FactoryModifiers {
     function _isBasket(address basket) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < baskets.length;) {
             if (baskets[i] == basket) return (i, true);
+            unchecked {
+                ++i;
+            }
         }
         return (0, false);
     }

@@ -148,7 +148,8 @@ contract BasketsTest is Test, Utility {
             TNFTTYPE,
             address(currencyFeed),
             MUMBAI_USDC,
-            features
+            features,
+            address(this)
         );
 
 

@@ -33,11 +33,11 @@ abstract contract Owned2Step {
 
     /**
      * @notice This function assigns a new owner address to newOwner state var.
-     * @param newOwner_ Address we're assigning to newOwner.
+     * @param _newOwner Address we're assigning to newOwner.
      */
-    function pushOwnership(address newOwner_) public onlyOwner {
-        require(newOwner_ != address(0), "Ownable: new owner is the zero address");
-        newOwner = newOwner_;
+    function pushOwnership(address _newOwner) public onlyOwner {
+        require(_newOwner != address(0), "Ownable: new owner is the zero address");
+        newOwner = _newOwner;
     }
 
     /**

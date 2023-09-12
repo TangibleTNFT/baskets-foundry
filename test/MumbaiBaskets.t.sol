@@ -7,12 +7,16 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
+import { IBasket } from "../src/interfaces/IBaskets.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketAddressProvider } from "../src/BasketsAddressProvider.sol";
+
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
 // tangible contract imports
 import { FactoryProvider } from "@tangible/FactoryProvider.sol";
+import { FactoryV2 } from "@tangible/FactoryV2.sol";
 
 // tangible interface imports
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
@@ -63,6 +67,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
     function setUp() public {
 
+        basketManager = new BasketManager(address(factoryProvider));
         uint256[] memory features = new uint256[](0);
 
         // Deploy Basket
@@ -73,8 +78,13 @@ contract MumbaiBasketsTest is Test, Utility {
             RE_TNFTTYPE,
             address(currencyFeed),
             MUMBAI_USDC,
-            features
+            features,
+            address(this)
         );
+
+        // add basket to basketManager
+        vm.prank(factoryOwner);
+        basketManager.addBasket(address(basket));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -139,6 +149,10 @@ contract MumbaiBasketsTest is Test, Utility {
 
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
+
+        // set basketManager
+        vm.prank(factoryOwner);
+        IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
 
         // mint fingerprint RE_1 and RE_2
         assertEq(IERC721(address(realEstateTnft)).balanceOf(TANGIBLE_LABS), 0);
@@ -413,7 +427,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_mumbai_depositTNFT_feature() public {
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Pre-state check
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
@@ -462,9 +476,9 @@ contract MumbaiBasketsTest is Test, Utility {
         vm.stopPrank();
 
         // add feature support        
-        basket.addFeatureSupport(RE_FEATURE_1);
-        basket.addFeatureSupport(RE_FEATURE_2);
-        basket.addFeatureSupport(RE_FEATURE_3);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_2));
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_3));
 
         // Pre-state check
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
@@ -618,7 +632,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(features.length, 0);
 
         // Execute addFeatureSupport
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
@@ -628,11 +642,22 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // Try to add same feature again -> revert
         vm.expectRevert("Feature already supported");
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Try to add another feature not supported in type -> revert
         vm.expectRevert("Feature not supported in type");
-        basket.addFeatureSupport(RE_FEATURE_2);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_2));
+
+        // Try to deploy a basket with same features -> revert
+        vm.expectRevert("Basket already exists");
+        basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            _asSingletonArrayUint(RE_FEATURE_1)
+        );
     }
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport() with multiple features
@@ -663,10 +688,8 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(features.length, 0);
 
         // Execute addFeatureSupport
-        basket.addFeatureSupport(RE_FEATURE_1);
-        basket.addFeatureSupport(RE_FEATURE_2);
-        basket.addFeatureSupport(RE_FEATURE_3);
-        basket.addFeatureSupport(RE_FEATURE_4);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
+        basket.addFeatureSupport(featuresToAdd);
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
@@ -683,13 +706,33 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // Try to add same features again -> revert
         vm.expectRevert("Feature already supported");
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
         vm.expectRevert("Feature already supported");
-        basket.addFeatureSupport(RE_FEATURE_2);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_2));
         vm.expectRevert("Feature already supported");
-        basket.addFeatureSupport(RE_FEATURE_3);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_3));
         vm.expectRevert("Feature already supported");
-        basket.addFeatureSupport(RE_FEATURE_4);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_4));
+
+        // Create new feature array for new basket
+        featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_1;
+        featuresToAdd[1] = RE_FEATURE_2;
+        featuresToAdd[2] = RE_FEATURE_3;
+
+        // Deploy new basket
+        IBasket basket2 = basketManager.deployBasket(
+            "Tangible Basket Token 2",
+            "TBT2",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            featuresToAdd
+        );
+
+        // add feature_4 to new basket -> revert
+        vm.expectRevert("Basket already exists");
+        basket2.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_4));
     }
 
     /// @notice This verifies state changes and restrictions for addFeatureSupport()
@@ -706,7 +749,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // Add feature whilst basket holds incompatible TNFT - > reverts
         vm.expectRevert("Incompatible TNFT in Basket");
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Add feature to TNFT contract
         _addFeatureToCategory(address(realEstateTnft), 1, RE_FEATURE_1);
@@ -717,7 +760,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(features[0], RE_FEATURE_1);
 
         // Add feature -> success
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
@@ -725,7 +768,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
     /// @notice This verifies state changes and restrictions for removeFeatureSupport()
     function test_mumbai_removeFeatureSupport() public {
-        basket.addFeatureSupport(RE_FEATURE_1);
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Pre-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), true);
@@ -735,7 +778,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(features[0], RE_FEATURE_1);
 
         // Execute removeFeatureSupport
-        basket.removeFeatureSupport(RE_FEATURE_1);
+        basket.removeFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
 
         // Post-state check.
         assertEq(basket.featureSupported(RE_FEATURE_1), false);
@@ -744,7 +787,80 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // Try to remove feature again -> revert
         vm.expectRevert("Feature not supported");
-        basket.removeFeatureSupport(RE_FEATURE_1);
+        basket.removeFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
+    }
+
+    /// @notice This verifies state changes and restrictions for removeFeatureSupport() with multiple features
+    function test_mumbai_removeFeatureSupport_multiple() public {
+        uint256[] memory featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_2;
+        featuresToAdd[1] = RE_FEATURE_3;
+        featuresToAdd[2] = RE_FEATURE_4;
+
+        string[] memory descriptionsToAdd = new string[](3);
+        descriptionsToAdd[0] = "Desc for feat 2";
+        descriptionsToAdd[1] = "Desc for feat 3";
+        descriptionsToAdd[2] = "Desc for feat 4";
+        
+        // add more features to tnftType
+        vm.startPrank(factoryOwner);
+        ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
+        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
+        vm.stopPrank();
+
+        // Execute addFeatureSupport
+        basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
+        basket.addFeatureSupport(featuresToAdd);
+
+        // Pre-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(basket.featureSupported(RE_FEATURE_2), true);
+        assertEq(basket.featureSupported(RE_FEATURE_3), true);
+        assertEq(basket.featureSupported(RE_FEATURE_4), true);
+
+        uint256[] memory features = basket.getSupportedFeatures();
+        assertEq(features.length, 4);
+        assertEq(features[0], RE_FEATURE_1);
+        assertEq(features[1], RE_FEATURE_2);
+        assertEq(features[2], RE_FEATURE_3);
+        assertEq(features[3], RE_FEATURE_4);
+
+        // Remove features
+        uint256[] memory featuresToRemove = new uint256[](2);
+        featuresToRemove[0] = RE_FEATURE_2;
+        featuresToRemove[1] = RE_FEATURE_4;
+        basket.removeFeatureSupport(featuresToRemove);
+        
+        // Post-state check.
+        assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(basket.featureSupported(RE_FEATURE_2), false);
+        assertEq(basket.featureSupported(RE_FEATURE_3), true);
+        assertEq(basket.featureSupported(RE_FEATURE_4), false);
+
+        features = basket.getSupportedFeatures();
+        assertEq(features.length, 2);
+        assertEq(features[0], RE_FEATURE_1);
+        assertEq(features[1], RE_FEATURE_3);
+
+        // Create new feature array for new duplicate basket
+        featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_1;
+        featuresToAdd[1] = RE_FEATURE_2;
+        featuresToAdd[2] = RE_FEATURE_3;
+
+        // Deploy new duplicate basket
+        IBasket basket2 = basketManager.deployBasket(
+            "Tangible Basket Token 2",
+            "TBT2",
+            RE_TNFTTYPE,
+            address(currencyFeed),
+            MUMBAI_USDC,
+            featuresToAdd
+        );
+
+        // remove feature_3 from the new basket, creating duplicate -> revert
+        vm.expectRevert("Basket already exists");
+        basket2.removeFeatureSupport(_asSingletonArrayUint(RE_FEATURE_2));
     }
 
 

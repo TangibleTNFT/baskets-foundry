@@ -8,6 +8,8 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { Basket } from "../src/Baskets.sol";
 import { IBasket } from "../src/interfaces/IBaskets.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketAddressProvider } from "../src/BasketsAddressProvider.sol";
+
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -64,20 +66,25 @@ contract BasketsManagerTest is Test, Utility {
 
     function setUp() public {
 
-        uint256[] memory features = new uint256[](0);
+        //uint256[] memory features = new uint256[](0);
 
         // Deploy BasketManager
         basketManager = new BasketManager(address(factoryProvider));
 
-        basket = new Basket(
-            "Tangible Basket Token",
-            "TBT",
-            address(factoryProvider),
-            RE_TNFTTYPE,
-            address(currencyFeed),
-            MUMBAI_USDC,
-            features
-        );
+        // basket = new Basket(
+        //     "Tangible Basket Token",
+        //     "TBT",
+        //     address(factoryProvider),
+        //     RE_TNFTTYPE,
+        //     address(currencyFeed),
+        //     MUMBAI_USDC,
+        //     features,
+        //     address(this)
+        // );
+
+        // add basket to basketManager
+        // vm.prank(factoryOwner);
+        // basketManager.addBasket(address(basket));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -215,7 +222,7 @@ contract BasketsManagerTest is Test, Utility {
 
         // deploy another basket with same features
         vm.expectRevert("Basket already exists");
-        IBasket _basket2 = basketManager.deployBasket(
+        basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
@@ -248,7 +255,8 @@ contract BasketsManagerTest is Test, Utility {
         // Post-state check
         basketsArray = basketManager.getBasketsArray();
         assertEq(basketsArray.length, 1);
-        assertEq(basketsArray[0], address(_basket));
+        //assertEq(basketsArray[0], address(basket));  // global setup basket
+        assertEq(basketsArray[0], address(_basket)); // local test basket
 
         assertEq(
             basketManager.hashedFeaturesForBasket(address(_basket)),

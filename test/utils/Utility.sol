@@ -52,7 +52,21 @@ interface IPriceOracleExt {
 }
 
 interface IFactoryExt {
+    enum FACT_ADDRESSES {
+        MARKETPLACE,
+        TNFT_DEPLOYER,
+        RENT_MANAGER_DEPLOYER,
+        LABS,
+        PRICE_MANAGER,
+        TNFT_META,
+        REVENUE_SHARE,
+        BASKETS_MANAGER,
+        CURRENCY_FEED
+    }
+
     function setRequireWhitelistCategory(ITangibleNFT tnft, bool required) external;
+
+    function setContract(FACT_ADDRESSES _contractId, address _contractAddress) external;
 }
 
 interface IPriceManagerExt {

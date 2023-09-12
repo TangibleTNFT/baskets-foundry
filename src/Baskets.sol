@@ -19,6 +19,7 @@ import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
 import { Owned2Step } from "./abstract/Owned.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
+import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 
 // TODO: How to handle rent? rent is redeemed when the TNFT is redeemed
 // TODO: Who is the owner of the contract? Creator or Tangible?
@@ -35,15 +36,9 @@ import { IBasket } from "./interfaces/IBaskets.sol";
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is ERC20, FactoryModifiers, Owned2Step {
+contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
 
     // ~ State Variables ~
-
-    struct TokenData {
-        address tnft;
-        uint256 tokenId;
-        uint256 fingerprint;
-    }
 
     TokenData[] public depositedTnfts;
 
@@ -68,7 +63,7 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
 
     uint256 public immutable tnftType;
 
-    uint256 public featureLimit = 10;
+    uint256 public featureLimit;
 
 
     // ~ Events ~
@@ -80,7 +75,6 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
     event FeatureSupportAdded(uint256 feature);
 
     event FeatureSupportRemoved(uint256 feature);
-
 
 
     // ~ Constructor ~
@@ -95,30 +89,29 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
         uint256 _tnftType,
         address _currencyFeed,
         address _rentToken,
-        uint256[] memory _features
+        uint256[] memory _features,
+        address _owner
     )
         ERC20(_name, _symbol) 
         FactoryModifiers(_factoryProvider) 
-        Owned2Step(msg.sender) 
+        Owned2Step(_owner) 
     {
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
         // TODO: Verify msg.sender is deployer or factory owner.
 
         address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+
+
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
         tnftType = _tnftType;
+        featureLimit = 10; // TODO: Add setter
         
         // If _features is not empty, add features
         if (_features.length > 0) {
             // TODO: Test
-            for (uint256 i; i < _features.length;) {
-                addFeatureSupport(_features[i]);
-                unchecked {
-                    ++i;
-                }
-            }
+            _addFeatureSupport(_features);
         }
 
         currencyFeed = ICurrencyFeedV2(_currencyFeed);
@@ -203,48 +196,79 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method adds a feature subcategory to this Basket.
      */
-    function addFeatureSupport(uint256 _feature) public onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
-        require(supportedFeatures.length < featureLimit, "Too many features");
-        require(!featureSupported[_feature], "Feature already supported");
+    function addFeatureSupport(uint256[] memory _features) public onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
+        _addFeatureSupport(_features);
 
-        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
-        require(ITNFTMetadata(metadata).featureInType(tnftType, _feature), "Feature not supported in type");
+        // check basket availability with new features
+        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
+        bytes32 hashedFeatures = basketManager.createHash(tnftType, supportedFeatures); // TODO: Test
 
-        // Verify tokens that are already in basket have feature
-        for (uint256 i; i < depositedTnfts.length;) {
-            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[i].tnft).tokenFeatureAdded(
-                depositedTnfts[i].tokenId,
-                _feature
-            );
-            require (featureData.added, "Incompatible TNFT in Basket");
+        require(basketManager.checkBasketAvailability(hashedFeatures), "Basket already exists");
+        basketManager.updateFeaturesHash(hashedFeatures);
+    }
+    
+    function _addFeatureSupport(uint256[] memory _features) internal {
+        require((supportedFeatures.length + _features.length) <= featureLimit, "Too many features");
+
+        // iterate through all new features -> verify they arent already supported, are a valid feature supported by tnftType, and existing TNFTs have that feature.
+        for (uint256 i; i < _features.length;) {
+            require(!featureSupported[_features[i]], "Feature already supported");
+            address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+            require(ITNFTMetadata(metadata).featureInType(tnftType, _features[i]), "Feature not supported in type");
+
+            // Verify tokens that are already in basket have feature
+            for (uint256 j; j < depositedTnfts.length;) {
+                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[j].tnft).tokenFeatureAdded(
+                    depositedTnfts[j].tokenId,
+                    _features[i]
+                );
+                require (featureData.added, "Incompatible TNFT in Basket");
+                unchecked {
+                    ++j;
+                }
+            }
+
+            supportedFeatures.push(_features[i]);
+            featureSupported[_features[i]] = true;
+
+            emit FeatureSupportAdded(_features[i]);
+
             unchecked {
                 ++i;
             }
         }
 
-        supportedFeatures.push(_feature);
-        featureSupported[_feature] = true;
-
-        emit FeatureSupportAdded(_feature);
     }
 
     /**
      * @notice This method removes a feature subcategory from this Basket.
      */
-    function removeFeatureSupport(uint256 _feature) external onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
-        (uint256 index, bool exists) = _isSupportedFeature(_feature);
-        require(exists, "Feature not supported");
+    function removeFeatureSupport(uint256[] memory _features) external onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
 
-        uint256 lengthFeatures = supportedFeatures.length;
+        for (uint256 i; i < _features.length;) {
+            (uint256 index, bool exists) = _isSupportedFeature(_features[i]);
+            require(exists, "Feature not supported");
 
-        // remove feature from array
-        supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
-        supportedFeatures.pop();
+            uint256 lengthFeatures = supportedFeatures.length;
 
-        // set feature is no longer supported
-        featureSupported[_feature] = false;
+            // remove feature from array
+            supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
+            supportedFeatures.pop();
 
-        emit FeatureSupportRemoved(_feature);
+            featureSupported[_features[i]] = false;
+            emit FeatureSupportRemoved(_features[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        // check basket availability with new features
+        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
+        bytes32 hashedFeatures = basketManager.createHash(tnftType, supportedFeatures); // TODO: Test
+
+        require(basketManager.checkBasketAvailability(hashedFeatures), "Basket already exists");
+        basketManager.updateFeaturesHash(hashedFeatures);
     }
 
     function modifyRentTokenSupport(address _token, bool _support) external onlyFactoryOwner { // TODO: TEST
@@ -300,15 +324,15 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
         //totalValue += _getUSDValue(primaryRentToken.symbol(), primaryRentToken.balanceOf(address(this)), primaryRentToken.decimals()); TODO: Revisit
     }
 
-    function getDepositedTnfts() public view returns (TokenData[] memory) {
+    function getDepositedTnfts() external view returns (TokenData[] memory) {
         return depositedTnfts;
     }
 
-    function getSupportedRentTokens() public view returns (address[] memory) {
+    function getSupportedRentTokens() external view returns (address[] memory) {
         return supportedRentToken;
     }
 
-    function getSupportedFeatures() public view returns (uint256[] memory) {
+    function getSupportedFeatures() external view returns (uint256[] memory) {
         return supportedFeatures;
     }
 
@@ -355,6 +379,9 @@ contract Basket is ERC20, FactoryModifiers, Owned2Step {
     function _isSupportedFeature(uint256 _feature) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < supportedFeatures.length;) {
             if (supportedFeatures[i] == _feature) return (i, true);
+            unchecked {
+                ++i;
+            }
         }
         return (0, false);
     }
