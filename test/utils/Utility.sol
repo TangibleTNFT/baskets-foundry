@@ -6,6 +6,12 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
 contract Utility {
 
+    // ~ Actors ~
+
+    address public constant JOE   = address(bytes20(bytes("Joe")));
+    address public constant NIK   = address(bytes20(bytes("Nik")));
+    address public constant ADMIN = address(bytes20(bytes("Admin")));
+
     // ~ Constants ~
 
     address public constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;

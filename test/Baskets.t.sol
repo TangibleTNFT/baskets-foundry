@@ -61,8 +61,6 @@ contract BasketsTest is Test, Utility {
     //uint256[] public featuresArray;
 
     // Actors
-    address public constant JOE = address(bytes20(bytes("Joe")));
-    address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant TANGIBLE_LABS = address(bytes20(bytes("Tangible Labs Multisig")));
 
     function setUp() public {
@@ -76,6 +74,11 @@ contract BasketsTest is Test, Utility {
         // Deploy Factory Provider
         factoryProvider = new FactoryProvider();
         factoryProvider.initialize(address(factory));
+
+        // Deploy basketManager
+        basketManager = new BasketManager(
+            address(factoryProvider)
+        );
 
         // Deplot tnft deployer
         tnftDeployer = new TangibleNFTDeployerV2(
@@ -125,11 +128,13 @@ contract BasketsTest is Test, Utility {
         // ~ configuration ~
 
         // set contracts on Factory
-        factory.setContract(FactoryV2.FACT_ADDRESSES.LABS, TANGIBLE_LABS);
-        factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER, address(priceManager));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META, address(metadata));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE, address(marketplace));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER, address(tnftDeployer));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.LABS,            TANGIBLE_LABS);
+        factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER,   address(priceManager));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META,       address(metadata));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE,     address(marketplace));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER,   address(tnftDeployer));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED,   address(currencyFeed));
 
 
         // Add TNFTType on TNFTMetadata contract
@@ -141,12 +146,12 @@ contract BasketsTest is Test, Utility {
 
         // Deploy Basket
         uint256[] memory features = new uint256[](0);
+        vm.prank(address(basketManager));
         basket = new Basket(
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),
             TNFTTYPE,
-            address(currencyFeed),
             MUMBAI_USDC,
             features,
             address(this)
@@ -241,6 +246,37 @@ contract BasketsTest is Test, Utility {
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT() public {
         assertTrue(true);
+    }
+    
+    /// @notice Verifies the transferOwnership logic
+    function test_baskets_transferOwnership() public {
+        
+        // Pre-state check
+        assertEq(basket.owner(), address(this));
+        assertEq(basket.newOwner(), address(0));
+
+        // Execute pushOwnership
+        basket.pushOwnership(JOE);
+
+        // Pre-state check
+        assertEq(basket.owner(), address(this));
+        assertEq(basket.newOwner(), JOE);
+
+        // Joe executes pullOwnership
+        vm.prank(JOE);
+        basket.pullOwnership();
+
+        // Pre-state check
+        assertEq(basket.owner(), JOE);
+        assertEq(basket.newOwner(), JOE);
+
+        // Joe attempts an onlyOwner function
+        vm.prank(JOE);
+        basket.pushOwnership(address(222));
+
+        // Previous owner (address(this)) can no longer call onlyOwner functions
+        vm.expectRevert("UNAUTHORIZED");
+        basket.pushOwnership(address(333));
     }
 
 }

@@ -6,6 +6,9 @@ import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { Basket } from "./Baskets.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
 
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+
 
 /**
  * @title BasketManager
@@ -51,32 +54,42 @@ contract BasketManager is FactoryModifiers {
         string memory _name,
         string memory _symbol,
         uint256 _tnftType,
-        address _currencyFeed,
         address _rentToken,
-        uint256[] memory _features
-    ) external returns (IBasket) {
+        uint256[] memory _features,
+        address _tangibleNFTDeposit,
+        uint256 _tokenIdDeposit
+    ) external returns (IBasket, uint256 basketShare) {
 
+        // create hash
         bytes32 hashedFeatures = createHash(_tnftType, _features);
 
         // might not be necessary -> hash is checked when Basket is initialized
         require(checkBasketAvailability(hashedFeatures), "Basket already exists");
+
+        // transfer initial TNFT from basket owner to this contract
+        IERC721(_tangibleNFTDeposit).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit);
         
+        // create new basket
         Basket basket = new Basket(
             _name,
             _symbol,
             factoryProvider,
             _tnftType,
-            _currencyFeed,
             _rentToken,
             _features,
             msg.sender
         );
 
+        // approve transfer of TNFT to new basket and call depositTNFT
+        IERC721(_tangibleNFTDeposit).approve(address(basket), _tokenIdDeposit);
+        basketShare = basket.depositTNFT(_tangibleNFTDeposit, _tokenIdDeposit);
+
+        // store hash and new basket
         hashedFeaturesForBasket[address(basket)] = hashedFeatures;
         baskets.push(address(basket));
 
         emit BasketCreated(msg.sender, address(basket));
-        return IBasket(address(basket));
+        return (IBasket(address(basket)), basketShare);
     }
 
     function updateFeaturesHash(bytes32 newFeaturesHash) external onlyBasket { // TODO: Test
@@ -86,6 +99,13 @@ contract BasketManager is FactoryModifiers {
 
     function getBasketsArray() external view returns (address[] memory) {
         return baskets;
+    }
+
+    /**
+     * @notice Allows address(this) to receive ERC721 tokens.
+     */
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 
     function checkBasketAvailability(bytes32 featuresHash) public view returns (bool) {

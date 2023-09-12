@@ -8,7 +8,6 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { Basket } from "../src/Baskets.sol";
 import { IBasket } from "../src/interfaces/IBaskets.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
-import { BasketAddressProvider } from "../src/BasketsAddressProvider.sol";
 
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
@@ -18,6 +17,7 @@ import { FactoryProvider } from "@tangible/FactoryProvider.sol";
 
 // tangible interface imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
+import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
@@ -51,9 +51,6 @@ contract BasketsManagerTest is Test, Utility {
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
 
     // ~ Actors ~
-
-    address public constant JOE = address(bytes20(bytes("Joe")));
-    address public constant NIK = address(bytes20(bytes("Nik")));
 
     address public factoryOwner = IOwnable(address(factoryV2)).contractOwner();
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
@@ -110,6 +107,15 @@ contract BasketsManagerTest is Test, Utility {
         );
         vm.stopPrank();
 
+        // set basketManager
+        vm.prank(factoryOwner);
+        IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
+
+        // set currencyFeed
+        vm.prank(factoryOwner);
+        IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
+
+        // configure features to add to metadata contract
         uint256[] memory featuresArr = new uint256[](4);
         featuresArr[0] = RE_FEATURE_1;
         featuresArr[1] = RE_FEATURE_2;
@@ -134,6 +140,38 @@ contract BasketsManagerTest is Test, Utility {
             featuresArr
         );
         vm.stopPrank();
+
+        // create mint voucher for RE_FP_1
+        IVoucher.MintVoucher memory voucher1 = IVoucher.MintVoucher(
+            ITangibleNFT(address(realEstateTnft)),  // token
+            1,                                      // mintCount
+            0,                                      // price -> since token is going to vendor, dont need price
+            TANGIBLE_LABS,                          // vendor
+            address(0),                             // buyer
+            RE_FINGERPRINT_1,                       // fingerprint
+            true                                    // sendToVender
+        );
+
+        // create mint voucher for RE_FP_2
+        IVoucher.MintVoucher memory voucher2 = IVoucher.MintVoucher(
+            ITangibleNFT(address(realEstateTnft)),  // token
+            1,                                      // mintCount
+            0,                                      // price -> since token is going to vendor, dont need price
+            TANGIBLE_LABS,                          // vendor
+            address(0),                             // buyer
+            RE_FINGERPRINT_2,                       // fingerprint
+            true                                    // sendToVender
+        );
+
+        // Tangible Labs mints token and sends it to Joe
+        vm.startPrank(TANGIBLE_LABS);
+        factoryV2.mint(voucher1);
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 1);
+        factoryV2.mint(voucher2);
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 2);
+        vm.stopPrank();
+
+        assertEq(realEstateTnft.balanceOf(JOE), 2);
 
         // labels
         vm.label(address(factoryV2), "FACTORY");
@@ -166,6 +204,16 @@ contract BasketsManagerTest is Test, Utility {
         return array;
     }
 
+    /// @notice This method adds feature metadata to a tokenId on a tnft contract
+    function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
+        vm.prank(TANGIBLE_LABS);
+        // add feature to tnft contract
+        ITangibleNFTExt(_tnft).addMetadata(
+            _tokenId,
+            _features
+        );
+    }
+
 
     // ~ Initial State Test ~
 
@@ -185,24 +233,36 @@ contract BasketsManagerTest is Test, Utility {
         features[0] = RE_FEATURE_2;
         features[1] = RE_FEATURE_1;
 
+        // add features to initial deposit token
+        _addFeatureToCategory(address(realEstateTnft), 1, features);
+
         // Pre-state check.
         address[] memory basketsArray = basketManager.getBasketsArray();
         assertEq(basketsArray.length, 0);
 
+        assertEq(realEstateTnft.balanceOf(JOE), 2);
+
         // deploy basket
-        IBasket _basket = basketManager.deployBasket(
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 1);
+        (IBasket _basket, uint256 basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(currencyFeed),
             MUMBAI_USDC,
-            features
+            features,
+            address(realEstateTnft),
+            1
         );
+        vm.stopPrank();
 
         // Post-state check
         basketsArray = basketManager.getBasketsArray();
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
+
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
 
         assertEq(
             basketManager.hashedFeaturesForBasket(address(_basket)),
@@ -213,7 +273,26 @@ contract BasketsManagerTest is Test, Utility {
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
         );
 
-        emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
+        uint256 sharePrice = IBasket(_basket).getSharePrice();
+
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
+
+        assertEq(
+            (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
+            _basket.getTotalValueOfBasket()
+        );
+
+        assertEq(_basket.balanceOf(JOE), basketShares);
+        assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+
+        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+
 
         // create new features array with same features in different order
         features = new uint256[](2);
@@ -221,15 +300,19 @@ contract BasketsManagerTest is Test, Utility {
         features[1] = RE_FEATURE_2;
 
         // deploy another basket with same features
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 2);
         vm.expectRevert("Basket already exists");
         basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(currencyFeed),
             MUMBAI_USDC,
-            features
+            features,
+            address(realEstateTnft),
+            1
         );
+        vm.stopPrank();
     }
 
     /// @notice Verifies proper state changes when a basket is deployed with no features
@@ -243,14 +326,18 @@ contract BasketsManagerTest is Test, Utility {
         assertEq(basketsArray.length, 0);
 
         // deploy basket
-        IBasket _basket = basketManager.deployBasket(
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 1);
+        (IBasket _basket,) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(currencyFeed),
             MUMBAI_USDC,
-            features
+            features,
+            address(realEstateTnft),
+            1
         );
+        vm.stopPrank();
 
         // Post-state check
         basketsArray = basketManager.getBasketsArray();

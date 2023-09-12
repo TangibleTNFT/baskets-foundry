@@ -21,9 +21,6 @@ import { Owned2Step } from "./abstract/Owned.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 
-// TODO: How to handle rent? rent is redeemed when the TNFT is redeemed
-// TODO: Who is the owner of the contract? Creator or Tangible?
-// TODO: How is rent sent to this contract? Time basis? What asset(s)?
 // TODO: How to handle storage? Does this contract have to pay for storage? TBA
 // TODO: Are there any other rewards besides rent? No
 // TODO: How to handle total value? TBA
@@ -59,8 +56,6 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
 
     IERC20Metadata public primaryRentToken; // USDC by default
 
-    ICurrencyFeedV2 public currencyFeed;
-
     uint256 public immutable tnftType;
 
     uint256 public featureLimit;
@@ -87,7 +82,6 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         string memory _symbol,
         address _factoryProvider,
         uint256 _tnftType,
-        address _currencyFeed,
         address _rentToken,
         uint256[] memory _features,
         address _owner
@@ -97,7 +91,10 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         Owned2Step(_owner) 
     {
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
-        // TODO: Verify msg.sender is deployer or factory owner.
+        require(
+            msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager(),
+            "msg.sender != basketManager"
+        );
 
         address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
 
@@ -114,7 +111,6 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
             _addFeatureSupport(_features);
         }
 
-        currencyFeed = ICurrencyFeedV2(_currencyFeed);
         primaryRentToken = IERC20Metadata(_rentToken);
     }
 
@@ -129,7 +125,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         basketShares = new uint256[](length);
 
         for (uint256 i; i < length;) {
-            basketShares[i] = depositTNFT(_tangibleNFTs[i], _tokenIds[i]);
+            basketShares[i] = _depositTNFT(_tangibleNFTs[i], _tokenIds[i], msg.sender);
             unchecked {
                 ++i;
             }
@@ -139,20 +135,27 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method allows a user to deposit their TNFT in exchange for Basket tokens.
      */
-    function depositTNFT(address _tangibleNFT, uint256 _tokenId) public returns (uint256 basketShare) {
+    function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
+        if (msg.sender != IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
+            basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
+        } else {
+            basketShare = _depositTNFT(_tangibleNFT, _tokenId, owner);
+        }
+    }
+
+    function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
 
         // if contract supports features, make sure tokenId has a supported feature
         uint256 length = supportedFeatures.length;
         if(length > 0) {
-            //uint256[] memory features = ITangibleNFT(_tangibleNFT).getTokenFeatures(_tokenId);
             for (uint256 i; i < length;) {
                 bool supported;
+
                 ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-                if (featureData.added) {
-                    supported = true;
-                }
+                if (featureData.added) supported = true;
+
                 require(supported, "TNFT missing feature");
                 unchecked {
                     ++i;
@@ -170,7 +173,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         basketShare = (usdValue * 10 ** decimals()) / sharePrice;
 
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
-        _mint(msg.sender, basketShare);
+        _mint(_depositor, basketShare);
 
         tokenDeposited[_tangibleNFT][_tokenId] = true;
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
@@ -181,7 +184,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
             supportedCurrency.push(currency);
         }
 
-        emit DepositedTNFT(msg.sender, _tangibleNFT, _tokenId);
+        emit DepositedTNFT(_depositor, _tangibleNFT, _tokenId);
     }
 
     /**
@@ -199,10 +202,11 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     function addFeatureSupport(uint256[] memory _features) public onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
         _addFeatureSupport(_features);
 
-        // check basket availability with new features
+        // create new features hash
         IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
         bytes32 hashedFeatures = basketManager.createHash(tnftType, supportedFeatures); // TODO: Test
 
+        // check basket availability with new features
         require(basketManager.checkBasketAvailability(hashedFeatures), "Basket already exists");
         basketManager.updateFeaturesHash(hashedFeatures);
     }
@@ -351,6 +355,8 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
 
         uint256 currencyNum;
         (value, currencyNum) = oracle.marketPriceNativeCurrency(_fingerprint);
+
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(IFactoryProvider(factoryProvider).factory()).currencyFeed());
         currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
 
         decimals = oracle.decimals();
@@ -368,6 +374,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
      * @dev Get USD Price of given currency from ChainLink
      */
     function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(IFactoryProvider(factoryProvider).factory()).currencyFeed());
         AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
         
         (, int256 price, , , ) = priceFeed.latestRoundData();
