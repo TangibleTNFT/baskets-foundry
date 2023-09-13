@@ -9,6 +9,7 @@ import { IBasket } from "./interfaces/IBaskets.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
+// TODO: Should we ever remove or destroy a basket?
 
 /**
  * @title BasketManager
@@ -23,6 +24,8 @@ contract BasketManager is FactoryModifiers {
 
     mapping(address => bytes32) public hashedFeaturesForBasket;
 
+    mapping(address => bool) public isBasket;
+
 
     // ~ Events ~
 
@@ -34,8 +37,7 @@ contract BasketManager is FactoryModifiers {
     // ~ Modifiers ~
 
     modifier onlyBasket() {
-        (,bool exists) = _isBasket(msg.sender);
-        require(exists, "Caller is not valid basket");
+        require(isBasket[msg.sender], "Caller is not valid basket");
         _;
     }
 
@@ -80,6 +82,7 @@ contract BasketManager is FactoryModifiers {
         // store hash and new basket
         hashedFeaturesForBasket[address(basket)] = hashedFeatures;
         baskets.push(address(basket));
+        isBasket[address(basket)] = true;
 
         // transfer initial TNFT from basket owner to this contract
         IERC721(_tangibleNFTDeposit).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit);
@@ -108,9 +111,9 @@ contract BasketManager is FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    function checkBasketAvailability(bytes32 featuresHash) public view returns (bool) {
+    function checkBasketAvailability(bytes32 _featuresHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
-            if (hashedFeaturesForBasket[baskets[i]] == featuresHash) return false;
+            if (hashedFeaturesForBasket[baskets[i]] == _featuresHash) return false;
             unchecked {
                 ++i;
             }
@@ -127,9 +130,10 @@ contract BasketManager is FactoryModifiers {
     }
 
     function addBasket(address _basket) external onlyFactoryOwner {
-        (,bool exists) = _isBasket(_basket);
-        require(!exists);
+        require(!isBasket[_basket], "Basket already exists");
+        
         baskets.push(_basket);
+        isBasket[address(_basket)] = true;
     }
 
     function sort(uint[] memory data) public pure returns (uint[] memory) {
@@ -160,9 +164,9 @@ contract BasketManager is FactoryModifiers {
             _sort(arr, i, right);
     }
 
-    function _isBasket(address basket) internal view returns (uint256 index, bool exists) {
+    function _isBasket(address _basket) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < baskets.length;) {
-            if (baskets[i] == basket) return (i, true);
+            if (baskets[i] == _basket) return (i, true);
             unchecked {
                 ++i;
             }

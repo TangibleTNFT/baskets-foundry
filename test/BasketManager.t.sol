@@ -273,6 +273,8 @@ contract BasketsManagerTest is Test, Utility {
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
         );
 
+        assertEq(basketManager.isBasket(address(_basket)), true);
+
         uint256 sharePrice = IBasket(_basket).getSharePrice();
 
         assertEq(realEstateTnft.balanceOf(JOE), 1);

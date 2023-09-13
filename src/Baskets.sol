@@ -16,6 +16,7 @@ import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManage
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
+import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 
 import { Owned2Step } from "./abstract/Owned.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
@@ -70,6 +71,14 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     event FeatureSupportAdded(uint256 feature);
 
     event FeatureSupportRemoved(uint256 feature);
+
+
+    // ~ Modifiers ~
+
+    modifier onlyOwnerOrFactoryOwner() {
+        _checkOwnerOrFactoryOwner();
+        _;
+    }
 
 
     // ~ Constructor ~
@@ -199,7 +208,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method adds a feature subcategory to this Basket.
      */
-    function addFeatureSupport(uint256[] memory _features) public onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
+    function addFeatureSupport(uint256[] memory _features) public onlyOwnerOrFactoryOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
         _addFeatureSupport(_features);
 
         // create new features hash
@@ -247,7 +256,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     /**
      * @notice This method removes a feature subcategory from this Basket.
      */
-    function removeFeatureSupport(uint256[] memory _features) external onlyOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
+    function removeFeatureSupport(uint256[] memory _features) external onlyOwnerOrFactoryOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
 
         for (uint256 i; i < _features.length;) {
             (uint256 index, bool exists) = _isSupportedFeature(_features[i]);
@@ -404,5 +413,13 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
             }
         }
         return (0, false);
+    }
+
+    function _checkOwnerOrFactoryOwner() internal view {
+        require(
+            IOwnable(IFactoryProvider(factoryProvider).factory()).contractOwner() == msg.sender ||
+            owner == msg.sender,
+            "UNAUTHORIZED"
+        );
     }
 }
