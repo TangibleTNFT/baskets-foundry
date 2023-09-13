@@ -132,32 +132,25 @@ contract BasketManager is FactoryModifiers {
         baskets.push(_basket);
     }
 
-    function sort(uint[] memory data) public pure returns (uint[] memory) {
-        _sort(data, int(0), int(data.length - 1));
-        return data;
-    }
+    function sort(uint256[] memory arr) public pure returns (uint256[] memory) {
+        for (uint256 i = 1; i < arr.length; ) {
+            uint256 key = arr[i];
+            uint256 j = i - 1;
 
-    function _sort(uint[] memory arr, int left, int right) internal pure {
-        int i = left;
-        int j = right;
-        if (i == j) return;
+            while (j != type(uint256).max && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                unchecked {
+                    --j;
+                }
+            }
 
-        uint pivot = arr[uint(left + (right - left) / 2)];
-
-        while (i <= j) {
-            while (arr[uint(i)] < pivot) i++;
-            while (pivot < arr[uint(j)]) j--;
-            if (i <= j) {
-                (arr[uint(i)], arr[uint(j)]) = (arr[uint(j)], arr[uint(i)]);
-                i++;
-                j--;
+            unchecked {
+                arr[j + 1] = key;
+                ++i;
             }
         }
 
-        if (left < j)
-            _sort(arr, left, j);
-        if (i < right)
-            _sort(arr, i, right);
+        return arr;
     }
 
     function _isBasket(address basket) internal view returns (uint256 index, bool exists) {
