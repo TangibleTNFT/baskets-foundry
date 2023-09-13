@@ -360,7 +360,7 @@ contract BasketsManagerTest is Test, Utility {
     }
 
     /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
-    function test_basketManager_quickSort() public {
+    function test_basketManager_insertSort() public {
 
         // Sort testArray1 of size 10.
         uint256[] memory sortedArray = basketManager.sort(testArray1);
@@ -413,9 +413,8 @@ contract BasketsManagerTest is Test, Utility {
         uint256[] memory featuresArray4 = new uint256[](0);
 
         // Sort
-        vm.expectRevert(); // reverts -> Cant sort empty array
         sortedArray = basketManager.sort(featuresArray4);
-
+        assertEq(sortedArray.length, 0);
     }
 
     /// @notice This test verifies the use of abi.encodePacked.

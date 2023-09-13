@@ -5,6 +5,7 @@ import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { Basket } from "./Baskets.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
+import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -17,6 +18,7 @@ import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Rec
  * @notice This contract manages all deployed Basket contracts.
  */
 contract BasketManager is FactoryModifiers {
+    using ArrayUtils for uint256[];
 
     // ~ State Variables ~
 
@@ -122,11 +124,7 @@ contract BasketManager is FactoryModifiers {
     }
 
     function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
-        if (_features.length > 1) {
-            hashedFeatures = keccak256(abi.encodePacked(_tnftType, sort(_features)));
-        } else {
-            hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features));
-        }
+        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }
 
     function addBasket(address _basket) external onlyFactoryOwner {
@@ -136,32 +134,9 @@ contract BasketManager is FactoryModifiers {
         isBasket[address(_basket)] = true;
     }
 
-    function sort(uint[] memory data) public pure returns (uint[] memory) {
-        _sort(data, int(0), int(data.length - 1));
-        return data;
-    }
-
-    function _sort(uint[] memory arr, int left, int right) internal pure {
-        int i = left;
-        int j = right;
-        if (i == j) return;
-
-        uint pivot = arr[uint(left + (right - left) / 2)];
-
-        while (i <= j) {
-            while (arr[uint(i)] < pivot) i++;
-            while (pivot < arr[uint(j)]) j--;
-            if (i <= j) {
-                (arr[uint(i)], arr[uint(j)]) = (arr[uint(j)], arr[uint(i)]);
-                i++;
-                j--;
-            }
-        }
-
-        if (left < j)
-            _sort(arr, left, j);
-        if (i < right)
-            _sort(arr, i, right);
+    // TODO: remove (only kept it to not break existing tests)
+    function sort(uint256[] memory arr) public pure returns (uint256[] memory) {
+        return arr.sort();
     }
 
     function _isBasket(address _basket) internal view returns (uint256 index, bool exists) {
