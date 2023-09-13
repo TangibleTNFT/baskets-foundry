@@ -173,7 +173,7 @@ contract BasketsTest is Test, Utility {
 
         // Add fingerprints to TNFT contract
         vm.prank(TANGIBLE_LABS);
-        realEstateTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
+        ITangibleNFTExt(address(realEstateTnft)).addFingerprints(_asSingletonArrayUint(FINGERPRINT));
 
         // Add TNFTType oracle to chainlinkRWA oracle and create item -> stocking item
         vm.startPrank(TANGIBLE_ORACLE_OWNER);
