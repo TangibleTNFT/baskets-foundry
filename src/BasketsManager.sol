@@ -5,6 +5,7 @@ import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { Basket } from "./Baskets.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
+import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -16,6 +17,7 @@ import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Rec
  * @notice This contract manages all deployed Basket contracts.
  */
 contract BasketManager is FactoryModifiers {
+    using ArrayUtils for uint256[];
 
     // ~ State Variables ~
 
@@ -119,11 +121,7 @@ contract BasketManager is FactoryModifiers {
     }
 
     function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
-        if (_features.length > 1) {
-            hashedFeatures = keccak256(abi.encodePacked(_tnftType, sort(_features)));
-        } else {
-            hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features));
-        }
+        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }
 
     function addBasket(address _basket) external onlyFactoryOwner {
@@ -132,25 +130,9 @@ contract BasketManager is FactoryModifiers {
         baskets.push(_basket);
     }
 
+    // TODO: remove (only kept it to not break existing tests)
     function sort(uint256[] memory arr) public pure returns (uint256[] memory) {
-        for (uint256 i = 1; i < arr.length; ) {
-            uint256 key = arr[i];
-            uint256 j = i - 1;
-
-            while (j != type(uint256).max && arr[j] > key) {
-                arr[j + 1] = arr[j];
-                unchecked {
-                    --j;
-                }
-            }
-
-            unchecked {
-                arr[j + 1] = key;
-                ++i;
-            }
-        }
-
-        return arr;
+        return arr.sort();
     }
 
     function _isBasket(address basket) internal view returns (uint256 index, bool exists) {
