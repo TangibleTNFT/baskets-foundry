@@ -66,9 +66,6 @@ contract BasketManager is FactoryModifiers {
         // might not be necessary -> hash is checked when Basket is initialized
         require(checkBasketAvailability(hashedFeatures), "Basket already exists");
 
-        // transfer initial TNFT from basket owner to this contract
-        IERC721(_tangibleNFTDeposit).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit);
-        
         // create new basket
         Basket basket = new Basket(
             _name,
@@ -80,13 +77,16 @@ contract BasketManager is FactoryModifiers {
             msg.sender
         );
 
-        // approve transfer of TNFT to new basket and call depositTNFT
-        IERC721(_tangibleNFTDeposit).approve(address(basket), _tokenIdDeposit);
-        basketShare = basket.depositTNFT(_tangibleNFTDeposit, _tokenIdDeposit);
-
         // store hash and new basket
         hashedFeaturesForBasket[address(basket)] = hashedFeatures;
         baskets.push(address(basket));
+
+        // transfer initial TNFT from basket owner to this contract
+        IERC721(_tangibleNFTDeposit).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit);
+
+        // approve transfer of TNFT to new basket and call depositTNFT
+        IERC721(_tangibleNFTDeposit).approve(address(basket), _tokenIdDeposit);
+        basketShare = basket.depositTNFT(_tangibleNFTDeposit, _tokenIdDeposit);
 
         emit BasketCreated(msg.sender, address(basket));
         return (IBasket(address(basket)), basketShare);
