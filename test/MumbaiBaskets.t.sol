@@ -426,130 +426,156 @@ contract MumbaiBasketsTest is Test, Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    // function test_baskets_mumbai_depositTNFT_feature() public { // TODO: Rewrite with immutable features
-    //     basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
+    function test_baskets_mumbai_depositTNFT_feature() public {
+        uint256[] memory features = new uint256[](1);
+        features[0] = RE_FEATURE_1;
 
-    //     // Pre-state check
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
-    //     assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        // create new basket with feature
+        vm.prank(address(basketManager));
+        Basket _basket = new Basket(
+            "Tangible Basket Token",
+            "TBT",
+            address(factoryProvider),
+            RE_TNFTTYPE,
+            MUMBAI_USDC,
+            features,
+            address(this)
+        );
 
-    //     // Execute a deposit
-    //     vm.startPrank(JOE);
-    //     realEstateTnft.approve(address(basket), 1);
-    //     vm.expectRevert("TNFT missing feature");
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // Pre-state check
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(_basket.featureSupported(RE_FEATURE_1), true);
 
-    //     // Post-state check
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
-    //     assertEq(basket.featureSupported(RE_FEATURE_1), true);
+        // Execute a deposit
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(_basket), 1);
+        vm.expectRevert("TNFT missing feature");
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
 
-    //     // add feature to TNFT
-    //     _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_1));
+        // Post-state check
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(_basket.featureSupported(RE_FEATURE_1), true);
 
-    //     // Execute a deposit
-    //     vm.startPrank(JOE);
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // add feature to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_1));
 
-    //     // Post-state check
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
-    //     assertEq(basket.featureSupported(RE_FEATURE_1), true);
-    // }
+        // Execute a deposit
+        vm.startPrank(JOE);
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.featureSupported(RE_FEATURE_1), true);
+    }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    // function test_baskets_mumbai_depositTNFT_feature_multiple() public { // TODO: Rewrite
-    //     uint256[] memory featuresToAdd = new uint256[](3);
-    //     featuresToAdd[0] = RE_FEATURE_2;
-    //     featuresToAdd[1] = RE_FEATURE_3;
-    //     featuresToAdd[2] = RE_FEATURE_4;
+    function test_baskets_mumbai_depositTNFT_feature_multiple() public {
+        uint256[] memory featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_2;
+        featuresToAdd[1] = RE_FEATURE_3;
+        featuresToAdd[2] = RE_FEATURE_4;
 
-    //     string[] memory descriptionsToAdd = new string[](3);
-    //     descriptionsToAdd[0] = "Desc for feat 2";
-    //     descriptionsToAdd[1] = "Desc for feat 3";
-    //     descriptionsToAdd[2] = "Desc for feat 4";
-        
-    //     // add more features to tnftType
-    //     vm.startPrank(factoryOwner);
-    //     ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
-    //     ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
-    //     vm.stopPrank();
+        string[] memory descriptionsToAdd = new string[](3);
+        descriptionsToAdd[0] = "Desc for feat 2";
+        descriptionsToAdd[1] = "Desc for feat 3";
+        descriptionsToAdd[2] = "Desc for feat 4";
+     
+        // add more features to tnftType
+        vm.startPrank(factoryOwner);
+        ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
+        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
+        vm.stopPrank();
 
-    //     // add feature support        
-    //     basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_1));
-    //     basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_2));
-    //     basket.addFeatureSupport(_asSingletonArrayUint(RE_FEATURE_3));
+        // features to add to basket initially
+        featuresToAdd = new uint256[](3);
+        featuresToAdd[0] = RE_FEATURE_1;
+        featuresToAdd[1] = RE_FEATURE_2;
+        featuresToAdd[2] = RE_FEATURE_3;
 
-    //     // Pre-state check
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
-    //     assertEq(basket.featureSupported(RE_FEATURE_1), true);
-    //     assertEq(basket.featureSupported(RE_FEATURE_2), true);
-    //     assertEq(basket.featureSupported(RE_FEATURE_3), true);
+        // create new basket with feature
+        vm.prank(address(basketManager));
+        Basket _basket = new Basket(
+            "Tangible Basket Token",
+            "TBT",
+            address(factoryProvider),
+            RE_TNFTTYPE,
+            MUMBAI_USDC,
+            featuresToAdd,
+            address(this)
+        );
 
-    //     // Try to execute a deposit
-    //     vm.startPrank(JOE);
-    //     realEstateTnft.approve(address(basket), 1);
-    //     vm.expectRevert("TNFT missing feature");
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // Pre-state check
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), false);
+        assertEq(_basket.featureSupported(RE_FEATURE_1), true);
+        assertEq(_basket.featureSupported(RE_FEATURE_2), true);
+        assertEq(_basket.featureSupported(RE_FEATURE_3), true);
 
-    //     // Post-state check 1.
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(_basket), 1);
+        vm.expectRevert("TNFT missing feature");
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
 
-    //     // add feature 1 to TNFT
-    //     _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_1));
+        // Post-state check 1.
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-    //     // Try to execute a deposit
-    //     vm.startPrank(JOE);
-    //     vm.expectRevert("TNFT missing feature");
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // add feature 1 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_1));
 
-    //     // Post-state check 2.
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        vm.expectRevert("TNFT missing feature");
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
 
-    //     // add feature 2 to TNFT
-    //     _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_2));
+        // Post-state check 2.
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-    //     // Try to execute a deposit
-    //     vm.startPrank(JOE);
-    //     vm.expectRevert("TNFT missing feature");
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // add feature 2 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_2));
 
-    //     // Post-state check 3.
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        vm.expectRevert("TNFT missing feature");
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
 
-    //     // add feature 3 to TNFT
-    //     _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_3));
+        // Post-state check 3.
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-    //     // Try to execute a deposit
-    //     vm.startPrank(JOE);
-    //     basket.depositTNFT(address(realEstateTnft), 1);
-    //     vm.stopPrank();
+        // add feature 3 to TNFT
+        _addFeatureToCategory(address(realEstateTnft), 1, _asSingletonArrayUint(RE_FEATURE_3));
 
-    //     // Post-state check 4.
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
+        // Try to execute a deposit
+        vm.startPrank(JOE);
+        _basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
 
-    //     // add all featurs to TNFT 2
-    //     _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_1));
-    //     _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_2));
-    //     _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_3));
-    //     _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_4));
-    //     assertEq(basket.featureSupported(RE_FEATURE_4), false);
+        // Post-state check 4.
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), false);
 
-    //     // Try to execute a deposit
-    //     vm.startPrank(NIK);
-    //     realEstateTnft.approve(address(basket), 2);
-    //     basket.depositTNFT(address(realEstateTnft), 2);
-    //     vm.stopPrank();
+        // add all featurs to TNFT 2
+        _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_1));
+        _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_2));
+        _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_3));
+        _addFeatureToCategory(address(realEstateTnft), 2, _asSingletonArrayUint(RE_FEATURE_4));
+        assertEq(_basket.featureSupported(RE_FEATURE_4), false);
 
-    //     // Post-state check 5.
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
-    //     assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
-    // }
+        // Try to execute a deposit
+        vm.startPrank(NIK);
+        realEstateTnft.approve(address(_basket), 2);
+        _basket.depositTNFT(address(realEstateTnft), 2);
+        vm.stopPrank();
+
+        // Post-state check 5.
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), true);
+    }
 
     /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
     function test_baskets_mumbai_batchDepositTNFT() public {
