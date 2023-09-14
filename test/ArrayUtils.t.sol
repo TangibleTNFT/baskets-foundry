@@ -8,7 +8,7 @@ import { ArrayUtils } from "../src/libraries/ArrayUtils.sol";
 
 import "./utils/Utility.sol";
 
-contract BasketsManagerTest is Test {
+contract ArrayUtilsTest is Test {
     using ArrayUtils for uint256[];
 
     uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];

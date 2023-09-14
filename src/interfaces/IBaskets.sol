@@ -28,8 +28,6 @@ interface IBasket is IERC20, IERC20Metadata {
 
     function tnftType() external returns (uint256);
 
-    function featureLimit() external returns (uint256);
-
     function batchDepositTNFT(
         address[] memory _tangibleNFTs,
         uint256[] memory _tokenIds
@@ -39,10 +37,6 @@ interface IBasket is IERC20, IERC20Metadata {
         address _tangibleNFT,
         uint256 _tokenId
     ) external returns (uint256 basketShare);
-
-    function addFeatureSupport(uint256[] memory _features) external;
-
-    function removeFeatureSupport(uint256[] memory _features) external;
 
     function modifyRentTokenSupport(address _token, bool _support) external;
 

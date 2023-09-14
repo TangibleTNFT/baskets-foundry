@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { Basket } from "./Baskets.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 
+import { IFactory } from "@tangible/interfaces/IFactory.sol";
+import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
+import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
+import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
+
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-// TODO: Should we ever remove or destroy a basket?
 
 /**
  * @title BasketManager
@@ -27,6 +29,8 @@ contract BasketManager is FactoryModifiers {
     mapping(address => bytes32) public hashedFeaturesForBasket;
 
     mapping(address => bool) public isBasket;
+
+    uint256 public featureLimit;
 
 
     // ~ Events ~
@@ -46,7 +50,9 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Constructor ~
 
-    constructor(address _factoryProvider) FactoryModifiers(_factoryProvider) {}
+    constructor(address _factoryProvider) FactoryModifiers(_factoryProvider) {
+        featureLimit = 10; // TODO: Add setter
+    }
 
 
     // ~ Functions ~
@@ -64,11 +70,23 @@ contract BasketManager is FactoryModifiers {
         uint256 _tokenIdDeposit
     ) external returns (IBasket, uint256 basketShare) {
 
+        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
+        require(added, "Invalid tnftType");
+
         // create hash
         bytes32 hashedFeatures = createHash(_tnftType, _features);
 
         // might not be necessary -> hash is checked when Basket is initialized
         require(checkBasketAvailability(hashedFeatures), "Basket already exists");
+
+        // check features are valid.
+        for (uint256 i; i < _features.length;) {
+            require(ITNFTMetadata(metadata).featureInType(_tnftType, _features[i]), "Feature not supported in type");
+            unchecked {
+                ++i;
+            }
+        }
 
         // create new basket
         Basket basket = new Basket(

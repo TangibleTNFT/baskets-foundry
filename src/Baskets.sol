@@ -59,8 +59,6 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
 
     uint256 public immutable tnftType;
 
-    uint256 public featureLimit;
-
 
     // ~ Events ~
 
@@ -105,19 +103,18 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
             "msg.sender != basketManager"
         );
 
-        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
-
-
-        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
-        require(added, "Invalid tnftType");
-
         tnftType = _tnftType;
-        featureLimit = 10; // TODO: Add setter
         
         // If _features is not empty, add features
         if (_features.length > 0) {
-            // TODO: Test
-            _addFeatureSupport(_features);
+            for (uint256 i; i < _features.length;) {
+                supportedFeatures.push(_features[i]);
+                featureSupported[_features[i]] = true;
+
+                unchecked {
+                    ++i;
+                }
+            }
         }
 
         primaryRentToken = IERC20Metadata(_rentToken);
@@ -203,85 +200,6 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         // calc value of TNFT(s) being redeemed
             // value of TNFT(s) / total value of Basket
         
-    }
-
-    /**
-     * @notice This method adds a feature subcategory to this Basket.
-     */
-    function addFeatureSupport(uint256[] memory _features) public onlyOwnerOrFactoryOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
-        _addFeatureSupport(_features);
-
-        // create new features hash
-        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
-        bytes32 hashedFeatures = basketManager.createHash(tnftType, supportedFeatures); // TODO: Test
-
-        // check basket availability with new features
-        require(basketManager.checkBasketAvailability(hashedFeatures), "Basket already exists");
-        basketManager.updateFeaturesHash(hashedFeatures);
-    }
-    
-    function _addFeatureSupport(uint256[] memory _features) internal {
-        require((supportedFeatures.length + _features.length) <= featureLimit, "Too many features");
-
-        // iterate through all new features -> verify they arent already supported, are a valid feature supported by tnftType, and existing TNFTs have that feature.
-        for (uint256 i; i < _features.length;) {
-            require(!featureSupported[_features[i]], "Feature already supported");
-            address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
-            require(ITNFTMetadata(metadata).featureInType(tnftType, _features[i]), "Feature not supported in type");
-
-            // Verify tokens that are already in basket have feature
-            for (uint256 j; j < depositedTnfts.length;) {
-                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(depositedTnfts[j].tnft).tokenFeatureAdded(
-                    depositedTnfts[j].tokenId,
-                    _features[i]
-                );
-                require (featureData.added, "Incompatible TNFT in Basket");
-                unchecked {
-                    ++j;
-                }
-            }
-
-            supportedFeatures.push(_features[i]);
-            featureSupported[_features[i]] = true;
-
-            emit FeatureSupportAdded(_features[i]);
-
-            unchecked {
-                ++i;
-            }
-        }
-
-    }
-
-    /**
-     * @notice This method removes a feature subcategory from this Basket.
-     */
-    function removeFeatureSupport(uint256[] memory _features) external onlyOwnerOrFactoryOwner { // TODO: Make sure when this is executed, call BasketsDeployer::checkBasketAvailability
-
-        for (uint256 i; i < _features.length;) {
-            (uint256 index, bool exists) = _isSupportedFeature(_features[i]);
-            require(exists, "Feature not supported");
-
-            uint256 lengthFeatures = supportedFeatures.length;
-
-            // remove feature from array
-            supportedFeatures[index] = supportedFeatures[lengthFeatures - 1];
-            supportedFeatures.pop();
-
-            featureSupported[_features[i]] = false;
-            emit FeatureSupportRemoved(_features[i]);
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        // check basket availability with new features
-        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
-        bytes32 hashedFeatures = basketManager.createHash(tnftType, supportedFeatures); // TODO: Test
-
-        require(basketManager.checkBasketAvailability(hashedFeatures), "Basket already exists");
-        basketManager.updateFeaturesHash(hashedFeatures);
     }
 
     function modifyRentTokenSupport(address _token, bool _support) external onlyFactoryOwner { // TODO: TEST

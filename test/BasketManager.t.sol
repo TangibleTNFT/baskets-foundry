@@ -268,8 +268,8 @@ contract BasketsManagerTest is Test, Utility {
             basketManager.hashedFeaturesForBasket(address(_basket)),
             keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
         );
-        assert(
-            basketManager.hashedFeaturesForBasket(address(_basket)) !=
+        assertNotEq(
+            basketManager.hashedFeaturesForBasket(address(_basket)),
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
         );
 
