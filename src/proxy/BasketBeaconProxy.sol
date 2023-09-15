@@ -58,4 +58,18 @@ contract BasketBeaconProxy is Proxy, ERC1967Upgrade {
     function _setBeacon(address beacon, bytes memory data) internal virtual {
         _upgradeBeaconToAndCall(beacon, data, false);
     }
+
+    /**
+     * @dev This method is mainly for testing purposes. Allows us to fetch externally the implementation address from beacon.
+     */
+    function implementation() external view returns (address) {
+        return IBeacon(_getBeacon()).implementation();
+    }
+
+    /**
+     * @dev This method is mainly for testing purposes. Allows us to fetch externally the beacon address for this beacon proxy.
+     */
+    function getBeacon() external view returns (address) {
+        return _getBeacon();
+    }
 }
