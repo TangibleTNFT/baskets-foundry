@@ -36,6 +36,12 @@ contract Utility {
 
 }
 
+/// @title interface for CounterContract -> beacon proxy testing
+interface ICounterContract {
+    function increment() external;
+    function counter() external returns (uint256);
+}
+
 interface ITangibleNFTExt is ITangibleNFT {
     /// @dev Returns the feature status of a `tokenId`.
     function tokenFeatureAdded (uint256 tokenId, uint256 feature) external view returns (FeatureInfo memory);
