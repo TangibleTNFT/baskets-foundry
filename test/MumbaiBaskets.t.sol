@@ -63,7 +63,9 @@ contract MumbaiBasketsTest is Test, Utility {
 
     function setUp() public {
 
-        basketManager = new BasketManager(address(factoryProvider));
+        basket = new Basket();
+        basketManager = new BasketManager(address(basket), address(factoryProvider));
+
         uint256[] memory features = new uint256[](0);
 
         // set basketManager
@@ -75,8 +77,8 @@ contract MumbaiBasketsTest is Test, Utility {
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
         // Deploy Basket
-        vm.prank(address(basketManager));
-        basket = new Basket(
+        vm.prank(address(basket)); // TODO: Should be proxy
+        basket.initialize( 
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),
@@ -431,8 +433,9 @@ contract MumbaiBasketsTest is Test, Utility {
         features[0] = RE_FEATURE_1;
 
         // create new basket with feature
-        vm.prank(address(basketManager));
-        Basket _basket = new Basket(
+        Basket _basket = new Basket();
+        vm.prank(PROXY);
+        _basket.initialize( 
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),
@@ -495,8 +498,9 @@ contract MumbaiBasketsTest is Test, Utility {
         featuresToAdd[2] = RE_FEATURE_3;
 
         // create new basket with feature
-        vm.prank(address(basketManager));
-        Basket _basket = new Basket(
+        Basket _basket = new Basket();
+        vm.prank(PROXY);
+        _basket.initialize( 
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),

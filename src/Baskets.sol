@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
@@ -18,7 +19,6 @@ import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 
-import { Owned2Step } from "./abstract/Owned.sol";
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 
@@ -34,7 +34,7 @@ import { IBasketManager } from "./interfaces/IBasketsManager.sol";
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
     // ~ State Variables ~
 
@@ -57,7 +57,9 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
 
     IERC20Metadata public primaryRentToken; // USDC by default
 
-    uint256 public immutable tnftType;
+    uint256 public tnftType;
+
+    address public deployer;
 
 
     // ~ Events ~
@@ -71,39 +73,23 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
     event FeatureSupportRemoved(uint256 feature);
 
 
-    // ~ Modifiers ~
-
-    modifier onlyOwnerOrFactoryOwner() {
-        _checkOwnerOrFactoryOwner();
-        _;
-    }
-
-
     // ~ Constructor ~
 
+    constructor() FactoryModifiers(address(0)) {}
+
     /**
-     * @notice Initializes Basket contract. // TODO: Only a TNFT holder should be able to create basket, immediately deposits (do this in deployer)
+     * @notice Initializes Basket contract.
      */
-    constructor(
+    function initialize(
         string memory _name,
         string memory _symbol,
         address _factoryProvider,
         uint256 _tnftType,
         address _rentToken,
         uint256[] memory _features,
-        address _owner
-    )
-        ERC20(_name, _symbol) 
-        FactoryModifiers(_factoryProvider) 
-        Owned2Step(_owner) 
-    {
+        address _deployer
+    ) external initializer {   
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
-        require(
-            msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager(),
-            "msg.sender != basketManager"
-        );
-
-        tnftType = _tnftType;
         
         // If _features is not empty, add features
         if (_features.length > 0) {
@@ -116,6 +102,12 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
                 }
             }
         }
+
+        __ERC20_init(_name, _symbol);
+        __FactoryModifiers_init(_factoryProvider);
+
+        tnftType = _tnftType;
+        deployer = _deployer;
 
         primaryRentToken = IERC20Metadata(_rentToken);
     }
@@ -145,7 +137,7 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
         if (msg.sender != IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
             basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
         } else {
-            basketShare = _depositTNFT(_tangibleNFT, _tokenId, owner);
+            basketShare = _depositTNFT(_tangibleNFT, _tokenId, deployer);
         }
     }
 
@@ -331,13 +323,5 @@ contract Basket is IBasket, ERC20, FactoryModifiers, Owned2Step {
             }
         }
         return (0, false);
-    }
-
-    function _checkOwnerOrFactoryOwner() internal view {
-        require(
-            IOwnable(IFactoryProvider(factoryProvider).factory()).contractOwner() == msg.sender ||
-            owner == msg.sender,
-            "UNAUTHORIZED"
-        );
     }
 }

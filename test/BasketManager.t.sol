@@ -64,9 +64,10 @@ contract BasketsManagerTest is Test, Utility {
     function setUp() public {
 
         //uint256[] memory features = new uint256[](0);
+        basket = new Basket();
 
         // Deploy BasketManager
-        basketManager = new BasketManager(address(factoryProvider));
+        basketManager = new BasketManager(address(basket), address(factoryProvider));
 
         // basket = new Basket(
         //     "Tangible Basket Token",

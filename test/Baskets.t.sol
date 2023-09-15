@@ -75,8 +75,12 @@ contract BasketsTest is Test, Utility {
         factoryProvider = new FactoryProvider();
         factoryProvider.initialize(address(factory));
 
+        // Deploy implementation basket contract
+        basket = new Basket();
+
         // Deploy basketManager
         basketManager = new BasketManager(
+            address(basket),
             address(factoryProvider)
         );
 
@@ -147,7 +151,7 @@ contract BasketsTest is Test, Utility {
         // Deploy Basket
         uint256[] memory features = new uint256[](0);
         vm.prank(address(basketManager));
-        basket = new Basket(
+        basket.initialize(
             "Tangible Basket Token",
             "TBT",
             address(factoryProvider),
@@ -246,37 +250,6 @@ contract BasketsTest is Test, Utility {
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT() public {
         assertTrue(true);
-    }
-    
-    /// @notice Verifies the transferOwnership logic
-    function test_baskets_transferOwnership() public {
-        
-        // Pre-state check
-        assertEq(basket.owner(), address(this));
-        assertEq(basket.newOwner(), address(0));
-
-        // Execute pushOwnership
-        basket.pushOwnership(JOE);
-
-        // Pre-state check
-        assertEq(basket.owner(), address(this));
-        assertEq(basket.newOwner(), JOE);
-
-        // Joe executes pullOwnership
-        vm.prank(JOE);
-        basket.pullOwnership();
-
-        // Pre-state check
-        assertEq(basket.owner(), JOE);
-        assertEq(basket.newOwner(), JOE);
-
-        // Joe attempts an onlyOwner function
-        vm.prank(JOE);
-        basket.pushOwnership(address(222));
-
-        // Previous owner (address(this)) can no longer call onlyOwner functions
-        vm.expectRevert("UNAUTHORIZED");
-        basket.pushOwnership(address(333));
     }
 
 }
