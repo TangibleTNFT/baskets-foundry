@@ -14,8 +14,6 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
     
     function getDepositedTnfts() external view returns (TokenData[] memory);
 
-    function getSupportedRentTokens() external view returns (address[] memory);
-
     function getSupportedFeatures() external view returns (uint256[] memory);
 
     function tokenDeposited(address, uint256) external returns (bool);
@@ -37,8 +35,6 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
         address _tangibleNFT,
         uint256 _tokenId
     ) external returns (uint256 basketShare);
-
-    function modifyRentTokenSupport(address _token, bool _support) external;
 
     function getSharePrice() external view returns (uint256 sharePrice);
 

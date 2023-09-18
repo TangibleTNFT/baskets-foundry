@@ -18,6 +18,8 @@ contract Utility {
     address public constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
     address public constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
 
+    uint256 constant USD = 10 ** 6;  // USDC precision decimals
+
     // ~ Types and Features ~
 
     uint256 public constant RE_TNFTTYPE = 2;

@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local contracts
 import { Basket } from "../src/Baskets.sol";
@@ -314,7 +315,7 @@ contract MumbaiBasketsTest is Test, Utility {
     // ~ Unit Tests ~
 
 
-    // Note: Deposit Functionality ----
+    /// @dev ~ Deposit Functionality Testing ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_mumbai_depositTNFT_single() public {
@@ -334,9 +335,9 @@ contract MumbaiBasketsTest is Test, Utility {
         uint256 usdValue = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
         uint256 sharePrice = basket.getSharePrice();
 
+        // Execute a deposit
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), 1);
-        // Execute a deposit
         basket.depositTNFT(address(realEstateTnft), 1);
         vm.stopPrank();
 
@@ -651,51 +652,237 @@ contract MumbaiBasketsTest is Test, Utility {
     }
 
 
-    // Note: Rent Management ----
+    /// @dev ~ Redeem Functionality Testing ~
+
+    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
+    function test_baskets_mumbai_redeemTNFT_single() public {
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        uint256 usdValue = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
+        uint256 sharePrice = basket.getSharePrice();
+
+        // Pre-state check
+        assertEq(
+            (basket.balanceOf(JOE) * sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(realEstateTnft.balanceOf(JOE), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.balanceOf(JOE), usdValue);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+
+        // Joe performs a redeem
+        vm.startPrank(JOE);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(), 0);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+    }
+
+    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
+    function test_baskets_mumbai_redeemTNFT_single_rent() public {
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+
+        uint256 usdValue = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
+        uint256 sharePrice = basket.getSharePrice();
+
+        uint256 rentBal = 10_000 * USD;
+        deal(MUMBAI_USDC, address(basket), rentBal);
+
+        // Pre-state check
+        assertEq(
+            ((basket.balanceOf(JOE) * sharePrice) / 1 ether) + (rentBal * 10**12),
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(IERC20(MUMBAI_USDC).balanceOf(address(basket)), rentBal);
+        assertEq(IERC20(MUMBAI_USDC).balanceOf(JOE), 0);
+
+        assertEq(realEstateTnft.balanceOf(JOE), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.balanceOf(JOE), usdValue);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+
+        // Joe performs a redeem
+        vm.startPrank(JOE);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(IERC20(MUMBAI_USDC).balanceOf(address(basket)), 0);
+        assertEq(IERC20(MUMBAI_USDC).balanceOf(JOE), rentBal);
+
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(), 0);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+    }
+
+    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed for multiple TNFTs.
+    function test_baskets_mumbai_redeemTNFT_multiple() public {
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), 1);
+        basket.depositTNFT(address(realEstateTnft), 1);
+        vm.stopPrank();
+        vm.startPrank(NIK);
+        realEstateTnft.approve(address(basket), 2);
+        basket.depositTNFT(address(realEstateTnft), 2);
+        vm.stopPrank();
+
+        uint256 usdValue1 = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
+        uint256 usdValue2 = _emitGetUsdValueOfNft(address(realEstateTnft), 2);
+        uint256 sharePrice = basket.getSharePrice();
+
+        // Pre-state check
+        assertEq(
+            ((basket.balanceOf(JOE) + basket.balanceOf(NIK)) * sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(realEstateTnft.balanceOf(JOE), 0);
+        assertEq(realEstateTnft.balanceOf(NIK), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 2);
+
+        assertEq(basket.balanceOf(JOE), usdValue1);
+        assertEq(basket.balanceOf(NIK), usdValue2);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 2);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].tnft, address(realEstateTnft));
+        assertEq(deposited[1].tokenId, 2);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
+
+        // Joe performs a redeem
+        vm.startPrank(JOE);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // Post-state check 1
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(NIK), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.balanceOf(NIK), usdValue2);
+        assertEq(basket.totalSupply(), basket.balanceOf(NIK));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 2);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_2);
+
+        // Nik performs a redeem
+        vm.startPrank(NIK);
+        basket.redeemTNFT(address(realEstateTnft), 2, basket.balanceOf(NIK));
+        vm.stopPrank();
+
+        // Post-state check 2
+        assertEq(realEstateTnft.balanceOf(JOE), 1);
+        assertEq(realEstateTnft.balanceOf(NIK), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.balanceOf(NIK), 0);
+        assertEq(basket.totalSupply(), 0);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+    }
+
+
+    /// @dev ~ Rent Management Testing ~
 
     /// @notice This verifies state changes and restrictions for modifyRentTokenSupport()
-    function test_baskets_mumbai_modifyRentTokenSupport() public {
+    // function test_baskets_mumbai_modifyRentTokenSupport() public {
 
-        // Pre-state check.
-        address[] memory rentTokens = basket.getSupportedRentTokens();
-        assertEq(rentTokens.length, 0);
+    //     // Pre-state check.
+    //     address[] memory rentTokens = basket.getSupportedRentTokens();
+    //     assertEq(rentTokens.length, 0);
 
-        // Remove token -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("Not supported");
-        basket.modifyRentTokenSupport(MUMBAI_USDC, false);
+    //     // Remove token -> revert
+    //     vm.prank(factoryOwner);
+    //     vm.expectRevert("Not supported");
+    //     basket.modifyRentTokenSupport(MUMBAI_USDC, false);
 
-        // Add USDC -> Success
-        vm.prank(factoryOwner);
-        basket.modifyRentTokenSupport(MUMBAI_USDC, true);
+    //     // Add USDC -> Success
+    //     vm.prank(factoryOwner);
+    //     basket.modifyRentTokenSupport(MUMBAI_USDC, true);
 
-        // Post-state check 1.
-        rentTokens = basket.getSupportedRentTokens();
-        assertEq(rentTokens.length, 1);
-        assertEq(rentTokens[0], MUMBAI_USDC);
+    //     // Post-state check 1.
+    //     rentTokens = basket.getSupportedRentTokens();
+    //     assertEq(rentTokens.length, 1);
+    //     assertEq(rentTokens[0], MUMBAI_USDC);
 
-        // Add USDC again -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("Already supported");
-        basket.modifyRentTokenSupport(MUMBAI_USDC, true);
+    //     // Add USDC again -> revert
+    //     vm.prank(factoryOwner);
+    //     vm.expectRevert("Already supported");
+    //     basket.modifyRentTokenSupport(MUMBAI_USDC, true);
 
-        // Add DAI
-        vm.prank(factoryOwner);
-        basket.modifyRentTokenSupport(MUMBAI_DAI, true);
+    //     // Add DAI
+    //     vm.prank(factoryOwner);
+    //     basket.modifyRentTokenSupport(MUMBAI_DAI, true);
 
-        // Post-state check 2.
-        rentTokens = basket.getSupportedRentTokens();
-        assertEq(rentTokens.length, 2);
-        assertEq(rentTokens[0], MUMBAI_USDC);
-        assertEq(rentTokens[1], MUMBAI_DAI);
+    //     // Post-state check 2.
+    //     rentTokens = basket.getSupportedRentTokens();
+    //     assertEq(rentTokens.length, 2);
+    //     assertEq(rentTokens[0], MUMBAI_USDC);
+    //     assertEq(rentTokens[1], MUMBAI_DAI);
 
-        // Remove DAI
-        vm.prank(factoryOwner);
-        basket.modifyRentTokenSupport(MUMBAI_DAI, false);
+    //     // Remove DAI
+    //     vm.prank(factoryOwner);
+    //     basket.modifyRentTokenSupport(MUMBAI_DAI, false);
 
-        // Post-state check 2.
-        rentTokens = basket.getSupportedRentTokens();
-        assertEq(rentTokens.length, 1);
-        assertEq(rentTokens[0], MUMBAI_USDC);
-    }
+    //     // Post-state check 2.
+    //     rentTokens = basket.getSupportedRentTokens();
+    //     assertEq(rentTokens.length, 1);
+    //     assertEq(rentTokens[0], MUMBAI_USDC);
+    // }
 }

@@ -53,8 +53,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
     string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
 
-    address[] public supportedRentToken;
-
     IERC20Metadata public primaryRentToken; // USDC by default
 
     uint256 public tnftType;
@@ -67,6 +65,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     event DepositedTNFT(address prevOwner, address indexed tnft, uint256 indexed tokenId);
 
     event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
+
+    event Debug(uint256);
 
     event FeatureSupportAdded(uint256 feature);
 
@@ -188,7 +188,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // mint basket tokens to user
         _mint(_depositor, basketShare);
 
-        currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals;
+        currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals; // TODO: Will most likely be removed
         if (!currencySupported[currency]) {
             currencySupported[currency] = true;
             supportedCurrency.push(currency);
@@ -200,8 +200,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     /**
      * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens.
      */
-    function redeemTNFT(address _tangibleNFT, uint256 _tokenId) external {
-        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+    function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
+        _redeemTNFT(_tangibleNFT, _tokenId, _amountBasketTokens);
+    }
+
+    function _redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) internal {
 
         // calc value of TNFT(s) being redeemed
             // value of TNFT(s) / total value of Basket
@@ -214,37 +217,46 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // calculate amount of rent to send
             // rent * total supply / amountTokens
 
+        require(balanceOf(msg.sender) >= _amountBasketTokens, "Insufficient balance");
+        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+
+        // Transfer tokenId to user -> update contract accordingly.
+        IERC721(_tangibleNFT).safeTransferFrom(address(this), msg.sender, _tokenId);
+
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
 
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
 
-        // TODO: Do something with usdValue to calculate how many tokens the user has based on current market value of TNFT being redeemed.
+        // Use usdValue and sharePrice to calculate how many tokens the user must have based on current market value of TNFT being redeemed.
+        uint256 sharePrice = getSharePrice();
+        uint256 basketShare = (usdValue * 10 ** decimals()) / sharePrice;
 
-        // TODO: Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
+        // Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
+        require(_amountBasketTokens >= basketShare, "Insufficient offer");
+        if (_amountBasketTokens > basketShare) _amountBasketTokens = basketShare;
 
-        // TODO: Transfer tokenId to user -> update contract accordingly.
-        IERC721(_tangibleNFT).safeTransferFrom(address(this), msg.sender, _tokenId);
-
+        // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;
-        // TODO: remove from array
+        currencyBalance[currency] -= (value * 1e18) / 10 ** nativeDecimals; // TODO: Will most likely be removed
 
-        // TODO: Calculate amount of rent to send to user -> rent * total supply / amount of token
-        
-    }
+        (uint256 index,) = _isDepositedTnft(_tangibleNFT, _tokenId);
+        depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
+        depositedTnfts.pop();
 
-    function modifyRentTokenSupport(address _token, bool _support) external onlyFactoryOwner { // TODO: TEST
-        (uint256 index, bool exists) = _isSupportedRentToken(_token);
-        if (_support) {
-            require(!exists, "Already supported");
-            supportedRentToken.push(_token);
+        // Calculate amount of rent to send to redeemer
+        uint256 rentBal = getRentBal();
+        if (rentBal > 0) {
+            // TODO test
+            uint256 amountRent = (_amountBasketTokens * rentBal) / totalSupply(); // TODO: Revisit math, needs to end with 6 decimals
+            emit Debug(amountRent);
+            assert(primaryRentToken.transfer(msg.sender, amountRent));
         }
-        else {
-            require(exists, "Not supported");
-            supportedRentToken[index] = supportedRentToken[supportedRentToken.length - 1];
-            supportedRentToken.pop();
-        }
+
+        _burn(msg.sender, _amountBasketTokens);
+
+        emit RedeemedTNFT(msg.sender, _tangibleNFT, _tokenId);
     }
 
     /**
@@ -252,6 +264,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
      */
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
+    }
+
+    function getDepositedTnfts() external view returns (TokenData[] memory) {
+        return depositedTnfts;
+    }
+
+    function getSupportedFeatures() external view returns (uint256[] memory) {
+        return supportedFeatures;
     }
 
 
@@ -284,19 +304,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         }
 
         // get value of rent accrued by this contract
-        //totalValue += _getUSDValue(primaryRentToken.symbol(), primaryRentToken.balanceOf(address(this)), primaryRentToken.decimals()); TODO: Revisit
+        // TODO: Convert decimals
+        totalValue += (getRentBal() * 10 ** (decimals() - primaryRentToken.decimals())); // TODO: Revisit -> USDC oracle may be best in case of a depeg.
     }
 
-    function getDepositedTnfts() external view returns (TokenData[] memory) {
-        return depositedTnfts;
-    }
-
-    function getSupportedRentTokens() external view returns (address[] memory) {
-        return supportedRentToken;
-    }
-
-    function getSupportedFeatures() external view returns (uint256[] memory) {
-        return supportedFeatures;
+    function getRentBal() public view returns (uint256) {
+        return primaryRentToken.balanceOf(address(this));
     }
 
 
@@ -343,11 +356,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     }
 
     /**
-     * @notice This method returns whether a provided Erc20 token is supported for rent.
+     * @notice This method returns whether a provided TNFT token exists in this contract and if so, where in the array.
      */
-    function _isSupportedRentToken(address _token) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < supportedRentToken.length;) {
-            if (supportedRentToken[i] == _token) return (i, true);
+    function _isDepositedTnft(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
+        for(uint256 i; i < depositedTnfts.length;) {
+            if (depositedTnfts[i].tnft == _tnft && depositedTnfts[i].tokenId == _tokenId) return (i, true);
             unchecked {
                 ++i;
             }
