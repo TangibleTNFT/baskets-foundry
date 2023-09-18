@@ -230,7 +230,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // using fingerprint, fetch the value of the property in it's respective currency
         (uint256 value, uint256 currencyNum) = realEstateOracle.marketPriceNativeCurrency(fingerprint);
-        emit log_named_uint("market value", value);
+        emit log_named_uint("market value", value); // 500_000_000
         //emit log_named_uint("currencyNum", currencyNum);
 
         // Fetch the string ISO code for currency
@@ -259,7 +259,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
         // calculate total USD value of property
         UsdValue = (uint(price) * value * 10 ** 18) / 10 ** priceDecimals / 10 ** oracleDecimals;
-        emit log_named_uint("USD Value", UsdValue);
+        emit log_named_uint("USD Value", UsdValue); // 650_000_000000000000000000 (18)
 
     }
 

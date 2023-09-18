@@ -115,7 +115,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     
     // ~ External Functions ~
 
-    // TODO: Test
+    /**
+     * @notice This method allows a user to deposit a batch of TNFTs into the basket.
+     */
     function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
         uint256 length = _tangibleNFTs.length;
         require(length == _tokenIds.length, "Arrays not same size");
@@ -161,20 +163,27 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             }
         }
 
+        // take token from depositor
+        IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
+
+        // update contract
+        tokenDeposited[_tangibleNFT][_tokenId] = true;
+        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
+
+        // find value of TNFT
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
 
+        // calculate usd value of TNFT with 18 decimals
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
 
+        // find share price
         uint256 sharePrice = getSharePrice();
         basketShare = (usdValue * 10 ** decimals()) / sharePrice;
 
-        IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
+        // mint basket tokens to user
         _mint(_depositor, basketShare);
-
-        tokenDeposited[_tangibleNFT][_tokenId] = true;
-        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
 
         currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals;
         if (!currencySupported[currency]) {
@@ -189,8 +198,36 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
      * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens.
      */
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId) external {
+        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+
         // calc value of TNFT(s) being redeemed
             // value of TNFT(s) / total value of Basket
+        
+        // calculate value of TNFT being redeemed
+            // how to calculate this?
+        // ensure user has sufficient TBT basket tokens
+        // take tokens
+        // send TNFT
+        // calculate amount of rent to send
+            // rent * total supply / amountTokens
+
+        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
+        (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
+
+        uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
+        require(usdValue > 0, "Unsupported TNFT");
+
+        // TODO: Do something with usdValue to calculate how many tokens the user has based on current market value of TNFT being redeemed.
+
+        // TODO: Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
+
+        // TODO: Transfer tokenId to user -> update contract accordingly.
+        IERC721(_tangibleNFT).safeTransferFrom(address(this), msg.sender, _tokenId);
+
+        tokenDeposited[_tangibleNFT][_tokenId] = false;
+        // TODO: remove from array
+
+        // TODO: Calculate amount of rent to send to user -> rent * total supply / amount of token
         
     }
 
@@ -300,16 +337,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         if (price < 0) price = 0;
 
         return (uint256(price), priceFeed.decimals());
-    }
-
-    function _isSupportedFeature(uint256 _feature) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < supportedFeatures.length;) {
-            if (supportedFeatures[i] == _feature) return (i, true);
-            unchecked {
-                ++i;
-            }
-        }
-        return (0, false);
     }
 
     /**
