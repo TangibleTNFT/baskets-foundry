@@ -184,7 +184,6 @@ contract BasketsManagerTest is Test, Utility {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");
-        vm.label(NIK, "NIK");
     }
 
     // ~ Utility ~
@@ -192,6 +191,14 @@ contract BasketsManagerTest is Test, Utility {
     /// @notice Turns a single uint to an array of uints of size 1.
     function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
         uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single address to an array of uints of size 1.
+    function _asSingletonArrayAddress(address element) private pure returns (address[] memory) {
+        address[] memory array = new address[](1);
         array[0] = element;
 
         return array;
@@ -246,24 +253,23 @@ contract BasketsManagerTest is Test, Utility {
         // deploy basket
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), 1);
-        (IBasket _basket, uint256 basketShares) = basketManager.deployBasket(
+        (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
             MUMBAI_USDC,
             features,
-            address(realEstateTnft),
-            1
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
         );
         vm.stopPrank();
 
         // Post-state check
+        assertEq(basketShares.length, 1);
+
         basketsArray = basketManager.getBasketsArray();
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
-
-        assertEq(realEstateTnft.balanceOf(JOE), 1);
-        assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
 
         assertEq(
             basketManager.hashedFeaturesForBasket(address(_basket)),
@@ -286,7 +292,7 @@ contract BasketsManagerTest is Test, Utility {
             _basket.getTotalValueOfBasket()
         );
 
-        assertEq(_basket.balanceOf(JOE), basketShares);
+        assertEq(_basket.balanceOf(JOE), basketShares[0]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
         assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
 
@@ -312,10 +318,91 @@ contract BasketsManagerTest is Test, Utility {
             RE_TNFTTYPE,
             MUMBAI_USDC,
             features,
-            address(realEstateTnft),
-            1
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
         );
         vm.stopPrank();
+    }
+
+    /// @notice Verifies proper state changes when a basket is deployed with features
+    function test_basketManager_deployBasket_multipleInitial() public {
+
+        // create tokenId array for initial deposit
+        address[] memory tnfts = new address[](2);
+        tnfts[0] = address(realEstateTnft);
+        tnfts[1] = address(realEstateTnft);
+
+        uint256[] memory tokenIds = new uint256[](2);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+
+        // create features array
+        uint256[] memory features = new uint256[](2);
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        // add features to initial deposit token
+        _addFeatureToCategory(address(realEstateTnft), 1, features);
+        _addFeatureToCategory(address(realEstateTnft), 2, features);
+
+        // Pre-state check.
+        address[] memory basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 0);
+
+        assertEq(realEstateTnft.balanceOf(JOE), 2);
+
+        // deploy basket
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 1);
+        realEstateTnft.approve(address(basketManager), 2);
+        (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            MUMBAI_USDC,
+            features,
+            tnfts,
+            tokenIds
+        );
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(basketShares.length, 2);
+
+        basketsArray = basketManager.getBasketsArray();
+        assertEq(basketsArray.length, 1);
+        assertEq(basketsArray[0], address(_basket));
+
+        assertEq(
+            basketManager.hashedFeaturesForBasket(address(_basket)),
+            keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
+        );
+
+        assertEq(basketManager.isBasket(address(_basket)), true);
+
+        uint256 sharePrice = IBasket(_basket).getSharePrice();
+
+        assertEq(realEstateTnft.balanceOf(JOE), 0);
+        assertEq(realEstateTnft.balanceOf(address(_basket)), 2);
+
+        assertEq(
+            (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
+            _basket.getTotalValueOfBasket()
+        );
+
+        assertEq(_basket.balanceOf(JOE), basketShares[0] + basketShares[1]);
+        assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), true);
+
+        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
+        assertEq(deposited.length, 2);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].tnft, address(realEstateTnft));
+        assertEq(deposited[1].tokenId, 2);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
     }
 
     /// @notice Verifies proper state changes when a basket is deployed with no features
@@ -337,8 +424,8 @@ contract BasketsManagerTest is Test, Utility {
             RE_TNFTTYPE,
             MUMBAI_USDC,
             features,
-            address(realEstateTnft),
-            1
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
         );
         vm.stopPrank();
 

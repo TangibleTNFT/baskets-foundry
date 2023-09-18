@@ -73,9 +73,10 @@ contract BasketManager is FactoryModifiers {
         uint256 _tnftType,
         address _rentToken,
         uint256[] memory _features,
-        address _tangibleNFTDeposit,
-        uint256 _tokenIdDeposit
-    ) external returns (IBasket, uint256 basketShare) {
+        address[] memory _tangibleNFTDeposit,
+        uint256[] memory _tokenIdDeposit
+    ) external returns (IBasket, uint256[] memory basketShares) {
+        require(_tangibleNFTDeposit.length == _tokenIdDeposit.length, "Differing lengths");
 
         address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
@@ -114,15 +115,20 @@ contract BasketManager is FactoryModifiers {
         baskets.push(address(newBasketBeacon));
         isBasket[address(newBasketBeacon)] = true;
 
-        // transfer initial TNFT from newBasketBeacon owner to this contract
-        IERC721(_tangibleNFTDeposit).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit);
+        // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
+        for (uint256 i; i < _tokenIdDeposit.length;) {
+            IERC721(_tangibleNFTDeposit[i]).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit[i]);
+            IERC721(_tangibleNFTDeposit[i]).approve(address(newBasketBeacon), _tokenIdDeposit[i]);
+            unchecked {
+                ++i;
+            }
+        }
 
-        // approve transfer of TNFT to new newBasketBeacon and call depositTNFT
-        IERC721(_tangibleNFTDeposit).approve(address(newBasketBeacon), _tokenIdDeposit);
-        basketShare = IBasket(address(newBasketBeacon)).depositTNFT(_tangibleNFTDeposit, _tokenIdDeposit);
+        // call batchDepositTNFT
+        basketShares = IBasket(address(newBasketBeacon)).batchDepositTNFT(_tangibleNFTDeposit, _tokenIdDeposit);
 
         emit BasketCreated(msg.sender, address(newBasketBeacon));
-        return (IBasket(address(newBasketBeacon)), basketShare);
+        return (IBasket(address(newBasketBeacon)), basketShares);
     }
 
     function getBasketsArray() external view returns (address[] memory) {

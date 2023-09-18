@@ -136,16 +136,19 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
      * @notice This method allows a user to deposit their TNFT in exchange for Basket tokens.
      */
     function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
-        if (msg.sender != IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
-            basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
-        } else {
-            basketShare = _depositTNFT(_tangibleNFT, _tokenId, deployer);
-        }
+        basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
     }
 
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
+
+        // get token fingerprint
+        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
+
+        // update contract
+        tokenDeposited[_tangibleNFT][_tokenId] = true;
+        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
 
         // if contract supports features, make sure tokenId has a supported feature
         uint256 length = supportedFeatures.length;
@@ -166,12 +169,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
 
-        // update contract
-        tokenDeposited[_tangibleNFT][_tokenId] = true;
-        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
-
         // find value of TNFT
-        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
 
         // calculate usd value of TNFT with 18 decimals
@@ -181,6 +179,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // find share price
         uint256 sharePrice = getSharePrice();
         basketShare = (usdValue * 10 ** decimals()) / sharePrice;
+
+        // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
+        if (msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
+            _depositor = deployer;
+        }
 
         // mint basket tokens to user
         _mint(_depositor, basketShare);
