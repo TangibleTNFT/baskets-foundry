@@ -1,3 +1,22 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
+	url = git@github.com:foundry-rs/forge-std
+
+[submodule "lib/chainlink"]
+	path = lib/chainlink
+	url = git@github.com:smartcontractkit/chainlink.git
+
+[submodule "lib/contacts-inside-team"]
+	path = lib/contracts-inside-team
+	branch = auditFractions
+	url = git@github.com:TangibleTNFT/contracts-inside-team.git
+
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	branch = release-v4.9
+	url = git@github.com:OpenZeppelin/openzeppelin-contracts.git
+
+[submodule "lib/openzeppelin-contracts-upgradeable"]
+	path = lib/openzeppelin-contracts-upgradeable
+	branch = release-v4.9
+	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
