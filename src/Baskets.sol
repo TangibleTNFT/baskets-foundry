@@ -180,7 +180,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
         // find share price
         uint256 sharePrice = getSharePrice();
-        basketShare = (usdValue * 10 ** decimals()) / sharePrice;
+        basketShare = (usdValue * 10 ** decimals()) / sharePrice; // TODO: Revisit
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
@@ -232,17 +232,27 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
+        emit Debug(usdValue);
 
         // Use usdValue and sharePrice to calculate how many tokens the user must have based on current market value of TNFT being redeemed.
         uint256 sharePrice = getSharePrice();
         emit Debug(sharePrice); // NOTE: For testing only
 
-        uint256 basketSharesRequired = (usdValue * 10 ** decimals()) / sharePrice;
+        // Get rent balance of contract
+        uint256 rentBal = getRentBal();
+
+        // Calculate amount of rent to send to redeemer
+        uint256 amountRent = (usdValue * rentBal) / totalNftValue; // TODO: Test, revisit
+        emit Debug(amountRent); // NOTE: For testing only
+
+        // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
+        uint256 basketSharesRequired = ((usdValue + (amountRent * 10**12)) / sharePrice) * 10 ** decimals();
         emit Debug(basketSharesRequired); // NOTE: For testing only
 
         // Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
         require(_amountBasketTokens >= basketSharesRequired, "Insufficient offer");
-        if (_amountBasketTokens > basketSharesRequired) _amountBasketTokens = usdValue; // TODO: Test, revisit (should basketTokensRequired be == usdValue?)
+        if (_amountBasketTokens > basketSharesRequired) _amountBasketTokens = basketSharesRequired;
+        emit Debug(_amountBasketTokens); // NOTE: For testing only
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;
@@ -252,13 +262,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
         depositedTnfts.pop();
 
-        // Calculate amount of rent to send to redeemer
-        uint256 rentBal = getRentBal();
-        if (rentBal > 0) {
-            uint256 amountRent = (usdValue * rentBal) / totalNftValue; // TODO: Test, revisit
-            emit Debug(amountRent); // NOTE: For testing only
-            emit Debug(_amountBasketTokens); // NOTE: For testing only
-            emit Debug(totalSupply()); // NOTE: For testing only
+        // Send rent to redeemer
+        if (amountRent > 0) {
+            //uint256 amountRent = (usdValue * rentBal) / totalNftValue; // TODO: Test, revisit
             assert(primaryRentToken.transfer(msg.sender, amountRent));
         }
 
