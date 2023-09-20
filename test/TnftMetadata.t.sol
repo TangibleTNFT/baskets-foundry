@@ -38,7 +38,7 @@ contract TnftMetadataTest is Test, Utility {
     function setUp() public {
         // Deploy Factory
         factory = new FactoryV2(
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             TANGIBLE_LABS
         );
 
@@ -51,25 +51,6 @@ contract TnftMetadataTest is Test, Utility {
             address(factoryProvider)
         );
 
-    }
-
-
-    // ~ Utility ~
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayString(string memory element) private pure returns (string[] memory) {
-        string[] memory array = new string[](1);
-        array[0] = element;
-
-        return array;
     }
 
 

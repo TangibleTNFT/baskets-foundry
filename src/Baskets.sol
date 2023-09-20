@@ -249,7 +249,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         uint256 basketSharesRequired = ((usdValue + (amountRent * 10**12)) / sharePrice) * 10 ** decimals();
         emit Debug(basketSharesRequired); // NOTE: For testing only
 
-        // Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
+        // Verify the user has this amount of tokens -> If so, BURN them                                                                                 
         require(_amountBasketTokens >= basketSharesRequired, "Insufficient offer");
         if (_amountBasketTokens > basketSharesRequired) _amountBasketTokens = basketSharesRequired;
         emit Debug(_amountBasketTokens); // NOTE: For testing only

@@ -4,6 +4,8 @@ pragma solidity ^0.8.13;
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
 contract Utility {
 
     // ~ Actors ~
@@ -13,12 +15,14 @@ contract Utility {
     address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant PROXY = address(bytes20(bytes("Proxy")));
 
+
     // ~ Constants ~
 
-    address public constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
+    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747);
     address public constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
 
     uint256 constant USD = 10 ** 6;  // USDC precision decimals
+
 
     // ~ Types and Features ~
 
@@ -35,6 +39,33 @@ contract Utility {
     uint256 public constant RE_FEATURE_4 = 444444;
 
     uint256 public constant GOLD_TNFTTYPE = 1;
+
+
+    // ~ Utility Functions ~
+
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayUint(uint256 element) internal pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single address to an array of uints of size 1.
+    function _asSingletonArrayAddress(address element) internal pure returns (address[] memory) {
+        address[] memory array = new address[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayString(string memory element) internal pure returns (string[] memory) {
+        string[] memory array = new string[](1);
+        array[0] = element;
+
+        return array;
+    }
 
 }
 

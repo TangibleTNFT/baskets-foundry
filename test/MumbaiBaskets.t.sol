@@ -84,7 +84,7 @@ contract MumbaiBasketsTest is Test, Utility {
             "TBT",
             address(factoryProvider),
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             address(this)
         );
@@ -192,23 +192,8 @@ contract MumbaiBasketsTest is Test, Utility {
         vm.label(NIK, "NIK");
     }
 
+
     // ~ Utility ~
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayString(string memory element) private pure returns (string[] memory) {
-        string[] memory array = new string[](1);
-        array[0] = element;
-
-        return array;
-    }
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
@@ -441,7 +426,7 @@ contract MumbaiBasketsTest is Test, Utility {
             "TBT",
             address(factoryProvider),
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             address(this)
         );
@@ -506,7 +491,7 @@ contract MumbaiBasketsTest is Test, Utility {
             "TBT",
             address(factoryProvider),
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             featuresToAdd,
             address(this)
         );
@@ -711,7 +696,7 @@ contract MumbaiBasketsTest is Test, Utility {
         uint256 sharePrice = basket.getSharePrice();
 
         uint256 rentBal = 10_000 * USD;
-        deal(MUMBAI_USDC, address(basket), rentBal);
+        deal(address(MUMBAI_USDC), address(basket), rentBal);
 
         // Pre-state check
         assertEq(
@@ -719,8 +704,8 @@ contract MumbaiBasketsTest is Test, Utility {
             basket.getTotalValueOfBasket()
         );
 
-        assertEq(IERC20(MUMBAI_USDC).balanceOf(address(basket)), rentBal);
-        assertEq(IERC20(MUMBAI_USDC).balanceOf(JOE), 0);
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), rentBal);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
@@ -741,8 +726,8 @@ contract MumbaiBasketsTest is Test, Utility {
         vm.stopPrank();
 
         // Post-state check
-        assertEq(IERC20(MUMBAI_USDC).balanceOf(address(basket)), 0);
-        assertEq(IERC20(MUMBAI_USDC).balanceOf(JOE), rentBal);
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), 0);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), rentBal);
 
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), 0);
@@ -836,53 +821,4 @@ contract MumbaiBasketsTest is Test, Utility {
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
     }
-
-
-    /// @dev ~ Rent Management Testing ~
-
-    /// @notice This verifies state changes and restrictions for modifyRentTokenSupport()
-    // function test_baskets_mumbai_modifyRentTokenSupport() public {
-
-    //     // Pre-state check.
-    //     address[] memory rentTokens = basket.getSupportedRentTokens();
-    //     assertEq(rentTokens.length, 0);
-
-    //     // Remove token -> revert
-    //     vm.prank(factoryOwner);
-    //     vm.expectRevert("Not supported");
-    //     basket.modifyRentTokenSupport(MUMBAI_USDC, false);
-
-    //     // Add USDC -> Success
-    //     vm.prank(factoryOwner);
-    //     basket.modifyRentTokenSupport(MUMBAI_USDC, true);
-
-    //     // Post-state check 1.
-    //     rentTokens = basket.getSupportedRentTokens();
-    //     assertEq(rentTokens.length, 1);
-    //     assertEq(rentTokens[0], MUMBAI_USDC);
-
-    //     // Add USDC again -> revert
-    //     vm.prank(factoryOwner);
-    //     vm.expectRevert("Already supported");
-    //     basket.modifyRentTokenSupport(MUMBAI_USDC, true);
-
-    //     // Add DAI
-    //     vm.prank(factoryOwner);
-    //     basket.modifyRentTokenSupport(MUMBAI_DAI, true);
-
-    //     // Post-state check 2.
-    //     rentTokens = basket.getSupportedRentTokens();
-    //     assertEq(rentTokens.length, 2);
-    //     assertEq(rentTokens[0], MUMBAI_USDC);
-    //     assertEq(rentTokens[1], MUMBAI_DAI);
-
-    //     // Remove DAI
-    //     vm.prank(factoryOwner);
-    //     basket.modifyRentTokenSupport(MUMBAI_DAI, false);
-
-    //     // Post-state check 2.
-    //     rentTokens = basket.getSupportedRentTokens();
-    //     assertEq(rentTokens.length, 1);
-    //     assertEq(rentTokens[0], MUMBAI_USDC);
-    // }
 }

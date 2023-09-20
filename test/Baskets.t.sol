@@ -67,7 +67,7 @@ contract BasketsTest is Test, Utility {
 
         // Deploy Factory
         factory = new FactoryV2(
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             TANGIBLE_LABS
         );
 
@@ -156,7 +156,7 @@ contract BasketsTest is Test, Utility {
             "TBT",
             address(factoryProvider),
             TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             address(this)
         );
@@ -225,17 +225,6 @@ contract BasketsTest is Test, Utility {
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");
         
-    }
-
-
-    // ~ Utility ~ 
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
     }
 
 

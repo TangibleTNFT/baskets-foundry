@@ -186,31 +186,8 @@ contract BasketsManagerTest is Test, Utility {
         vm.label(JOE, "JOE");
     }
 
+
     // ~ Utility ~
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single address to an array of uints of size 1.
-    function _asSingletonArrayAddress(address element) private pure returns (address[] memory) {
-        address[] memory array = new address[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayString(string memory element) private pure returns (string[] memory) {
-        string[] memory array = new string[](1);
-        array[0] = element;
-
-        return array;
-    }
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
@@ -257,7 +234,7 @@ contract BasketsManagerTest is Test, Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(1)
@@ -316,7 +293,7 @@ contract BasketsManagerTest is Test, Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(1)
@@ -359,7 +336,7 @@ contract BasketsManagerTest is Test, Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             tnfts,
             tokenIds
@@ -422,7 +399,7 @@ contract BasketsManagerTest is Test, Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(1)
