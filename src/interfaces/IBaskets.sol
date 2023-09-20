@@ -7,14 +7,21 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
 
     struct TokenData {
-        address tnft;
         uint256 tokenId;
         uint256 fingerprint;
     }
     
-    function getDepositedTnfts() external view returns (TokenData[] memory);
+    function getDepositedTnfts(address _tnft) external view returns (TokenData[] memory);
+
+    function getDepositedTnftsLength(address _tnft) external view returns (uint256);
 
     function getSupportedFeatures() external view returns (uint256[] memory);
+
+    function getSupportedFeaturesLength() external view returns (uint256);
+
+    function getTnftsSupported() external view returns (address[] memory);
+
+    function getTnftsSupportedLength() external view returns (uint256);
 
     function tokenDeposited(address, uint256) external returns (bool);
 

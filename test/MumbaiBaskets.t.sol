@@ -313,8 +313,11 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
+
+        address[] memory tnftsSupported = basket.getTnftsSupported();
+        assertEq(tnftsSupported.length, 0);
 
         // emit deposit logic 
         uint256 usdValue = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
@@ -342,11 +345,14 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+
+        tnftsSupported = basket.getTnftsSupported();
+        assertEq(tnftsSupported.length, 1);
+        assertEq(tnftsSupported[0], address(realEstateTnft));
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
@@ -363,8 +369,11 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
+
+        address[] memory tnftsSupported = basket.getTnftsSupported();
+        assertEq(tnftsSupported.length, 0);
 
         // emit deposit logic 
         uint256 usdValue1 = _emitGetUsdValueOfNft(address(realEstateTnft), 1);
@@ -403,14 +412,16 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 2);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
-        assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, 2);
         assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
+
+        tnftsSupported = basket.getTnftsSupported();
+        assertEq(tnftsSupported.length, 1);
+        assertEq(tnftsSupported[0], address(realEstateTnft));
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
@@ -588,7 +599,7 @@ contract MumbaiBasketsTest is Test, Utility {
             assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), false);
         }
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
 
         // emit deposit logic 
@@ -627,10 +638,9 @@ contract MumbaiBasketsTest is Test, Utility {
             assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
         }
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, amountTNFTs);
         for (uint256 i; i < amountTNFTs; ++i) {
-            assertEq(deposited[i].tnft, address(realEstateTnft));
             assertEq(deposited[i].tokenId, tokenIds[i]);
             assertEq(deposited[i].fingerprint, RE_FINGERPRINT_1);
         }
@@ -662,9 +672,8 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
@@ -681,7 +690,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
     }
 
@@ -714,9 +723,8 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
@@ -736,7 +744,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
     }
 
@@ -771,12 +779,10 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 2);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
-        assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, 2);
         assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
 
@@ -796,9 +802,8 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 2), true);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 2);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_2);
 
@@ -818,7 +823,7 @@ contract MumbaiBasketsTest is Test, Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), 2), false);
 
-        deposited = basket.getDepositedTnfts();
+        deposited = basket.getDepositedTnfts(address(realEstateTnft));
         assertEq(deposited.length, 0);
     }
 }
