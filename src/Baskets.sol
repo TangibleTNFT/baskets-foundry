@@ -59,6 +59,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
     address public deployer;
 
+    uint256 public totalNftValue; // NOTE: For testing. Will be replaced
+
 
     // ~ Events ~
 
@@ -188,11 +190,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // mint basket tokens to user
         _mint(_depositor, basketShare);
 
-        currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals; // TODO: Will most likely be removed
+        currencyBalance[currency] += (value * 1e18) / 10 ** nativeDecimals; // NOTE: Will most likely be removed
         if (!currencySupported[currency]) {
             currencySupported[currency] = true;
             supportedCurrency.push(currency);
         }
+
+        totalNftValue += usdValue;
 
         emit DepositedTNFT(_depositor, _tangibleNFT, _tokenId);
     }
@@ -231,15 +235,18 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
         // Use usdValue and sharePrice to calculate how many tokens the user must have based on current market value of TNFT being redeemed.
         uint256 sharePrice = getSharePrice();
-        uint256 basketShare = (usdValue * 10 ** decimals()) / sharePrice;
+        emit Debug(sharePrice); // NOTE: For testing only
+
+        uint256 basketSharesRequired = (usdValue * 10 ** decimals()) / sharePrice;
+        emit Debug(basketSharesRequired); // NOTE: For testing only
 
         // Verify the user has this amount of tokens -> If so, BURN them (user will have to approve prior)
-        require(_amountBasketTokens >= basketShare, "Insufficient offer");
-        if (_amountBasketTokens > basketShare) _amountBasketTokens = basketShare;
+        require(_amountBasketTokens >= basketSharesRequired, "Insufficient offer");
+        if (_amountBasketTokens > basketSharesRequired) _amountBasketTokens = usdValue; // TODO: Test, revisit (should basketTokensRequired be == usdValue?)
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;
-        currencyBalance[currency] -= (value * 1e18) / 10 ** nativeDecimals; // TODO: Will most likely be removed
+        currencyBalance[currency] -= (value * 1e18) / 10 ** nativeDecimals; // NOTE: Will most likely be removed
 
         (uint256 index,) = _isDepositedTnft(_tangibleNFT, _tokenId);
         depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
@@ -248,12 +255,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         // Calculate amount of rent to send to redeemer
         uint256 rentBal = getRentBal();
         if (rentBal > 0) {
-            // TODO test
-            uint256 amountRent = (_amountBasketTokens * rentBal) / totalSupply(); // TODO: Revisit math, needs to end with 6 decimals
-            emit Debug(amountRent);
+            uint256 amountRent = (usdValue * rentBal) / totalNftValue; // TODO: Test, revisit
+            emit Debug(amountRent); // NOTE: For testing only
+            emit Debug(_amountBasketTokens); // NOTE: For testing only
+            emit Debug(totalSupply()); // NOTE: For testing only
             assert(primaryRentToken.transfer(msg.sender, amountRent));
         }
 
+        totalNftValue -= usdValue;
         _burn(msg.sender, _amountBasketTokens);
 
         emit RedeemedTNFT(msg.sender, _tangibleNFT, _tokenId);
