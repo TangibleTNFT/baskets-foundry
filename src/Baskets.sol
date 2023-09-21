@@ -18,6 +18,7 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
+import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
@@ -338,12 +339,26 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             }
         }
 
-        // get value of rent accrued by this contract
-        // TODO: Convert decimals
+        // get value of rent accrued by this contract TODO: TEST
         //totalValue += (getRentBal() * 10 ** (decimals() - primaryRentToken.decimals()));
+        for (uint256 i; i < tnftsSupported.length;) {
 
-        // TODO: call claimableRentForTokenBatch() for all tokens in basket
-        
+            address tnft = tnftsSupported[i];
+            IRentManager rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(tnft));
+
+            for (uint256 j; j < depositedTnfts[tnft].length;) {
+
+                totalValue += rentManager.claimableRentForToken(depositedTnfts[tnft][j].tokenId);
+
+                unchecked {
+                    ++j;
+                }
+            }
+            
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function getRentBal() public view returns (uint256) {
