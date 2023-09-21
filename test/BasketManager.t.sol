@@ -273,8 +273,9 @@ contract BasketsManagerTest is Test, Utility {
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
         assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
 
-        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts(address(realEstateTnft));
+        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
@@ -371,10 +372,12 @@ contract BasketsManagerTest is Test, Utility {
         assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
         assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), true);
 
-        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts(address(realEstateTnft));
+        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 2);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, 1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, 2);
         assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
     }

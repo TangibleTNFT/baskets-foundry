@@ -19,7 +19,7 @@ contract Utility {
     // ~ Constants ~
 
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747);
-    address public constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+    IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F);
 
     uint256 constant USD = 10 ** 6;  // USDC precision decimals
 

@@ -18,7 +18,7 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
-import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
+import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
 
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
@@ -39,9 +39,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
     // ~ State Variables ~
 
+    TokenData[] public depositedTnfts;
+
     address[] public tnftsSupported;
 
-    mapping(address => TokenData[]) public depositedTnfts;
+    mapping(address => uint256[]) public tokenIdLibrary;
 
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
     mapping(address => mapping(uint256 => bool)) public tokenDeposited;
@@ -153,7 +155,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = true;
-        depositedTnfts[_tangibleNFT].push(TokenData(_tokenId, fingerprint));
+        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
+        tokenIdLibrary[_tangibleNFT].push(_tokenId); // TODO: Test with mul tnft address and mul arrays.
         (, bool exists) = _isSupportedTnft(_tangibleNFT); // TODO: Test
         if (!exists) {
             tnftsSupported.push(_tangibleNFT);
@@ -264,9 +267,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         currencyBalance[currency] -= (value * 1e18) / 10 ** nativeDecimals; // NOTE: Will most likely be removed
 
         (uint256 index,) = _isDepositedTnft(_tangibleNFT, _tokenId);
-        depositedTnfts[_tangibleNFT][index] = depositedTnfts[_tangibleNFT][depositedTnfts[_tangibleNFT].length - 1];
-        depositedTnfts[_tangibleNFT].pop();
+        depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
+        depositedTnfts.pop();
         // TODO: Update tnftsSupported if applicable
+        // TODO: Update tokenIdLibrary
 
         // Send rent to redeemer
         if (amountRent > 0) {
@@ -287,28 +291,20 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    function getDepositedTnfts(address _tnft) external view returns (TokenData[] memory) {
-        return depositedTnfts[_tnft];
-    }
-
-    function getDepositedTnftsLength(address _tnft) external view returns (uint256) {
-        return depositedTnfts[_tnft].length;
-    }
-
-    function getSupportedFeatures() external view returns (uint256[] memory) {
-        return supportedFeatures;
-    }
-
-    function getSupportedFeaturesLength() external view returns (uint256) {
-        return supportedFeatures.length;
+    function getDepositedTnfts() external view returns (TokenData[] memory) {
+        return depositedTnfts;
     }
 
     function getTnftsSupported() external view returns (address[] memory) {
         return tnftsSupported;
     }
 
-    function getTnftsSupportedLength() external view returns (uint256) {
-        return tnftsSupported.length;
+    function getTokenIdLibrary(address _tnft) external view returns (uint256[] memory) {
+        return tokenIdLibrary[_tnft];
+    }
+
+    function getSupportedFeatures() external view returns (uint256[] memory) {
+        return supportedFeatures;
     }
 
     // ~ Public Functions ~
@@ -331,7 +327,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     }
 
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
-        // Get value of each real estate by currency
+        // Get value of each TNFTs by currency
         for (uint256 i; i < supportedCurrency.length;) {
             totalValue += _getUSDValue(supportedCurrency[i], currencyBalance[supportedCurrency[i]], 18);
             unchecked {
@@ -339,22 +335,27 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             }
         }
 
-        // get value of rent accrued by this contract TODO: TEST
-        //totalValue += (getRentBal() * 10 ** (decimals() - primaryRentToken.decimals()));
+        // get value of rent accrued by this contract
         for (uint256 i; i < tnftsSupported.length;) {
-
             address tnft = tnftsSupported[i];
+
             IRentManager rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(tnft));
+            uint256[] memory claimables = rentManager.claimableRentForTokenBatch(tokenIdLibrary[tnft]);
 
-            for (uint256 j; j < depositedTnfts[tnft].length;) {
+            for (uint256 j; j < claimables.length;) {
+                if (claimables[j] > 0) {
+                    uint256 tokenId = tokenIdLibrary[tnft][j];
+                    IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokenId);
 
-                totalValue += rentManager.claimableRentForToken(depositedTnfts[tnft][j].tokenId);
-
+                    uint256 decimals = decimals() - IERC20Metadata(rentInfo.rentToken).decimals();
+                    decimals > 0 ?
+                        totalValue += claimables[j] * 10**decimals :
+                        totalValue += claimables[j];
+                }
                 unchecked {
                     ++j;
                 }
             }
-            
             unchecked {
                 ++i;
             }
@@ -412,8 +413,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
      * @notice This method returns whether a provided TNFT token exists in this contract and if so, where in the array.
      */
     function _isDepositedTnft(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < depositedTnfts[_tnft].length;) {
-            if (depositedTnfts[_tnft][i].tokenId == _tokenId) return (i, true);
+        for(uint256 i; i < depositedTnfts.length;) {
+            if (depositedTnfts[i].tokenId == _tokenId && depositedTnfts[i].tnft == _tnft) return (i, true);
             unchecked {
                 ++i;
             }
