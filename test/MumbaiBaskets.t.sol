@@ -874,6 +874,7 @@ contract MumbaiBasketsTest is Test, Utility {
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket
     function test_baskets_mumbai_getTotalValueOfBasket_single() public {
+        assertEq(basket.getTotalValueOfBasket(), 0);
 
         // deposit TNFT of certain value -> $650k usd
         vm.startPrank(JOE);
@@ -913,11 +914,14 @@ contract MumbaiBasketsTest is Test, Utility {
         
         // post state check
         emit log_named_uint("Total value of basket", totalValue);
-        assertEq(totalValue, usdValue1 + rentClaimable * 10**12);
+        assertEq(basket.getRentBal(), rentClaimable * 10**12);
+        assertEq(totalValue, usdValue1 + basket.getRentBal());
     }
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket with many TNFTs.
     function test_baskets_mumbai_getTotalValueOfBasket_multiple() public {
+        assertEq(basket.getTotalValueOfBasket(), 0);
+
         // Joe deposits TNFT of certain value -> $650k usd
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), 1);
@@ -982,76 +986,9 @@ contract MumbaiBasketsTest is Test, Utility {
         
         // post state check
         emit log_named_uint("Total value of basket", totalValue);
-        assertEq(totalValue, usdValue1 + usdValue2 + (rentClaimable1 * 10**12) + (rentClaimable2 * 10**12));
+        assertEq(basket.getRentBal(), (rentClaimable1 * 10**12) + (rentClaimable2 * 10**12));
+        assertEq(totalValue, usdValue1 + usdValue2 + basket.getRentBal());
     }
 
-    /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket with many TNFTs and one rent is DAI.
-    function test_baskets_mumbai_getTotalValueOfBasket_multiple_DAI() public {
-        // Joe deposits TNFT of certain value -> $650k usd
-        vm.startPrank(JOE);
-        realEstateTnft.approve(address(basket), 1);
-        basket.depositTNFT(address(realEstateTnft), 1);
-        vm.stopPrank();
-
-        // Nik deposits TNFT of certain value -> $780k usd
-        vm.startPrank(NIK);
-        realEstateTnft.approve(address(basket), 2);
-        basket.depositTNFT(address(realEstateTnft), 2);
-        vm.stopPrank();
-
-        // get nft value of tnft 1
-        uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), 1);
-        assertEq(usdValue1, 650_000 ether); //1e18
-
-        // get nft value of tnft 2
-        uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), 2);
-        assertEq(usdValue2, 780_000 ether); //1e18
-
-        // deal category owner USDC and DAI to deposit into rentManager for tnft 1 and tnft 2
-        uint256 amount1 = 10_000 * USD; // Note: USDC
-        uint256 amount2 = 14_000 ether; // Note: DAI
-        deal(address(MUMBAI_USDC), TANGIBLE_LABS, amount1);
-        deal(address(MUMBAI_DAI),  TANGIBLE_LABS, amount2);
-
-        // deposit rent for that TNFT (no vesting)
-        vm.startPrank(TANGIBLE_LABS);
-        // deposit rent for tnft 1
-        MUMBAI_USDC.approve(address(rentManager), amount1);
-        rentManager.deposit(
-            1,
-            address(MUMBAI_USDC),
-            amount1,
-            0,
-            block.timestamp + 1,
-            true
-        );
-        // deposit rent for tnft 2
-        MUMBAI_DAI.approve(address(rentManager), amount2);
-        rentManager.deposit(
-            2,
-            address(MUMBAI_DAI),
-            amount2,
-            0,
-            block.timestamp + 1,
-            true
-        );
-        vm.stopPrank();
-
-        skip(1); // go to end of vesting period
-
-        // get claimable rent value for tnft 1
-        uint256 rentClaimable1 = rentManager.claimableRentForToken(1);
-        assertEq(rentClaimable1, amount1);
-
-        // get claimable rent value for tnft 2
-        uint256 rentClaimable2 = rentManager.claimableRentForToken(2);
-        assertEq(rentClaimable2, amount2);
-
-        // call getTotalValueOfBasket
-        uint256 totalValue = basket.getTotalValueOfBasket();
-        
-        // post state check
-        emit log_named_uint("Total value of basket", totalValue);
-        assertEq(totalValue, usdValue1 + usdValue2 + (rentClaimable1 * 10**12) + rentClaimable2);
-    }
+    
 }

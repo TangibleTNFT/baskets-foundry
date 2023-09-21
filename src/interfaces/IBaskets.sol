@@ -11,6 +11,12 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
         uint256 tokenId;
         uint256 fingerprint;
     }
+
+    struct RentData {
+        address tnft;
+        uint256 tokenId;
+        uint256 amountClaimable;
+    }
     
     function getDepositedTnfts() external view returns (TokenData[] memory);
 
