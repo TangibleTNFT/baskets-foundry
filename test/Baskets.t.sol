@@ -230,13 +230,79 @@ contract BasketsTest is Utility {
     }
 
 
-    // ~ Initial State Test ~
+    // ----------
+    // Unit Tests
+    // ----------
 
-    /// @notice Initial state test.
-    function test_baskets_init_state() public {}
+
+    // ~ Initialize ~
+
+    /// @notice Verifies restrictions and correct state when Basket::initialize() is executed.
+    function test_baskets_initialize() public {
+        // Deploy implementation basket contract
+        Basket _basket = new Basket();
+        uint256[] memory features = new uint256[](0);
+
+        // Attempt to initialize a basket with address(0) for factory provider -> revert
+        vm.expectRevert("FactoryProvider == address(0)");
+        vm.prank(address(basketManager));
+        _basket.initialize(
+            "Tangible Basket Token",
+            "TBT",
+            address(0),
+            TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            address(this)
+        );
+
+        // Execute initialize on basket -> success
+        vm.prank(address(basketManager));
+        _basket.initialize(
+            "Tangible Basket Token",
+            "TBT",
+            address(factoryProvider),
+            TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            address(this)
+        );
+
+        // Post-state check 1.
+        assertEq(_basket.tnftType(), TNFTTYPE);
+        assertEq(_basket.deployer(), address(this));
+        assertEq(address(_basket.primaryRentToken()), address(MUMBAI_USDC));
+
+        uint256[] memory feats = _basket.getSupportedFeatures();
+        assertEq(feats.length, 0);
+
+        // Deploy another basket with features.
+        Basket _basket2 = new Basket();
+        features = new uint256[](2);
+        features[0] = 1;
+        features[1] = 2;
+
+        // Execute initialize on basket with features -> success
+        vm.prank(address(basketManager));
+        _basket2.initialize(
+            "Tangible Basket Token",
+            "TBT",
+            address(factoryProvider),
+            TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            address(this)
+        );
+
+        // Post-state check 2.
+        feats = _basket2.getSupportedFeatures();
+        assertEq(feats.length, 2);
+        assertEq(feats[0], 1);
+        assertEq(feats[1], 2);
+    }
 
 
-    // ~ Unit Tests ~
+    // ~ depositTNFT ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT() public {

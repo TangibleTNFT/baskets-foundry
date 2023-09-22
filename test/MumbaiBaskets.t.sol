@@ -318,7 +318,7 @@ contract MumbaiBasketsTest is Utility {
     // ----------
 
 
-    // ~ Deposit Functionality Testing ~
+    // ~ Deposit Testing ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_mumbai_depositTNFT_single() public {
@@ -677,10 +677,17 @@ contract MumbaiBasketsTest is Utility {
             assertEq(deposited[i].tokenId, tokenIds[i]);
             assertEq(deposited[i].fingerprint, RE_FINGERPRINT_1);
         }
+
+        // Try to call batchDepositNFT with diff size arrays -> revert
+        tokenIds = new uint256[](1);
+        tnfts = new address[](2);
+
+        vm.expectRevert("Arrays not same size");
+        basket.batchDepositTNFT(tnfts, tokenIds);
     }
 
 
-    // ~ Redeem Functionality Testing ~
+    // ~ Redeem Testing ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
     function test_baskets_mumbai_redeemTNFT_single() public {

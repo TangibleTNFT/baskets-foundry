@@ -169,7 +169,7 @@ contract BasketManager is FactoryModifiers {
     }
 
     function _isBasket(address _basket) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < baskets.length;) {
+        for (uint256 i; i < baskets.length;) {
             if (baskets[i] == _basket) return (i, true);
             unchecked {
                 ++i;
