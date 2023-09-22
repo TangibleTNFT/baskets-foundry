@@ -34,7 +34,7 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 // Polygon RPC: https://rpc.ankr.com/polygon
 
 
-contract BasketsTest is Test, Utility {
+contract BasketsTest is Utility {
     Basket public basket;
     BasketManager public basketManager;
 
@@ -64,6 +64,8 @@ contract BasketsTest is Test, Utility {
     address public constant TANGIBLE_LABS = address(bytes20(bytes("Tangible Labs Multisig")));
 
     function setUp() public {
+
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
         // Deploy Factory
         factory = new FactoryV2(

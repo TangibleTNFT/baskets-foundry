@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import { Test } from "../../lib/forge-std/src/Test.sol";
+
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-contract Utility {
+contract Utility is Test{
+
+    // ~ RPCs ~
+
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
+
 
     // ~ Actors ~
 

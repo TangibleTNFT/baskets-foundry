@@ -34,7 +34,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
-contract BasketsManagerTest is Test, Utility {
+contract BasketsManagerTest is Utility {
 
     Basket public basket;
     BasketManager public basketManager;
@@ -52,7 +52,7 @@ contract BasketsManagerTest is Test, Utility {
 
     // ~ Actors ~
 
-    address public factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+    address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
 
@@ -62,6 +62,10 @@ contract BasketsManagerTest is Test, Utility {
     event log_named_bool(string key, bool val);
 
     function setUp() public {
+
+        vm.createSelectFork(MUMBAI_RPC_URL);
+
+        factoryOwner = IOwnable(address(factoryV2)).contractOwner();
 
         //uint256[] memory features = new uint256[](0);
         basket = new Basket();

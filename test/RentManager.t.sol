@@ -23,7 +23,7 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
-contract RentManagerTest is Test, Utility {
+contract RentManagerTest is Utility {
     RentManager public rentManager;
     RentManagerDeployer public rentManagerDeployer;
 
@@ -51,6 +51,8 @@ contract RentManagerTest is Test, Utility {
     uint256 public tokenId = 2;
 
     function setUp() public {
+
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
         // ~ deployment ~
 
