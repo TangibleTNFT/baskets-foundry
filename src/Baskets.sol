@@ -264,12 +264,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
         depositedTnfts.pop();
 
-        (index,) = _isTokenIdLibrary(_tangibleNFT, _tokenId);// TODO: Test
+        (index,) = _isTokenIdLibrary(_tangibleNFT, _tokenId);
         tokenIdLibrary[_tangibleNFT][index] = tokenIdLibrary[_tangibleNFT][tokenIdLibrary[_tangibleNFT].length - 1];
         tokenIdLibrary[_tangibleNFT].pop();
 
         if (tokenIdLibrary[_tangibleNFT].length == 0) {
-            (index,) = _isSupportedTnft(_tangibleNFT); // TODO: Test
+            (index,) = _isSupportedTnft(_tangibleNFT); 
             tnftsSupported[index] = tnftsSupported[tnftsSupported.length - 1];
             tnftsSupported.pop();
         }
@@ -433,7 +433,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             }
 
             // we now iterate through the master claimable rent array, find the largest amount claimable, claim, then check if we need more
-            while (_amount > primaryRentToken.balanceOf(address(this))) {
+            while (_amount > primaryRentToken.balanceOf(address(this))) { // TODO: Refactor
                 uint256 mostValuableIndex;
                 for (uint256 i; i < claimableRent.length;) {
                     if (claimableRent[i].amountClaimable > claimableRent[mostValuableIndex].amountClaimable) {

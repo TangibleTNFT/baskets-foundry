@@ -19,6 +19,9 @@ contract Utility is Test{
 
     address public constant JOE   = address(bytes20(bytes("Joe")));
     address public constant NIK   = address(bytes20(bytes("Nik")));
+    address public constant ALICE = address(bytes20(bytes("Alice")));
+    address public constant BOB   = address(bytes20(bytes("Bob")));
+
     address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant PROXY = address(bytes20(bytes("Proxy")));
 

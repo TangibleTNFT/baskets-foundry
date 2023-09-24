@@ -263,7 +263,28 @@ contract MumbaiBasketsTest is Utility {
 
     }
 
-    function _createToken(address tnft, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
+    function _createItemAndMint(address tnft, uint256 _sellAt, uint256 _stock, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
+        require(_mintCount >= _stock, "mint count must be gt stock");
+
+        vm.startPrank(ORACLE_OWNER);
+        // create new item with fingerprint.
+        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+            _fingerprint, // fingerprint
+            _sellAt,      // weSellAt
+            0,            // lockedAmount
+            _stock,       // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE
+            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        );
+        vm.stopPrank();
+
+        vm.prank(TANGIBLE_LABS);
+        ITangibleNFTExt(tnft).addFingerprints(_asSingletonArrayUint(_fingerprint));
+
+        return _mintToken(tnft, _mintCount, _fingerprint, _receiver);
+    }
+
+    function _mintToken(address tnft, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
         uint256 preBal = IERC721(tnft).balanceOf(TANGIBLE_LABS);
 
         // create mint voucher for RE_FP_1
@@ -616,7 +637,7 @@ contract MumbaiBasketsTest is Utility {
         uint256 preBal = realEstateTnft.balanceOf(JOE);
         uint256 amountTNFTs = 3;
 
-        uint256[] memory tokenIds = _createToken(address(realEstateTnft), amountTNFTs, RE_FINGERPRINT_1, JOE);
+        uint256[] memory tokenIds = _mintToken(address(realEstateTnft), amountTNFTs, RE_FINGERPRINT_1, JOE);
         address[] memory tnfts = new address[](amountTNFTs);
         for (uint256 i; i < tokenIds.length; ++i) {
             tnfts[i] = address(realEstateTnft);
@@ -1147,6 +1168,270 @@ contract MumbaiBasketsTest is Utility {
 
         tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 0);
+    }
+
+    function test_baskets_mumbai_redeemTNFT_mathCheck1() public {
+        // Mint Alice token worth $100
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000, // 100 GBP TODO: Switch to USD
+            1,
+            1,
+            1,
+            ALICE
+        );
+        uint256 aliceToken = tokenIds[0];
+
+        // Mint Bob token worth $50
+        tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            50_000, // 50 GBP TODO: Switch to USD
+            1,
+            1,
+            2,
+            BOB
+        );
+        uint256 bobToken = tokenIds[0];
+
+        assertNotEq(aliceToken, bobToken);
+
+        // Pre-state check
+        assertEq(realEstateTnft.balanceOf(ALICE), 1);
+        assertEq(realEstateTnft.balanceOf(BOB), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(ALICE), 0);
+        assertEq(basket.balanceOf(BOB), 0);
+        assertEq(basket.totalSupply(), 0);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), false);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), bobToken), false);
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+
+        address[] memory supportedTnfts = basket.getTnftsSupported();
+        assertEq(supportedTnfts.length, 0);
+
+        // Alice executes a deposit
+        vm.startPrank(ALICE);
+        realEstateTnft.approve(address(basket), aliceToken);
+        basket.depositTNFT(address(realEstateTnft), aliceToken);
+        vm.stopPrank();
+
+        // Bob executes a deposit
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), bobToken);
+        basket.depositTNFT(address(realEstateTnft), bobToken);
+        vm.stopPrank();
+
+        // deal category owner USDC to deposit into rentManager
+        uint256 aliceRentBal = 10 * USD;
+        uint256 bobRentBal = 5 * USD;
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+
+        // deposit rent for that TNFT (no vesting)
+        vm.startPrank(TANGIBLE_LABS);
+        // deposit rent for alice's tnft
+        MUMBAI_USDC.approve(address(rentManager), aliceRentBal);
+        rentManager.deposit(
+            aliceToken,
+            address(MUMBAI_USDC),
+            aliceRentBal,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        // deposit rent for bob's tnft
+        MUMBAI_USDC.approve(address(rentManager), bobRentBal);
+        rentManager.deposit(
+            bobToken,
+            address(MUMBAI_USDC),
+            bobRentBal,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+
+        skip(1); // skip to end of vesting
+
+        // Sanity rent check
+        assertEq(rentManager.claimableRentForToken(aliceToken), 10 * USD);
+        assertEq(rentManager.claimableRentForToken(bobToken), 5 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), 15 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(ALICE), 0);
+        assertEq(MUMBAI_USDC.balanceOf(BOB), 0);
+
+        // TODO: Add check for share price
+
+        // Bob executes a redeem of bobToken
+        vm.startPrank(BOB);
+        basket.redeemTNFT(address(realEstateTnft), bobToken, basket.balanceOf(BOB));
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(rentManager.claimableRentForToken(aliceToken), 10 * USD);
+        assertEq(rentManager.claimableRentForToken(bobToken), 0);
+
+        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), 10 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(ALICE), 0);
+        assertEq(MUMBAI_USDC.balanceOf(BOB), 5 * USD);
+
+        assertEq(realEstateTnft.balanceOf(ALICE), 0);
+        assertEq(realEstateTnft.balanceOf(BOB), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.balanceOf(ALICE), (100 ether * 1.30 ether) / 1 ether); // Note: Odd exchange rate math
+        assertEq(basket.balanceOf(BOB), 0);
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), true);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), bobToken), false);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, aliceToken);
+        assertEq(deposited[0].fingerprint, 1);
+
+        supportedTnfts = basket.getTnftsSupported();
+        assertEq(supportedTnfts.length, 1);
+        assertEq(supportedTnfts[0], address(realEstateTnft));
+
+        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
+        assertEq(tokenIdLib.length, 1);
+        assertEq(tokenIdLib[0], aliceToken);
+    }
+
+    function test_baskets_mumbai_redeemTNFT_mathCheck2() public {
+        // Mint Alice token worth $100
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000, // 100 GBP TODO: Switch to USD
+            1,
+            1,
+            1,
+            ALICE
+        );
+        uint256 aliceToken = tokenIds[0];
+
+        // Mint Bob token worth $50
+        tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            50_000, // 50 GBP TODO: Switch to USD
+            1,
+            1,
+            2,
+            BOB
+        );
+        uint256 bobToken = tokenIds[0];
+
+        assertNotEq(aliceToken, bobToken);
+
+        // Pre-state check
+        assertEq(realEstateTnft.balanceOf(ALICE), 1);
+        assertEq(realEstateTnft.balanceOf(BOB), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.balanceOf(ALICE), 0);
+        assertEq(basket.balanceOf(BOB), 0);
+        assertEq(basket.totalSupply(), 0);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), false);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), bobToken), false);
+
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 0);
+
+        address[] memory supportedTnfts = basket.getTnftsSupported();
+        assertEq(supportedTnfts.length, 0);
+
+        // Alice executes a deposit
+        vm.startPrank(ALICE);
+        realEstateTnft.approve(address(basket), aliceToken);
+        basket.depositTNFT(address(realEstateTnft), aliceToken);
+        vm.stopPrank();
+
+        // Bob executes a deposit
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), bobToken);
+        basket.depositTNFT(address(realEstateTnft), bobToken);
+        vm.stopPrank();
+
+        // deal category owner USDC to deposit into rentManager
+        uint256 aliceRentBal = 10 * USD;
+        uint256 bobRentBal = 5 * USD;
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+
+        // deposit rent for that TNFT (no vesting)
+        vm.startPrank(TANGIBLE_LABS);
+        // deposit rent for alice's tnft
+        MUMBAI_USDC.approve(address(rentManager), aliceRentBal);
+        rentManager.deposit(
+            aliceToken,
+            address(MUMBAI_USDC),
+            aliceRentBal,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        // deposit rent for bob's tnft
+        MUMBAI_USDC.approve(address(rentManager), bobRentBal);
+        rentManager.deposit(
+            bobToken,
+            address(MUMBAI_USDC),
+            bobRentBal,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+
+        skip(1); // skip to end of vesting
+
+        // Sanity rent check
+        assertEq(rentManager.claimableRentForToken(aliceToken), 10 * USD);
+        assertEq(rentManager.claimableRentForToken(bobToken), 5 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), 15 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(ALICE), 0);
+        assertEq(MUMBAI_USDC.balanceOf(BOB), 0);
+
+        // TODO: Add check for share price
+
+        // Alice executes a redeem of bobToken -> Only using half of her tokens
+        vm.startPrank(ALICE);
+        basket.redeemTNFT(address(realEstateTnft), bobToken, basket.balanceOf(ALICE) / 2);
+        vm.stopPrank();
+
+        // Post-state check
+        assertEq(rentManager.claimableRentForToken(aliceToken), 10 * USD);
+        assertEq(rentManager.claimableRentForToken(bobToken), 0);
+
+        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), 10 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(ALICE), 5 * USD);
+        assertEq(MUMBAI_USDC.balanceOf(BOB), 0);
+
+        assertEq(realEstateTnft.balanceOf(ALICE), 1);
+        assertEq(realEstateTnft.balanceOf(BOB), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.balanceOf(ALICE), (50 ether * 1.30 ether) / 1 ether); // Note: Odd exchange rate math
+        assertEq(basket.balanceOf(BOB), (50 ether * 1.30 ether) / 1 ether);
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE) + basket.balanceOf(BOB));
+        assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), true);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), bobToken), false);
+
+        deposited = basket.getDepositedTnfts();
+        assertEq(deposited.length, 1);
+        assertEq(deposited[0].tnft, address(realEstateTnft));
+        assertEq(deposited[0].tokenId, aliceToken);
+        assertEq(deposited[0].fingerprint, 1);
+
+        supportedTnfts = basket.getTnftsSupported();
+        assertEq(supportedTnfts.length, 1);
+        assertEq(supportedTnfts[0], address(realEstateTnft));
+
+        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
+        assertEq(tokenIdLib.length, 1);
+        assertEq(tokenIdLib[0], aliceToken);
     }
 
 
