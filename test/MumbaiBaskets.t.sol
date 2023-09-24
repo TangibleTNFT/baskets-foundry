@@ -1171,6 +1171,11 @@ contract MumbaiBasketsTest is Utility {
     }
 
     function test_baskets_mumbai_redeemTNFT_mathCheck1() public {
+        // deal category owner USDC to deposit into rentManager
+        uint256 aliceRentBal = 10 * USD;
+        uint256 bobRentBal = 5 * USD;
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+
         // Mint Alice token worth $100
         uint256[] memory tokenIds = _createItemAndMint(
             address(realEstateTnft),
@@ -1218,17 +1223,6 @@ contract MumbaiBasketsTest is Utility {
         basket.depositTNFT(address(realEstateTnft), aliceToken);
         vm.stopPrank();
 
-        // Bob executes a deposit
-        vm.startPrank(BOB);
-        realEstateTnft.approve(address(basket), bobToken);
-        basket.depositTNFT(address(realEstateTnft), bobToken);
-        vm.stopPrank();
-
-        // deal category owner USDC to deposit into rentManager
-        uint256 aliceRentBal = 10 * USD;
-        uint256 bobRentBal = 5 * USD;
-        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
-
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for alice's tnft
@@ -1241,6 +1235,17 @@ contract MumbaiBasketsTest is Utility {
             block.timestamp + 1,
             true
         );
+        vm.stopPrank();
+
+        // Bob executes a deposit
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), bobToken);
+        basket.depositTNFT(address(realEstateTnft), bobToken);
+        vm.stopPrank();
+
+        // deposit rent for that TNFT (no vesting)
+        vm.startPrank(TANGIBLE_LABS);
+        
         // deposit rent for bob's tnft
         MUMBAI_USDC.approve(address(rentManager), bobRentBal);
         rentManager.deposit(
@@ -1303,6 +1308,11 @@ contract MumbaiBasketsTest is Utility {
     }
 
     function test_baskets_mumbai_redeemTNFT_mathCheck2() public {
+        // deal category owner USDC to deposit into rentManager
+        uint256 aliceRentBal = 10 * USD;
+        uint256 bobRentBal = 5 * USD;
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+
         // Mint Alice token worth $100
         uint256[] memory tokenIds = _createItemAndMint(
             address(realEstateTnft),
@@ -1350,17 +1360,6 @@ contract MumbaiBasketsTest is Utility {
         basket.depositTNFT(address(realEstateTnft), aliceToken);
         vm.stopPrank();
 
-        // Bob executes a deposit
-        vm.startPrank(BOB);
-        realEstateTnft.approve(address(basket), bobToken);
-        basket.depositTNFT(address(realEstateTnft), bobToken);
-        vm.stopPrank();
-
-        // deal category owner USDC to deposit into rentManager
-        uint256 aliceRentBal = 10 * USD;
-        uint256 bobRentBal = 5 * USD;
-        deal(address(MUMBAI_USDC), TANGIBLE_LABS, aliceRentBal + bobRentBal);
-
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for alice's tnft
@@ -1373,6 +1372,17 @@ contract MumbaiBasketsTest is Utility {
             block.timestamp + 1,
             true
         );
+        vm.stopPrank();
+
+        // Bob executes a deposit
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), bobToken);
+        basket.depositTNFT(address(realEstateTnft), bobToken);
+        vm.stopPrank();
+
+        // deposit rent for that TNFT (no vesting)
+        vm.startPrank(TANGIBLE_LABS);
+        
         // deposit rent for bob's tnft
         MUMBAI_USDC.approve(address(rentManager), bobRentBal);
         rentManager.deposit(
