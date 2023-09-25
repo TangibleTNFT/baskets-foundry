@@ -36,8 +36,7 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 
-// Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
-
+/// @notice This test file 
 contract MumbaiBasketsTest is Utility {
 
     Basket public basket;

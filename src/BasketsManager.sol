@@ -156,6 +156,7 @@ contract BasketManager is FactoryModifiers {
         hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }
 
+    /// @dev for testing only
     function addBasket(address _basket) external onlyFactoryOwner {
         require(!isBasket[_basket], "Basket already exists");
         
@@ -167,16 +168,5 @@ contract BasketManager is FactoryModifiers {
     function sort(uint256[] memory arr) public pure returns (uint256[] memory) {
         return arr.sort();
     }
-
-    function _isBasket(address _basket) internal view returns (uint256 index, bool exists) {
-        for (uint256 i; i < baskets.length;) {
-            if (baskets[i] == _basket) return (i, true);
-            unchecked {
-                ++i;
-            }
-        }
-        return (0, false);
-    }
-
 
 }

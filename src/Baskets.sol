@@ -5,9 +5,12 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import { VRFConsumerBaseV2 } from "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
+import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
@@ -23,19 +26,15 @@ import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 
-// TODO: How to handle storage? Does this contract have to pay for storage? TBA
-// TODO: Are there any other rewards besides rent? No
 // TODO: How to handle total value? TBA
-
 // NOTE: Make sure rev share and rent managers are updated properly
-// NOTE: Test how proxy contracts can be implemented.
 
 /**
  * @title Basket
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable {
 
     // ~ State Variables ~
 
@@ -218,7 +217,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
         _redeemTNFT(_tangibleNFT, _tokenId, _amountBasketTokens);
     }
 
-    function _redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) internal { // TODO: Add re-entrancy guard
+    function _redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) internal nonReentrant {
 
         // calc value of TNFT(s) being redeemed
             // value of TNFT(s) / total value of Basket
@@ -389,19 +388,22 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
     function _redeemRent(address _tnft, uint256 _tokenId, uint256 _amount, address _redeemer) internal { // TODO: Needs stress testing -> 1000+ NFTs
 
         // TODO:
-        // 1. Claim from primary tnft
-        // 2. Claim from USDC balance
+        // 1. Claim from USDC balance
+        // 2. Claim from TNFT rent being redeemed
         // 3. Claim from other TNFTs in basket -> best method for this:
         //      a. sort array -> too comlpex, would need to build a single array of type (uint) and we'd lose which token IDs were in which TNFT contract.
-        //      b. loop through main array, find largest claimable, claim that -> implemented.
+        //                       Unless we wrote a custom sort method in this contract.
+        //      b. Loop through main array, find largest claimable, claim that -> implemented.
+        //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem.
 
-        // find how much rent needs to be claimed to obtain full amount of owed rent by subtracting amount that is already in this contract.
+        // fetch current balance of USDC in this contract
         uint256 preBal = primaryRentToken.balanceOf(address(this));
 
         // first, claim rent for TNFT being redeemed.
         IRentManager rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(_tnft));
         uint256 received = rentManager.claimRentForToken(_tokenId);
 
+        // verify claimed balance
         require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "Error when claiming");
 
         // if we still need more rent, start claiming rent from TNFTs in basket.
@@ -415,7 +417,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             for (uint256 i; i < tnftsSupported.length;) {
                 address tnft = tnftsSupported[i];
 
-                // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds for each TNFT contract in this basket.
+                // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
                 rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(tnft));
                 uint256[] memory claimables = rentManager.claimableRentForTokenBatch(tokenIdLibrary[tnft]);
 
@@ -433,9 +435,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers {
             }
 
             // we now iterate through the master claimable rent array, find the largest amount claimable, claim, then check if we need more
-            while (_amount > primaryRentToken.balanceOf(address(this))) { // TODO: Refactor
+            while (_amount > primaryRentToken.balanceOf(address(this))) {
                 uint256 mostValuableIndex;
-                for (uint256 i; i < claimableRent.length;) {
+                for (uint256 i; i < claimableRent.length;) {  // TODO: Refactor -> finding largest claimable multiple times can get expensive.
                     if (claimableRent[i].amountClaimable > claimableRent[mostValuableIndex].amountClaimable) {
                         mostValuableIndex = i;
                     }
