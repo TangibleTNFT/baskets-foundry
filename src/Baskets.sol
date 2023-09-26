@@ -11,7 +11,6 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 
 // chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
 // tangible imports
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
@@ -28,7 +27,7 @@ import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager
 // local imports
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
-import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgradeable.sol";
+import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 
 // TODO: How to handle total value? TBA
 // NOTE: Make sure rev share and rent managers are updated properly
@@ -38,7 +37,7 @@ import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgrad
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable, VRFConsumerBaseV2Upgradeable {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable {
 
     // ~ State Variables ~
 
@@ -82,6 +81,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     event FeatureSupportRemoved(uint256 feature);
 
+    
+    // ~ Modifiers ~
+
+    modifier onlyBasketVrfConsumer() {
+        require(msg.sender == _getBasketVrfConsumer());
+        _;
+    }
+
 
     // ~ Constructor ~
 
@@ -97,8 +104,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 _tnftType,
         address _rentToken,
         uint256[] memory _features,
-        address _deployer,
-        address _vrfCoordinator
+        address _deployer
     ) external initializer {   
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
         
@@ -116,7 +122,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
         __ERC20_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
-        __VRFConsumerBase_init(_vrfCoordinator);
 
         tnftType = _tnftType;
         deployer = _deployer;
@@ -221,6 +226,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      */
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
         _redeemTNFT(_tangibleNFT, _tokenId, _amountBasketTokens);
+        // TODO: Call BasketsVrfConsumer to make random call, store requestId and request data.
+        // TODO IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForBasket();
+    }
+
+    function fullFillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer {
+
     }
 
     function _redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) internal nonReentrant {
@@ -388,10 +399,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     // ~ Internal Functions ~
 
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
-        // TODO
-    }
-
     /**
      * @notice This internal method claims rent from the Rent Manager and transfers a specified amount to redeemer.
      */
@@ -506,6 +513,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         if (price < 0) price = 0;
 
         return (uint256(price), priceFeed.decimals());
+    }
+
+    function _getBasketVrfConsumer() internal returns (address) {
+        return IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()).basketsVrfConsumer();
     }
 
     /**

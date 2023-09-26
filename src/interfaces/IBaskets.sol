@@ -49,4 +49,6 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
     function getSharePrice() external view returns (uint256 sharePrice);
 
     function getTotalValueOfBasket() external view returns (uint256 totalValue);
+
+    function fullFillRandomRedeem(uint256 requestId, uint256 randomWord) external;
 }

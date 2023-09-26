@@ -8,6 +8,8 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+
 contract Utility is Test{
 
     // ~ RPCs ~
@@ -30,6 +32,9 @@ contract Utility is Test{
 
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747);
     IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F);
+
+    VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
+    VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);
 
     uint256 constant USD = 10 ** 6;  // USDC precision decimals
 

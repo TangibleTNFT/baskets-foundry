@@ -259,7 +259,7 @@ contract VRFCoordinatorV2Mock is VRFCoordinatorV2Interface {
 
   function getConfig()
     external
-    view
+    pure
     returns (
       uint16 minimumRequestConfirmations,
       uint32 maxGasLimit,
@@ -272,7 +272,7 @@ contract VRFCoordinatorV2Mock is VRFCoordinatorV2Interface {
 
   function getFeeConfig()
     external
-    view
+    pure
     returns (
       uint32 fulfillmentFlatFeeLinkPPMTier1,
       uint32 fulfillmentFlatFeeLinkPPMTier2,
@@ -302,15 +302,15 @@ contract VRFCoordinatorV2Mock is VRFCoordinatorV2Interface {
     return 4000000000000000; // 0.004 Ether
   }
 
-  function requestSubscriptionOwnerTransfer(uint64 _subId, address _newOwner) external pure override {
+  function requestSubscriptionOwnerTransfer(uint64, address) external pure override {
     revert("not implemented");
   }
 
-  function acceptSubscriptionOwnerTransfer(uint64 _subId) external pure override {
+  function acceptSubscriptionOwnerTransfer(uint64) external pure override {
     revert("not implemented");
   }
 
-  function pendingRequestExists(uint64 subId) public view override returns (bool) {
+  function pendingRequestExists(uint64) public pure override returns (bool) {
     revert("not implemented");
   }
 }

@@ -26,4 +26,8 @@ interface IBasketManager {
     function createHash(uint256 _tnftType, uint256[] memory _features) external pure returns (bytes32 hashedFeatures);
 
     function sort(uint[] memory data) external pure returns (uint[] memory);
+
+    function isBasket(address _basket) external returns (bool);
+
+    function basketsVrfConsumer() external returns (address);
 }

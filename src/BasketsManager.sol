@@ -40,11 +40,7 @@ contract BasketManager is FactoryModifiers {
 
     uint256 public featureLimit;
 
-    address public vrfCoordinator; // TODO: Add owner update method
-
-    /// @notice Chainlink VRF subscription id.
-    uint64 public subId; // TODO: Add owner update method
-
+    address public basketsVrfConsumer;
 
     // ~ Events ~
 
@@ -61,12 +57,9 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Constructor ~
 
-    constructor(address _initBasketImplementation, address _factoryProvider, address _vrfCoordinator, uint64 _subId) FactoryModifiers(_factoryProvider) {
+    constructor(address _initBasketImplementation, address _factoryProvider) FactoryModifiers(_factoryProvider) {
         __FactoryModifiers_init(_factoryProvider);
         beacon = new UpgradeableBeacon(_initBasketImplementation);
-
-        vrfCoordinator = _vrfCoordinator;
-        subId = _subId;
 
         featureLimit = 10; // TODO: Add setter
     }
@@ -116,8 +109,7 @@ contract BasketManager is FactoryModifiers {
                 _tnftType,
                 _rentToken,
                 _features,
-                msg.sender,
-                vrfCoordinator
+                msg.sender
             )
         );
 
@@ -140,6 +132,11 @@ contract BasketManager is FactoryModifiers {
 
         emit BasketCreated(msg.sender, address(newBasketBeacon));
         return (IBasket(address(newBasketBeacon)), basketShares);
+    }
+
+    function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
+        require(_basketsVrfConsumer != address(0));
+        basketsVrfConsumer = _basketsVrfConsumer;
     }
 
     function getBasketsArray() external view returns (address[] memory) {
@@ -167,7 +164,7 @@ contract BasketManager is FactoryModifiers {
         hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }
 
-    /// @dev for testing only
+    // NOTE for testing only
     function addBasket(address _basket) external onlyFactoryOwner {
         require(!isBasket[_basket], "Basket already exists");
         

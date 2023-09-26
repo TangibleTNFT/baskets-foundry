@@ -86,9 +86,7 @@ contract MumbaiBasketsTest is Utility {
         basket = new Basket();
         basketManager = new BasketManager(
             address(basket),
-            address(factoryProvider),
-            address(vrfCoordinator),
-            subId
+            address(factoryProvider)
         );
 
         uint256[] memory features = new uint256[](0);
@@ -114,8 +112,7 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this),
-            address(222) // TODO: VrfCoordinator -> update
+            address(this)
         );
 
         // add basket to basketManager
@@ -508,8 +505,7 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this),
-            address(222) // TODO: VrfCoordinator -> update
+            address(this)
         );
 
         // Pre-state check
@@ -575,8 +571,7 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             featuresToAdd,
-            address(this),
-            address(222) // TODO: VrfCoordinator -> update
+            address(this)
         );
 
         // Pre-state check
