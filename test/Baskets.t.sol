@@ -5,7 +5,7 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 
 // local contracts
-import { Basket } from "../src/Baskets.sol";
+import { Basket } from "../src/Basket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/Utility.sol";
 

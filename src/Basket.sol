@@ -25,7 +25,7 @@ import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
 
 // local imports
-import { IBasket } from "./interfaces/IBaskets.sol";
+import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 
@@ -227,7 +227,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
         _redeemTNFT(_tangibleNFT, _tokenId, _amountBasketTokens);
         // TODO: Call BasketsVrfConsumer to make random call, store requestId and request data.
-        // TODO IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForBasket();
+        // TODO IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
     }
 
     function fullFillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer {

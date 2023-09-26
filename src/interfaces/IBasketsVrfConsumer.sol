@@ -3,5 +3,5 @@ pragma solidity ^0.8.19;
 
 interface IBasketsVrfConsumer {
 
-    function makeRequestForBasket() external returns (uint256 requestId);
+    function makeRequestForRandomWords() external returns (uint256 requestId);
 }

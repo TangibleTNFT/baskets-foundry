@@ -6,9 +6,14 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 // chainlink imports
 import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
+// tangible imports
+import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
+import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
+import { IFactory } from "@tangible/interfaces/IFactory.sol";
+
 // local imports
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
-import { IBasket } from "./interfaces/IBaskets.sol";
+import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgradeable.sol";
 
@@ -20,12 +25,9 @@ import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgrad
  * @author Chase Brown
  * @notice This contract handles all vrf requests from all basket contracts.
  */
-contract BasketVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBaseV2Upgradeable {
+contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBaseV2Upgradeable, FactoryModifiers {
 
     // ~ State Variables ~
-
-    /// @notice basket manager contract reference.
-    IBasketManager public basketManager;
 
     /// @notice Mapping from requestId to basket address that made request.
     mapping(uint256 => address) public requestTracker;
@@ -52,6 +54,7 @@ contract BasketVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBas
     // ~ Modifiers ~
 
     modifier onlyBasket() {
+        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
         require(basketManager.isBasket(msg.sender), "Caller is not valid basket");
         _;
     }
@@ -59,12 +62,14 @@ contract BasketVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBas
 
     // ~ Constructor ~
 
+    constructor() FactoryModifiers(address(0)) {} // NOTE: Temporary
+
     /**
      * @notice Initializes BasketVrfConsumer contract.
      */
-    function initialize(address _basketManager, uint64 _subId, address _vrfCoordinator, bytes32 _keyHash) external initializer {
+    function initialize(address _factoryProvider, uint64 _subId, address _vrfCoordinator, bytes32 _keyHash) external initializer {
         __VRFConsumerBase_init(_vrfCoordinator);
-        basketManager = IBasketManager(_basketManager);
+        __FactoryModifiers_init(_factoryProvider);
 
         subId = _subId;
         keyHash = _keyHash;
@@ -76,7 +81,7 @@ contract BasketVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBas
     
     // ~ External Functions ~
 
-    function makeRequestForBasket() external onlyBasket returns (uint256 requestId) {
+    function makeRequestForRandomWords() external onlyBasket returns (uint256 requestId) {
         address basket = msg.sender;
 
         requestId = VRFCoordinatorV2Interface(vrfCoordinator).requestRandomWords(

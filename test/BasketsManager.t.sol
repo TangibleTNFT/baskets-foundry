@@ -5,8 +5,8 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // local contracts
-import { Basket } from "../src/Baskets.sol";
-import { IBasket } from "../src/interfaces/IBaskets.sol";
+import { Basket } from "../src/Basket.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
 
 import "./utils/MumbaiAddresses.sol";

@@ -7,8 +7,8 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local contracts
-import { Basket } from "../src/Baskets.sol";
-import { IBasket } from "../src/interfaces/IBaskets.sol";
+import { Basket } from "../src/Basket.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
 
 import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";

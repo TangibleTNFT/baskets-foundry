@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 // local
-import { Basket } from "./Baskets.sol";
-import { IBasket } from "./interfaces/IBaskets.sol";
+import { Basket } from "./Basket.sol";
+import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 import { UpgradeableBeacon } from "./proxy/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "./proxy/BasketBeaconProxy.sol";
