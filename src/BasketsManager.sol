@@ -17,6 +17,7 @@ import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol"; 
 
 
 /**
@@ -39,6 +40,11 @@ contract BasketManager is FactoryModifiers {
 
     uint256 public featureLimit;
 
+    address public vrfCoordinator; // TODO: Add owner update method
+
+    /// @notice Chainlink VRF subscription id.
+    uint64 public subId; // TODO: Add owner update method
+
 
     // ~ Events ~
 
@@ -55,9 +61,13 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Constructor ~
 
-    constructor(address _initBasketImplementation, address _factoryProvider) FactoryModifiers(_factoryProvider) {
+    constructor(address _initBasketImplementation, address _factoryProvider, address _vrfCoordinator, uint64 _subId) FactoryModifiers(_factoryProvider) {
         __FactoryModifiers_init(_factoryProvider);
         beacon = new UpgradeableBeacon(_initBasketImplementation);
+
+        vrfCoordinator = _vrfCoordinator;
+        subId = _subId;
+
         featureLimit = 10; // TODO: Add setter
     }
 
@@ -106,7 +116,8 @@ contract BasketManager is FactoryModifiers {
                 _tnftType,
                 _rentToken,
                 _features,
-                msg.sender
+                msg.sender,
+                vrfCoordinator
             )
         );
 

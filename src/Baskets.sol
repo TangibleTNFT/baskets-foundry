@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
+// oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -8,10 +9,11 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
+// chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import { VRFConsumerBaseV2 } from "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
 import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
+// tangible imports
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
@@ -23,8 +25,10 @@ import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
 
+// local imports
 import { IBasket } from "./interfaces/IBaskets.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
+import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgradeable.sol";
 
 // TODO: How to handle total value? TBA
 // NOTE: Make sure rev share and rent managers are updated properly
@@ -34,7 +38,7 @@ import { IBasketManager } from "./interfaces/IBasketsManager.sol";
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable, VRFConsumerBaseV2Upgradeable {
 
     // ~ State Variables ~
 
@@ -93,7 +97,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 _tnftType,
         address _rentToken,
         uint256[] memory _features,
-        address _deployer
+        address _deployer,
+        address _vrfCoordinator
     ) external initializer {   
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
         
@@ -111,6 +116,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
         __ERC20_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
+        __VRFConsumerBase_init(_vrfCoordinator);
 
         tnftType = _tnftType;
         deployer = _deployer;
@@ -381,6 +387,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
 
     // ~ Internal Functions ~
+
+    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
+        // TODO
+    }
 
     /**
      * @notice This internal method claims rent from the Rent Manager and transfers a specified amount to redeemer.

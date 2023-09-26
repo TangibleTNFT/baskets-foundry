@@ -71,7 +71,12 @@ contract BasketsManagerTest is Utility {
         basket = new Basket();
 
         // Deploy BasketManager
-        basketManager = new BasketManager(address(basket), address(factoryProvider));
+        basketManager = new BasketManager(
+            address(basket),
+            address(factoryProvider),
+            address(222), // TODO: VrfCoordinator -> Update
+            1 // TODO: Subscription id
+        );
 
         // basket = new Basket(
         //     "Tangible Basket Token",

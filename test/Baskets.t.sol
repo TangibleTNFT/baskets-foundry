@@ -83,7 +83,9 @@ contract BasketsTest is Utility {
         // Deploy basketManager
         basketManager = new BasketManager(
             address(basket),
-            address(factoryProvider)
+            address(factoryProvider),
+            address(222), // TODO: VrfCoordinator -> Update
+            1 // TODO: Subscription id
         );
 
         // Deplot tnft deployer
@@ -160,7 +162,8 @@ contract BasketsTest is Utility {
             TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
 
@@ -253,7 +256,8 @@ contract BasketsTest is Utility {
             TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // Execute initialize on basket -> success
@@ -265,7 +269,8 @@ contract BasketsTest is Utility {
             TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // Post-state check 1.
@@ -291,7 +296,8 @@ contract BasketsTest is Utility {
             TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // Post-state check 2.

@@ -11,6 +11,7 @@ import { Basket } from "../src/Baskets.sol";
 import { IBasket } from "../src/interfaces/IBaskets.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
 
+import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -41,6 +42,7 @@ contract MumbaiBasketsTest is Utility {
 
     Basket public basket;
     BasketManager public basketManager;
+    VRFCoordinatorV2Mock public vrfCoordinator;
 
     //contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
@@ -62,6 +64,10 @@ contract MumbaiBasketsTest is Utility {
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4; // NOTE: category owner
 
     address public rentManagerDepositor = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
+
+    // State variables for VRF.
+    uint256[] internal entropy = [uint256(uint160(address(this)))];
+    uint64 internal subId;
     
     event log_named_bool(string key, bool val);
 
@@ -71,8 +77,19 @@ contract MumbaiBasketsTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).contractOwner();
 
+        // vrf config
+        vrfCoordinator = new VRFCoordinatorV2Mock(100000, 100000);
+        subId = vrfCoordinator.createSubscription();
+        vrfCoordinator.fundSubscription(subId, 100 ether);
+
+        // basket stuff
         basket = new Basket();
-        basketManager = new BasketManager(address(basket), address(factoryProvider));
+        basketManager = new BasketManager(
+            address(basket),
+            address(factoryProvider),
+            address(vrfCoordinator),
+            subId
+        );
 
         uint256[] memory features = new uint256[](0);
 
@@ -97,7 +114,8 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // add basket to basketManager
@@ -490,7 +508,8 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // Pre-state check
@@ -556,7 +575,8 @@ contract MumbaiBasketsTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             featuresToAdd,
-            address(this)
+            address(this),
+            address(222) // TODO: VrfCoordinator -> update
         );
 
         // Pre-state check
