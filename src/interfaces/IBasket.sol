@@ -17,6 +17,19 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
         uint256 tokenId;
         uint256 amountClaimable;
     }
+
+    struct RedeemData {
+        address tnft;
+        uint256 tokenId;
+        uint256 usdValue;
+        uint256 amountRent;
+        uint256 sharesRequired;
+    }
+
+    struct RedeemRequest {
+        address redeemer;
+        uint256 budget;
+    }
     
     function getDepositedTnfts() external view returns (TokenData[] memory);
 
@@ -50,5 +63,5 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
 
     function getTotalValueOfBasket() external view returns (uint256 totalValue);
 
-    function fullFillRandomRedeem(uint256 requestId, uint256 randomWord) external;
+    function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external;
 }

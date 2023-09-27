@@ -31,8 +31,8 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     /// @notice Mapping from requestId to basket address that made request.
     mapping(uint256 => address) public requestTracker;
-    /// @notice Mapping from requestId to boolean. If true, request for randomness was fullfilled.
-    mapping(uint256 => bool) public fullfilled;
+    /// @notice Mapping from requestId to boolean. If true, request for randomness was fulfilled.
+    mapping(uint256 => bool) public fulfilled;
 
     /// @notice Stores Vrf subscription Id.
     uint64 public subId;
@@ -48,7 +48,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     event RequestSubmitted(uint256 requestId, address basket);
 
-    event RequestFullfilled(uint256 requestId, address basket);
+    event RequestFulfilled(uint256 requestId, address basket);
 
 
     // ~ Modifiers ~
@@ -106,12 +106,13 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     // ~ Internal Functions ~
 
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
-        require(!fullfilled[requestId], "Request already fullfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
+        require(!fulfilled[requestId], "Request already fulfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
 
-        fullfilled[requestId] = true;
+        fulfilled[requestId] = true;
         address basket = requestTracker[requestId];
-        IBasket(basket).fullFillRandomRedeem(requestId, randomWords[0]);
+        IBasket(basket).fulfillRandomRedeem(requestId, randomWords[0]);
 
-        emit RequestFullfilled(requestId, basket);
+        delete requestTracker[requestId];
+        emit RequestFulfilled(requestId, basket);
     }
 }

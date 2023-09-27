@@ -36,6 +36,14 @@ contract Utility is Test{
     VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
     VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);
 
+    /// @dev https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mainnet
+    bytes32 public constant POLYGON_VRF_KEY_HASH = 0xd729dc84e21ae57ffb6be0053bf2b0668aa2aaf300a2a7b2ddf7dc0bb6e875a8; // 1000 gwei
+    /// @dev https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mumbai-testnet
+    bytes32 public constant MUMBAI_VRF_KEY_HASH = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f; // 500 gwei
+
+
+    // ~ Precision ~
+
     uint256 constant USD = 10 ** 6;  // USDC precision decimals
 
 

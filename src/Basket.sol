@@ -43,6 +43,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     TokenData[] public depositedTnfts;
 
+    RedeemData[] internal tokensInBudget; // Note: Only used during runtime. Otherwise empty
+
     address[] public tnftsSupported;
 
     mapping(address => uint256[]) public tokenIdLibrary;
@@ -68,6 +70,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     uint256 public totalNftValue; // NOTE: For testing. Will be replaced
 
+    mapping(uint256 => RedeemRequest) public redeemRequestInFlightData;
+
+    mapping(address => bool) public redeemerHasRequestInFlight;
+
 
     // ~ Events ~
 
@@ -75,11 +81,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
 
-    event Debug(uint256);
+    event RedeemRequestInFlight(address redeemer, uint256 budget);
 
-    event FeatureSupportAdded(uint256 feature);
-
-    event FeatureSupportRemoved(uint256 feature);
+    event Debug(string, uint256);
 
     
     // ~ Modifiers ~
@@ -222,33 +226,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     /**
-     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens.
+     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // NOTE: For testing only
      */
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
-        _redeemTNFT(_tangibleNFT, _tokenId, _amountBasketTokens);
-        // TODO: Call BasketsVrfConsumer to make random call, store requestId and request data.
-        // TODO IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
-    }
-
-    function fullFillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer {
-
-    }
-
-    function _redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) internal nonReentrant {
-
-        // calc value of TNFT(s) being redeemed
-            // value of TNFT(s) / total value of Basket
-        
-        // calculate value of TNFT being redeemed
-            // how to calculate this?
-        // ensure user has sufficient TBT basket tokens
-        // take tokens
-        // send TNFT
-        // calculate amount of rent to send
-            // rent * total supply / amountTokens
-
-        require(balanceOf(msg.sender) >= _amountBasketTokens, "Insufficient balance");
-        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
 
         (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(
             _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
@@ -257,19 +237,132 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         // get usd value of TNFT token being redeemed
         uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
         require(usdValue > 0, "Unsupported TNFT");
+        emit Debug("usd value", usdValue); // NOTE: For testing only
 
         // Calculate amount of rent to send to redeemer
         uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Test, revisit
-        emit Debug(amountRent); // NOTE: For testing only
+        emit Debug("amount rent", amountRent); // NOTE: For testing only
 
         // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-        uint256 basketSharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
-        emit Debug(basketSharesRequired); // NOTE: For testing only
+        uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
+        emit Debug("shares required", sharesRequired); // NOTE: For testing only
 
         // Verify the user has this amount of tokens -> If so, BURN them                                                                                 
-        require(_amountBasketTokens >= basketSharesRequired, "Insufficient offer");
-        if (_amountBasketTokens > basketSharesRequired) _amountBasketTokens = basketSharesRequired;
-        emit Debug(_amountBasketTokens); // NOTE: For testing only
+        require(_amountBasketTokens >= sharesRequired, "Insufficient offer");
+        if (_amountBasketTokens > sharesRequired) _amountBasketTokens = sharesRequired;
+
+        _redeemTNFT(msg.sender, _tangibleNFT, _tokenId, usdValue, amountRent, _amountBasketTokens);
+    }
+
+    /**
+     * @notice This method is used to fetch a random number to then receive a random TNFT.
+     */
+    function redeemRandomTNFT(uint256 _budget) external returns (uint256 requestId) {
+        address redeemer = msg.sender;
+        require(!redeemerHasRequestInFlight[redeemer], "redeem request in progress");
+        require(balanceOf(redeemer) >= _budget, "Insufficient balance");
+
+        requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
+
+        redeemRequestInFlightData[requestId] = RedeemRequest(redeemer, _budget);
+        redeemerHasRequestInFlight[redeemer] = true;
+
+        emit RedeemRequestInFlight(redeemer, _budget);
+    }
+
+    /**
+     * @notice This method is the vrf callback method. Will use the random seed to choose a random TNFT for redeemer.
+     */
+    function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer { // TODO: Add re-entrancy guard. Will this affect callback from vrf coordinator?
+        address redeemer = redeemRequestInFlightData[requestId].redeemer;
+        uint256 budget = redeemRequestInFlightData[requestId].budget;
+
+        redeemerHasRequestInFlight[redeemer] = false;
+        delete redeemRequestInFlightData[requestId];
+
+        // a. Create an array that fits budget
+        for (uint256 i; i < depositedTnfts.length;) {
+
+            (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(
+                depositedTnfts[i].tnft, depositedTnfts[i].fingerprint
+            );
+
+            // get usd value of TNFT token being redeemed
+            uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
+            require(usdValue > 0, "Unsupported TNFT");
+            emit Debug("usd value", usdValue); // NOTE: For testing only
+
+            // Calculate amount of rent to send to redeemer
+            uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Test, revisit
+            emit Debug("amount rent", amountRent); // NOTE: For testing only
+
+            // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
+            uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
+            emit Debug("shares required", sharesRequired); // NOTE: For testing only
+
+            if (budget >= sharesRequired) {
+                tokensInBudget.push(
+                    RedeemData(
+                        depositedTnfts[i].tnft,
+                        depositedTnfts[i].tokenId,
+                        usdValue,
+                        amountRent,
+                        sharesRequired
+                    )
+                );
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        uint256 len = tokensInBudget.length;
+        require(len > 0, "Budget too low");
+
+        // b. use randomWord to shuffle array
+        for (uint256 i; i < len;) {
+            uint256 key = i + (randomWord % (len - i));
+
+            if (i != key) {
+                RedeemData memory temp = tokensInBudget[key];
+                tokensInBudget[key] = tokensInBudget[i];
+                tokensInBudget[i] = temp;
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        // c. redeem NFT in index 0
+        _redeemTNFT(
+            redeemer,
+            tokensInBudget[0].tnft,
+            tokensInBudget[0].tokenId,
+            tokensInBudget[0].usdValue,
+            tokensInBudget[0].amountRent,
+            tokensInBudget[0].sharesRequired
+        );
+    }
+
+    /**
+     * @notice Internal method for redeeming a specified TNFT in the basket
+     */
+    function _redeemTNFT(
+        address _redeemer,
+        address _tangibleNFT,
+        uint256 _tokenId,
+        uint256 _usdValue,
+        uint256 _amountRent,
+        uint256 _amountBasketTokens
+    ) internal nonReentrant {
+        require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
+        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+
+        (string memory currency, uint256 value, uint8 nativeDecimals) = _getTnftNativeValue(
+            _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
+        );
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;
@@ -291,20 +384,21 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         }
 
         // Send rent to redeemer
-        if (amountRent > 0) {
+        if (_amountRent > 0) {
+
             // If there's sufficient rent sitting in the basket, no need to claim, otherwise claim rent from manager first.
-            primaryRentToken.balanceOf(address(this)) >= amountRent ?
-                assert(primaryRentToken.transfer(msg.sender, amountRent)) :
-                _redeemRent(_tangibleNFT, _tokenId, amountRent, msg.sender);
+            primaryRentToken.balanceOf(address(this)) >= _amountRent ?
+                assert(primaryRentToken.transfer(_redeemer, _amountRent)) :
+                _redeemRent(_tangibleNFT, _tokenId, _amountRent, _redeemer);
         }
 
         // Transfer tokenId to user
-        IERC721(_tangibleNFT).safeTransferFrom(address(this), msg.sender, _tokenId);
+        IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);
 
-        totalNftValue -= usdValue;
-        _burn(msg.sender, _amountBasketTokens);
+        totalNftValue -= _usdValue;
+        _burn(_redeemer, _amountBasketTokens);
 
-        emit RedeemedTNFT(msg.sender, _tangibleNFT, _tokenId);
+        emit RedeemedTNFT(_redeemer, _tangibleNFT, _tokenId);
     }
 
     /**
