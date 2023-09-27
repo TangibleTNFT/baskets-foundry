@@ -289,7 +289,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
             // get usd value of TNFT token being redeemed
             uint256 usdValue = _getUSDValue(currency, value, nativeDecimals);
-            require(usdValue > 0, "Unsupported TNFT");
             emit Debug("usd value", usdValue); // NOTE: For testing only
 
             // Calculate amount of rent to send to redeemer

@@ -31,7 +31,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     /// @notice Mapping from requestId to basket address that made request.
     mapping(uint256 => address) public requestTracker;
-    /// @notice Mapping from requestId to boolean. If true, request for randomness was fulfilled.
+    /// @notice Mapping from requestId to boolean. If true, request for randomness was fullfilled.
     mapping(uint256 => bool) public fulfilled;
 
     /// @notice Stores Vrf subscription Id.
@@ -79,7 +79,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     }
 
     
-    // ~ External Functions ~
+    // ~ Functions ~
 
     function makeRequestForRandomWords() external onlyBasket returns (uint256 requestId) {
         address basket = msg.sender;
@@ -97,13 +97,6 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         emit RequestSubmitted(requestId, basket);
     }
 
-
-    // ~ Public Functions ~
-
-    //
-
-
-    // ~ Internal Functions ~
 
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
         require(!fulfilled[requestId], "Request already fulfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
