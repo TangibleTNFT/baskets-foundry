@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
+// oz imports
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // chainlink imports
@@ -46,13 +47,15 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     // ~ Events ~
 
+    /// @notice Emitted when makeRequestForRandomWords is executed.
     event RequestSubmitted(uint256 requestId, address basket);
-
+    /// @notice Emitted when fulfillRandomWords is executed.
     event RequestFulfilled(uint256 requestId, address basket);
 
 
     // ~ Modifiers ~
 
+    /// @notice Modifier to verify msg.sender was the basket manager contract.
     modifier onlyBasket() {
         IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
         require(basketManager.isBasket(msg.sender), "Caller is not valid basket");
@@ -75,15 +78,21 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         keyHash = _keyHash;
 
         requestConfirmations = 20;
-        callbackGasLimit = 50_000; // ideal for one word of entropy.
+        callbackGasLimit = 50_000; // ideal for one word of entropy. TODO: Verify
     }
 
     
     // ~ Functions ~
 
+    /**
+     * @notice This method is used to trigger a request to chainlink's vrf coordinator contract.
+     * @dev This contract is only callable by a valid basket contract.
+     * @return requestId -> the request identifier given to us by the vrf coordinator.
+     */
     function makeRequestForRandomWords() external onlyBasket returns (uint256 requestId) {
         address basket = msg.sender;
 
+        // make request to vrfCoordinator contract requesting entropy.
         requestId = VRFCoordinatorV2Interface(vrfCoordinator).requestRandomWords(
             keyHash,
             subId,
@@ -92,17 +101,25 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
             1
         );
 
+        // store the basket requesting entropy in requestTracker using the requestId as the key value.
         requestTracker[requestId] = basket;
 
         emit RequestSubmitted(requestId, basket);
     }
 
-
+    /**
+     * @notice This method is the vrf callback function. Vrf coordinator will respond with our random word by calling this method.
+     * @dev    Only executable by the vrf coordinator contract.
+     *         Will respond to the requesting basket with the random number.
+     * @param  requestId unique request identifier given to us by Chainlink.
+     * @param  randomWords array of random numbers requested via makeRequestForRandomWords.
+     */
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
         require(!fulfilled[requestId], "Request already fulfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
 
         fulfilled[requestId] = true;
         address basket = requestTracker[requestId];
+        // respond to the basket contract requesting entropy with it's random number.
         IBasket(basket).fulfillRandomRedeem(requestId, randomWords[0]);
 
         delete requestTracker[requestId];

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-// local
+// local imports
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
@@ -23,32 +23,41 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 /**
  * @title BasketManager
  * @author Chase Brown
- * @notice This contract manages all deployed Basket contracts.
+ * @notice This contract manages all Basket contracts.
  */
 contract BasketManager is FactoryModifiers {
     using ArrayUtils for uint256[];
 
     // ~ State Variables ~
+    // TODO: pack?
 
-    UpgradeableBeacon immutable beacon;
-
-    address[] public baskets;
-
+    /// @notice Mapping that stores the unique `featureHash` for each basket.
     mapping(address => bytes32) public hashedFeaturesForBasket;
 
+    /// @notice Mapping that stores whether a specified address is a basket.
     mapping(address => bool) public isBasket;
 
+    /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
+    UpgradeableBeacon immutable public beacon;
+
+    /// @notice Array of all baskets deployed.
+    address[] public baskets;
+
+    /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
+    /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
 
     // ~ Events ~
 
+    /// @notice Emitted when a new basket instance is created // beaconProxy deployed.
     event BasketCreated(address creator, address basket);
 
 
     // ~ Modifiers ~
 
+    /// @notice Modifier verifying msg.sender is a valid Basket contract.
     modifier onlyBasket() {
         require(isBasket[msg.sender], "Caller is not valid basket");
         _;
@@ -57,6 +66,11 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Constructor ~
 
+    /**
+     * @notice Initializes BasketManager contract. TODO: Update to initialize()
+     * @param _initBasketImplementation Contract address of Basket implementation contract.
+     * @param _factoryProvider Contract address of FactoryProvider contract.
+     */
     constructor(address _initBasketImplementation, address _factoryProvider) FactoryModifiers(_factoryProvider) {
         __FactoryModifiers_init(_factoryProvider);
         beacon = new UpgradeableBeacon(_initBasketImplementation);
@@ -65,10 +79,18 @@ contract BasketManager is FactoryModifiers {
     }
 
 
-    // ~ Functions ~
+    // ~ External Functions ~
 
     /**
      * @notice This method deploys a new Basket contract.
+     * @dev This func will only deploy a beacon proxy with the implementation being the basket contract.
+     * @param _name Name of new basket.
+     * @param _symbol Symbol of new basket.
+     * @param _tnftType Tnft category supported by basket.
+     * @param _rentToken ERC-20 token being used for rent. USDC by default.
+     * @param _features Array of uint feature identifiers (subcategories) supported by basket.
+     * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
+     * @param _tokenIdDeposit Array of tokenIds being deposited into basket initally. Note: Corresponds with _tangibleNFTDeposit.
      */
     function deployBasket(
         string memory _name,
@@ -79,13 +101,18 @@ contract BasketManager is FactoryModifiers {
         address[] memory _tangibleNFTDeposit,
         uint256[] memory _tokenIdDeposit
     ) external returns (IBasket, uint256[] memory basketShares) {
+        // verify _tanfibleNFTDeposit array and _tokenIdDeposit array are the same size.
         require(_tangibleNFTDeposit.length == _tokenIdDeposit.length, "Differing lengths");
 
+        // verify _features does not have more features that what is allowed.
+        require(featureLimit >= _features.length, "Too many features");
+
+        // verify _tnftType is a supported type in the Metadata contract.
         address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
-        // create hash
+        // create unique hash
         bytes32 hashedFeatures = createHash(_tnftType, _features);
 
         // might not be necessary -> hash is checked when Basket is initialized
@@ -134,11 +161,28 @@ contract BasketManager is FactoryModifiers {
         return (IBasket(address(newBasketBeacon)), basketShares);
     }
 
+    /**
+     * @notice This method allows the factory owner to update the basketsVrfConsumer contract address.
+     * @param _basketsVrfConsumer New contract address.
+     */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
         require(_basketsVrfConsumer != address(0));
         basketsVrfConsumer = _basketsVrfConsumer;
     }
 
+    /**
+     * @notice This method allows the factory owner to update the limit of features a basket can support.
+     * @param _limit New feature limit.
+     */
+    function setFeatureLimit(uint256 _limit) external onlyFactoryOwner {
+        require(_limit != featureLimit, "Already set");
+        featureLimit = _limit;
+    }
+
+    /**
+     * @notice View method for fetching baskets array.
+     * @return baskets array.
+     */
     function getBasketsArray() external view returns (address[] memory) {
         return baskets;
     }
@@ -150,6 +194,16 @@ contract BasketManager is FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
+
+    // ~ Public Functions ~
+
+    /**
+     * @notice This method checks whether a basket with featuresHash can be created or is taken.
+     * @dev A featuresHash is a unique hash assigned each basket contract and is created based on the unique
+     *      combination of features that basket supports. No 2 baskets that support same combo can co-exist.
+     * @param _featuresHash unique bytes32 hash created from combination of features
+     * @return If true, features combo is available to be created. If false, already exists.
+     */
     function checkBasketAvailability(bytes32 _featuresHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
             if (hashedFeaturesForBasket[baskets[i]] == _featuresHash) return false;
@@ -160,6 +214,11 @@ contract BasketManager is FactoryModifiers {
         return true;
     }
 
+    /**
+     * @notice This method is used to create a unique hash given a category and list of sub categories.
+     * @param _tnftType Category identifier.
+     * @param _features List of subcategories.
+     */
     function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
         hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }

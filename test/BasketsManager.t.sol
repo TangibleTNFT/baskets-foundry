@@ -67,7 +67,6 @@ contract BasketsManagerTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).contractOwner();
 
-        //uint256[] memory features = new uint256[](0);
         basket = new Basket();
 
         // Deploy BasketManager
@@ -75,21 +74,6 @@ contract BasketsManagerTest is Utility {
             address(basket),
             address(factoryProvider)
         );
-
-        // basket = new Basket(
-        //     "Tangible Basket Token",
-        //     "TBT",
-        //     address(factoryProvider),
-        //     RE_TNFTTYPE,
-        //     address(currencyFeed),
-        //     MUMBAI_USDC,
-        //     features,
-        //     address(this)
-        // );
-
-        // add basket to basketManager
-        // vm.prank(factoryOwner);
-        // basketManager.addBasket(address(basket));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -211,7 +195,9 @@ contract BasketsManagerTest is Utility {
 
     /// @notice Initial state test.
     function test_basketManager_init_state() public {
-        // TODO
+        assertEq(basketManager.featureLimit(), 10);
+        assertEq(basketManager.beacon().implementation(), address(basket));
+        assertEq(basketManager.factoryProvider(), address(factoryProvider));
     }
 
 
@@ -432,7 +418,7 @@ contract BasketsManagerTest is Utility {
     }
 
     /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
-    function test_basketManager_insertSort() public {
+    function test_basketManager_insertionSort() public {
 
         // Sort testArray1 of size 10.
         uint256[] memory sortedArray = basketManager.sort(testArray1);
@@ -442,6 +428,13 @@ contract BasketsManagerTest is Utility {
             assertEq(sortedArray[i], i + 1);
             emit log_uint(sortedArray[i]);
         }
+
+        // Create features array of size 0.
+        uint256[] memory featuresArray4 = new uint256[](0);
+
+        // Sort
+        sortedArray = basketManager.sort(featuresArray4);
+        assertEq(sortedArray.length, 0);
 
         // Create features array of size 1.
         uint256[] memory featuresArray1 = new uint256[](1);
@@ -480,13 +473,6 @@ contract BasketsManagerTest is Utility {
         assertEq(sortedArray[1], RE_FEATURE_2);
         assertEq(sortedArray[2], RE_FEATURE_3);
         assertEq(sortedArray[3], RE_FEATURE_4);
-
-        // Create features array of size 4.
-        uint256[] memory featuresArray4 = new uint256[](0);
-
-        // Sort
-        sortedArray = basketManager.sort(featuresArray4);
-        assertEq(sortedArray.length, 0);
     }
 
     /// @notice This test verifies the use of abi.encodePacked.
