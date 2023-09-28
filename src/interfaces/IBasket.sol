@@ -43,10 +43,6 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
 
     function featureSupported(uint256) external returns (bool);
 
-    function currencySupported(string memory) external returns (bool);
-
-    function currencyBalance(string memory) external returns (uint256);
-
     function tnftType() external returns (uint256);
 
     function batchDepositTNFT(

@@ -233,10 +233,12 @@ contract MumbaiBasketsTest is Utility {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
-        vm.label(address(vrfCoordinatorMock), "MOCK VRF COORDINATOR");
-        vm.label(address(basketVrfConsumer), "BASKET VRF CONSUMER");
+        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
+        vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
         vm.label(JOE, "JOE");
         vm.label(NIK, "NIK");
+        vm.label(ALICE, "ALICE");
+        vm.label(BOB, "BOB");
     }
 
 
@@ -2041,7 +2043,7 @@ contract MumbaiBasketsTest is Utility {
 
         // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
         vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords);
+        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords); // 625_351 gas
 
         // Post-state check
         assertEq(basket.redeemerHasRequestInFlight(JOE), false);
@@ -2076,6 +2078,7 @@ contract MumbaiBasketsTest is Utility {
 
 
     // ~ getTotalValueOfBasket ~
+    // TODO: Write getTotalValueOfBasket test using fuzzing
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket
     function test_baskets_mumbai_getTotalValueOfBasket_single() public {
@@ -2195,7 +2198,87 @@ contract MumbaiBasketsTest is Utility {
         assertEq(totalValue, usdValue1 + usdValue2 + basket.getRentBal());
     }
 
-    // TODO: Write getTotalValueOfBasket test using fuzzing
 
-    
+    // ~ checkBudget ~
+
+    function test_baskets_mumbai_checkBudget() public {
+        uint256 batchSize = 4;
+
+        // Mint Bob 4 TNFTs to be deposited.
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, // 100,000 GBP
+            batchSize,   // stock
+            batchSize,   // mintCount
+            1,           // fingerprint
+            BOB          // receiver
+        );
+
+        address[] memory tnfts = new address[](tokenIds.length);
+        for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
+
+        // deposit all new TNFTs via batchDepositTNFT
+        vm.startPrank(BOB);
+        for (uint i; i < tokenIds.length; ++i) {
+            realEstateTnft.approve(address(basket), tokenIds[i]);
+        }
+        basket.batchDepositTNFT(tnfts, tokenIds);
+        vm.stopPrank();
+
+        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
+
+        // Sanity check -> Execute checkBudget(0)
+        (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(0);
+
+        assertEq(inBudget.length, 4);
+        assertEq(inBudget[0].tnft, address(0));
+        assertEq(inBudget[0].tokenId, 0);
+        assertEq(inBudget[0].usdValue, 0);
+        assertEq(inBudget[0].amountRent, 0);
+        assertEq(inBudget[0].sharesRequired, 0);
+        assertEq(inBudget[1].tnft, address(0));
+        assertEq(inBudget[1].tokenId, 0);
+        assertEq(inBudget[1].usdValue, 0);
+        assertEq(inBudget[1].amountRent, 0);
+        assertEq(inBudget[1].sharesRequired, 0);
+        assertEq(inBudget[2].tnft, address(0));
+        assertEq(inBudget[2].tokenId, 0);
+        assertEq(inBudget[2].usdValue, 0);
+        assertEq(inBudget[2].amountRent, 0);
+        assertEq(inBudget[2].sharesRequired, 0);
+        assertEq(inBudget[3].tnft, address(0));
+        assertEq(inBudget[3].tokenId, 0);
+        assertEq(inBudget[3].usdValue, 0);
+        assertEq(inBudget[3].amountRent, 0);
+        assertEq(inBudget[3].sharesRequired, 0);
+        assertEq(quantity, 0);
+        assertEq(valid, false);
+
+        // Execute checkBudget() with Bob's basket token balance
+        (inBudget, quantity, valid) = basket.checkBudget(usdValue);
+
+        assertEq(inBudget.length, 4);
+        assertEq(inBudget[0].tnft, address(realEstateTnft));
+        assertEq(inBudget[0].tokenId, 3);
+        assertEq(inBudget[0].usdValue, usdValue);
+        assertEq(inBudget[0].amountRent, 0);
+        assertEq(inBudget[0].sharesRequired, usdValue);
+        assertEq(inBudget[1].tnft, address(realEstateTnft));
+        assertEq(inBudget[1].tokenId, 4);
+        assertEq(inBudget[1].usdValue, usdValue);
+        assertEq(inBudget[1].amountRent, 0);
+        assertEq(inBudget[1].sharesRequired, usdValue);
+        assertEq(inBudget[2].tnft, address(realEstateTnft));
+        assertEq(inBudget[2].tokenId, 5);
+        assertEq(inBudget[2].usdValue, usdValue);
+        assertEq(inBudget[2].amountRent, 0);
+        assertEq(inBudget[2].sharesRequired, usdValue);
+        assertEq(inBudget[3].tnft, address(realEstateTnft));
+        assertEq(inBudget[3].tokenId, 6);
+        assertEq(inBudget[3].usdValue, usdValue);
+        assertEq(inBudget[3].amountRent, 0);
+        assertEq(inBudget[3].sharesRequired, usdValue);
+        assertEq(quantity, 4);
+        assertEq(valid, true);
+    }
 }

@@ -31,7 +31,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     /// @notice Mapping from requestId to basket address that made request.
     mapping(uint256 => address) public requestTracker;
-    /// @notice Mapping from requestId to boolean. If true, request for randomness was fullfilled.
+    /// @notice Mapping from requestId to boolean. If true, request for randomness was fulfilled.
     mapping(uint256 => bool) public fulfilled;
 
     /// @notice Stores Vrf subscription Id.
