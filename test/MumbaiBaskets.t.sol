@@ -2,6 +2,9 @@
 pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+import { StdInvariant } from "../lib/forge-std/src/StdInvariant.sol";
+
+// oz imports
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -368,6 +371,14 @@ contract MumbaiBasketsTest is Utility {
 
         // verify priceManager has oracle set
         assertEq(address(IPriceManagerExt(address(priceManager)).oracleForCategory(realEstateTnft)), address(realEstateOracle));
+
+        // verify BasketsVrfConsumer initial state
+        assertEq(basketVrfConsumer.subId(), subId);
+        assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
+        assertEq(basketVrfConsumer.factoryProvider(), address(factoryProvider));
+        assertEq(basketVrfConsumer.requestConfirmations(), 20);
+        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
+        assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
     }
 
 
@@ -2201,6 +2212,7 @@ contract MumbaiBasketsTest is Utility {
 
     // ~ checkBudget ~
 
+    /// @notice Verifies checkBudget view method is returning correct data
     function test_baskets_mumbai_checkBudget() public {
         uint256 batchSize = 4;
 

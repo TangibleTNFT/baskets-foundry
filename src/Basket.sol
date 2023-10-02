@@ -72,17 +72,36 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     // ~ Events ~
 
-    event DepositedTNFT(address prevOwner, address indexed tnft, uint256 indexed tokenId);
+    /**
+     * @notice This event is emitted when a TNFT is deposited into this basket.
+     * @param prevOwner Previous owner before deposit. Aka depositor.
+     * @param tnft TNFT contract address of token being deposited.
+     * @param tokenId TokenId identifier of token being deposited.
+     */
+    event TNFTDeposited(address prevOwner, address indexed tnft, uint256 indexed tokenId);
 
-    event RedeemedTNFT(address newOwner, address indexed tnft, uint256 indexed tokenId);
-
+    /**
+     * @notice This event is emitted when a TNFT random redeem has been requested and is "in flight".
+     * @param redeemer Address of redeemer.
+     * @param budget Budget of basket tokens redeemer wishes to work with.
+     */
     event RedeemRequestInFlight(address redeemer, uint256 budget);
 
+    /**
+     * @notice This event is emitted when a TNFT is redeemed from this basket.
+     * @param newOwner New owner before deposit. Aka redeemer.
+     * @param tnft TNFT contract address of token being redeemed.
+     * @param tokenId TokenId identifier of token being redeemed.
+     */
+    event TNFTRedeemed(address newOwner, address indexed tnft, uint256 indexed tokenId);
+
+    // TODO: FOR TESTING ONLY
     event Debug(string, uint256);
 
     
     // ~ Modifiers ~
 
+    /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
     modifier onlyBasketVrfConsumer() {
         require(msg.sender == _getBasketVrfConsumer());
         _;
@@ -95,6 +114,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     /**
      * @notice Initializes Basket contract.
+     * @param _name Unique name of basket contract.
+     * @param _symbol Unique symbol of basket contract.
+     * @param _factoryProvider FactoryProvider contract address.
+     * @param _tnftType TNFT Type (category).
+     * @param _rentToken ERC-20 token being used for rent. USDC by default.
+     * @param _features Array of features TNFTs must support to be in this basket.
+     * @param _deployer Address of creator of the basket contract.
      */
     function initialize(
         string memory _name,
@@ -155,6 +181,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
     }
 
+    /**
+     * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
+     *         The deposit will be minted a sufficient amount of basket tokens in return.
+     */
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
@@ -206,22 +236,23 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         // mint basket tokens to user
         _mint(_depositor, basketShare);
 
+        // Update total nft value in this contract
         totalNftValue += usdValue;
 
-        emit DepositedTNFT(_depositor, _tangibleNFT, _tokenId);
+        emit TNFTDeposited(_depositor, _tangibleNFT, _tokenId);
     }
 
     /**
-     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // NOTE: For testing only
+     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // NOTE: For testing only?
      */
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
 
-        // get usd value of TNFT token being redeemed
+        // get usd value of TNFT token being redeemed.
         uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue > 0, "Unsupported TNFT");
         emit Debug("usd value", usdValue); // NOTE: For testing only
 
-        // Calculate amount of rent to send to redeemer
+        // Calculate amount of rent to send to redeemer.
         uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Test, revisit
         emit Debug("amount rent", amountRent); // NOTE: For testing only
 
@@ -229,7 +260,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
         emit Debug("shares required", sharesRequired); // NOTE: For testing only
 
-        // Verify the user has this amount of tokens -> If so, BURN them                                                                                 
+        // Verify the user has sufficient amount of tokens.
         require(_amountBasketTokens >= sharesRequired, "Insufficient offer");
         if (_amountBasketTokens > sharesRequired) _amountBasketTokens = sharesRequired;
 
@@ -243,6 +274,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         address redeemer = msg.sender;
         require(!redeemerHasRequestInFlight[redeemer], "redeem request in progress");
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
+
         (,, bool validBudget) = checkBudget(_budget);
         require(validBudget, "Insufficient budget");
 
@@ -257,14 +289,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     /**
      * @notice This method is the vrf callback method. Will use the random seed to choose a random TNFT for redeemer.
      */
-    function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer { // TODO: Add re-entrancy guard. Will this affect callback from vrf coordinator?
+    function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer {
         address redeemer = redeemRequestInFlightData[requestId].redeemer;
         uint256 budget = redeemRequestInFlightData[requestId].budget;
 
         redeemerHasRequestInFlight[redeemer] = false;
         delete redeemRequestInFlightData[requestId];
 
-        // a. Create an array that fits budget
+        // a. Create an array of TNFTs within budget
         uint256 len = depositedTnfts.length;
         for (uint256 i; i < len;) {
 
@@ -298,7 +330,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         }
 
         len = tokensInBudget.length;
-        require(len > 0, "0");
+        require(len > 0, "0"); // TODO: How does chainlink handle a reverted callback
 
         // b. use randomWord to shuffle array
         for (uint256 i; i < len;) {
@@ -376,7 +408,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         totalNftValue -= _usdValue;
         _burn(_redeemer, _amountBasketTokens);
 
-        emit RedeemedTNFT(_redeemer, _tangibleNFT, _tokenId);
+        emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
     }
 
     /**
@@ -505,7 +537,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         }
 
         decimals > 0 ?
-            totalRent += primaryRentToken.balanceOf(address(this)) * 10**decimals : // TODO: Test
+            totalRent += primaryRentToken.balanceOf(address(this)) * 10**decimals :
             totalRent += primaryRentToken.balanceOf(address(this));
     }
 
@@ -524,7 +556,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         //      a. sort array -> too comlpex, would need to build a single array of type (uint) and we'd lose which token IDs were in which TNFT contract.
         //                       Unless we wrote a custom sort method in this contract.
         //      b. Loop through main array, find largest claimable, claim that -> implemented.
-        //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem.
+        //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem?
 
         // fetch current balance of USDC in this contract
         uint256 preBal = primaryRentToken.balanceOf(address(this));

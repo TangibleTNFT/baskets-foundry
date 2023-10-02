@@ -178,7 +178,9 @@ contract BasketsManagerTest is Utility {
     }
 
 
-    // ~ Utility ~
+    // -------
+    // Utility
+    // -------
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
@@ -191,7 +193,9 @@ contract BasketsManagerTest is Utility {
     }
 
 
-    // ~ Initial State Test ~
+    // ------------------
+    // Initial State Test
+    // ------------------
 
     /// @notice Initial state test.
     function test_basketManager_init_state() public {
@@ -201,7 +205,12 @@ contract BasketsManagerTest is Utility {
     }
 
 
-    // ~ Unit Tests ~
+    // ----------
+    // Unit Tests
+    // ----------
+
+
+    // ~ deployBasket testing ~
 
     /// @notice Verifies proper state changes when a basket is deployed with features
     function test_basketManager_deployBasket() public {
@@ -417,6 +426,9 @@ contract BasketsManagerTest is Utility {
         emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
     }
 
+
+    // ~ sort testing ~
+
     /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
     function test_basketManager_insertionSort() public {
 
@@ -475,6 +487,9 @@ contract BasketsManagerTest is Utility {
         assertEq(sortedArray[3], RE_FEATURE_4);
     }
 
+
+    // ~ encodePacked testing ~
+
     /// @notice This test verifies the use of abi.encodePacked.
     function test_basketManager_encodePacked() public {
         uint256 tnftType = 2;
@@ -529,6 +544,45 @@ contract BasketsManagerTest is Utility {
         emit log_bytes32(hashedCombo3);
 
         assertEq(hashedCombo2, hashedCombo3);
+    }
+
+
+    // ~ setters ~
+
+    /// @notice Verifies correct state changes when BasketManager::setBasketsVrfConsumer is executed.
+    function test_basketManager_setBasketsVrfConsumer() public {
+        // Pre-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(0));
+
+        // Execute setBasketsVrfConsumer with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("_basketsVrfConsumer == address(0)");
+        basketManager.setBasketsVrfConsumer(address(0));
+
+        // Execute setBasketsVrfConsumer -> success
+        vm.prank(factoryOwner);
+        basketManager.setBasketsVrfConsumer(address(222));
+
+        // Post-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(222));
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::setFeatureLimit is executed.
+    function test_basketManager_setFeatureLimit() public {
+        // Pre-state check.
+        assertEq(basketManager.featureLimit(), 10);
+
+        // Execute setFeatureLimit with same value -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Already set");
+        basketManager.setFeatureLimit(10);
+
+        // Execute setFeatureLimit -> success
+        vm.prank(factoryOwner);
+        basketManager.setFeatureLimit(100);
+
+        // Post-state check.
+        assertEq(basketManager.featureLimit(), 100);
     }
 
 }

@@ -166,7 +166,7 @@ contract BasketManager is FactoryModifiers {
      * @param _basketsVrfConsumer New contract address.
      */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
-        require(_basketsVrfConsumer != address(0));
+        require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
         basketsVrfConsumer = _basketsVrfConsumer;
     }
 
