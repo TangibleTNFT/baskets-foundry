@@ -64,6 +64,11 @@ contract Utility is Test{
     uint256 public constant GOLD_TNFTTYPE = 1;
 
 
+    // ~ Events ~
+
+    event log_named_bool(string key, bool val);
+
+
     // ~ Utility Functions ~
 
     /// @notice Turns a single uint to an array of uints of size 1.

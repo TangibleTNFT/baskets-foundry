@@ -59,8 +59,6 @@ contract BasketsManagerTest is Utility {
     uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];
 
 
-    event log_named_bool(string key, bool val);
-
     function setUp() public {
 
         vm.createSelectFork(MUMBAI_RPC_URL);

@@ -57,17 +57,17 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
 
-    IERC20Metadata public primaryRentToken; // USDC by default
-
     uint256 public tnftType;
-
-    address public deployer;
 
     uint256 public totalNftValue; // NOTE: For testing. Will be replaced
 
     mapping(uint256 => RedeemRequest) public redeemRequestInFlightData;
 
     mapping(address => bool) public redeemerHasRequestInFlight;
+
+    IERC20Metadata public primaryRentToken; // USDC by default
+
+    address public deployer;
 
 
     // ~ Events ~
@@ -159,6 +159,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     /**
      * @notice This method allows a user to deposit a batch of TNFTs into the basket.
+     * @dev Gas block limit is reached at 90 ~ 100 tokens.
      */
     function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
         uint256 length = _tangibleNFTs.length;
@@ -668,7 +669,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     /**
-     * @notice This method returns whether a provided TNFT token exists in this contract and if so, where in the array.
+     * @notice This method returns whether a provided TNFT token exists in the depositedTnfts array and if so, where in the array.
      */
     function _isDepositedTnft(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < depositedTnfts.length;) {
@@ -680,6 +681,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         return (0, false);
     }
 
+    /**
+     * @notice This method returns whether a provided TNFT (category) address exists in the tnftsSupported array and if so, where in the array.
+     */
     function _isSupportedTnft(address _tnft) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < tnftsSupported.length;) {
             if (tnftsSupported[i] == _tnft) return (i, true);
@@ -690,6 +694,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         return (0, false);
     }
 
+    /**
+     * @notice This method returns whether a provided tokenId exists in the tokenIdLibrary mapped array and if so, where in the array.
+     */
     function _isTokenIdLibrary(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < tokenIdLibrary[_tnft].length;) {
             if (tokenIdLibrary[_tnft][i] == _tokenId) return (i, true);

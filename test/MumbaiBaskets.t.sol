@@ -41,20 +41,24 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 
-/// @notice This test file 
+/// @notice This test file contains integration tests for the baskets protocol. We import real mumbai addresses of the underlying layer
+///         of smart contracts via MumbaiAddresses.sol.
 contract MumbaiBasketsTest is Utility {
 
+    // ~ Contracts ~
+
+    // baskets
     Basket public basket;
     BasketManager public basketManager;
     BasketsVrfConsumer public basketVrfConsumer;
 
+    // helper
     VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
-    //contracts
+    // tangible mumbai contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
     ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
-    //IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_ChainlinkOracle);
     IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
     IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
@@ -63,7 +67,7 @@ contract MumbaiBasketsTest is Utility {
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
     IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
 
-    // ~ Actors ~
+    // ~ Actors and Variables ~
 
     address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
@@ -72,11 +76,10 @@ contract MumbaiBasketsTest is Utility {
     address public rentManagerDepositor = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
     // State variables for VRF.
-    uint256[] internal entropy = [uint256(uint160(address(this)))];
     uint64 internal subId;
-    
-    event log_named_bool(string key, bool val);
 
+
+    /// @notice Config function for test cases.
     function setUp() public {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
@@ -200,10 +203,10 @@ contract MumbaiBasketsTest is Utility {
             true                                    // sendToVender
         );
 
-        emit log_named_address("Oracle for category", address(priceManager.oracleForCategory(realEstateTnft)));
+        //emit log_named_address("Oracle for category", address(priceManager.oracleForCategory(realEstateTnft)));
 
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
-        emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
+        //emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
         // mint fingerprint RE_1 and RE_2
         assertEq(IERC721(address(realEstateTnft)).balanceOf(TANGIBLE_LABS), 0);
