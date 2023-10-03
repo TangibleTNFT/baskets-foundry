@@ -303,6 +303,7 @@ contract MumbaiBasketsTest is Utility {
 
     }
 
+    /// @notice Helper function for creating items and minting to a designated address.
     function _createItemAndMint(address tnft, uint256 _sellAt, uint256 _stock, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
         require(_mintCount >= _stock, "mint count must be gt stock");
 
@@ -324,6 +325,7 @@ contract MumbaiBasketsTest is Utility {
         return _mintToken(tnft, _mintCount, _fingerprint, _receiver);
     }
 
+    /// @notice Helper function for minting to a designated address.
     function _mintToken(address tnft, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
         uint256 preBal = IERC721(tnft).balanceOf(TANGIBLE_LABS);
 

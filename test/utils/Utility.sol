@@ -137,6 +137,17 @@ interface IFactoryExt {
     function setRequireWhitelistCategory(ITangibleNFT tnft, bool required) external;
 
     function setContract(FACT_ADDRESSES _contractId, address _contractAddress) external;
+
+    function newCategory(
+        string calldata name,
+        string calldata symbol,
+        string calldata uri,
+        bool isStoragePriceFixedAmount,
+        bool storageRequired,
+        address priceOracle,
+        bool symbolInUri,
+        uint256 _tnftType
+    ) external returns (ITangibleNFT);
 }
 
 interface IPriceManagerExt {
