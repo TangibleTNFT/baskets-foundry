@@ -9,7 +9,8 @@ import { UpgradeableBeacon } from "../src/proxy/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "../src/proxy/BasketBeaconProxy.sol";
 import { ICounterContract } from "./utils/Utility.sol";
 
-/// @notice Counter contract for testing.
+
+/// @notice Counter helper contract for testing.
 contract CounterContract is Initializable, ICounterContract {
 
     uint256 public counter;
@@ -23,7 +24,11 @@ contract CounterContract is Initializable, ICounterContract {
     }
 }
 
-/// @notice Testing file for testing beacon proxies.
+/**
+ * @title BeaconProxyTest
+ * @author Chase Brown
+ * @notice Testing file for testing beacon proxies.
+ */
 contract BeaconProxyTest is Test {
 
     CounterContract public counterContract;

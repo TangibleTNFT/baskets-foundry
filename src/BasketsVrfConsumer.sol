@@ -65,7 +65,12 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     // ~ Constructor ~
 
-    constructor() FactoryModifiers(address(0)) {} // NOTE: Temporary
+    constructor() FactoryModifiers(address(0)) {
+        _disableInitializers();
+    }
+
+
+    // ~ Initializer ~
 
     /**
      * @notice Initializes BasketVrfConsumer contract.

@@ -23,6 +23,11 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
+/**
+ * @title RentManagerTest
+ * @author Chase Brown
+ * @notice Testing file for RentManager contract.
+ */
 contract RentManagerTest is Utility {
     RentManager public rentManager;
     RentManagerDeployer public rentManagerDeployer;

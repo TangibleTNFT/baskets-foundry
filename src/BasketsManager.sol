@@ -17,7 +17,8 @@ import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol"; 
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 
 /**
@@ -25,7 +26,7 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
  * @author Chase Brown
  * @notice This contract manages all Basket contracts.
  */
-contract BasketManager is FactoryModifiers {
+contract BasketManager is Initializable, FactoryModifiers {
     using ArrayUtils for uint256[];
 
     // ~ State Variables ~
@@ -38,7 +39,7 @@ contract BasketManager is FactoryModifiers {
     mapping(address => bool) public isBasket;
 
     /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
-    UpgradeableBeacon immutable public beacon;
+    UpgradeableBeacon public beacon;
 
     /// @notice Array of all baskets deployed.
     address[] public baskets;
@@ -66,12 +67,19 @@ contract BasketManager is FactoryModifiers {
 
     // ~ Constructor ~
 
+    constructor() FactoryModifiers(address(0)) {
+        _disableInitializers();
+    }
+
+
+    // ~ Initializer ~
+
     /**
-     * @notice Initializes BasketManager contract. TODO: Update to initialize()
+     * @notice Initializes BasketManager contract.
      * @param _initBasketImplementation Contract address of Basket implementation contract.
      * @param _factoryProvider Contract address of FactoryProvider contract.
      */
-    constructor(address _initBasketImplementation, address _factoryProvider) FactoryModifiers(_factoryProvider) {
+    function initialize(address _initBasketImplementation, address _factoryProvider) external initializer {
         __FactoryModifiers_init(_factoryProvider);
         beacon = new UpgradeableBeacon(_initBasketImplementation);
 
@@ -92,7 +100,7 @@ contract BasketManager is FactoryModifiers {
      * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
      * @param _tokenIdDeposit Array of tokenIds being deposited into basket initally. Note: Corresponds with _tangibleNFTDeposit.
      */
-    function deployBasket(
+    function deployBasket( // TODO: Add name/symbol protection
         string memory _name,
         string memory _symbol,
         uint256 _tnftType,
@@ -129,7 +137,7 @@ contract BasketManager is FactoryModifiers {
         // create new basket beacon proxy
         BasketBeaconProxy newBasketBeacon = new BasketBeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(Basket(address(0)).initialize.selector, 
+            abi.encodeWithSelector(Basket.initialize.selector,  // TODO: Verify all this data is indeed being stored in proxy
                 _name,
                 _symbol,
                 factoryProvider,

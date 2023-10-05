@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
-import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
@@ -24,6 +23,12 @@ import { TangibleNFTDeployerV2 } from "@tangible/TangibleNFTDeployerV2.sol";
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
+
+// oz imports
+import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
 // https://docs.chain.link/data-feeds/price-feeds/addresses/?network=polygon#Polygon%20Mainnet
 // Polygon GBP / USD Price Feed: 0x099a2540848573e94fb1Ca0Fa420b00acbBc845a
@@ -48,6 +53,9 @@ contract BasketsTest is Utility {
     TNFTMarketplaceV2 public marketplace;
     TangibleNFTDeployerV2 public tnftDeployer;
 
+    TransparentUpgradeableProxy public basketManagerProxy;
+    ProxyAdmin public admin;
+
     //address public constant POLYGON_CHAINLINK_GBPUSD_PRICE_FEED = 0x099a2540848573e94fb1Ca0Fa420b00acbBc845a;
     //address public constant POLYGON_CHAINLINK_USDCUSD_PRICE_FEED = 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7;
 
@@ -67,6 +75,8 @@ contract BasketsTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
+        admin = new ProxyAdmin();
+
         // Deploy Factory
         factory = new FactoryV2(
             address(MUMBAI_USDC),
@@ -81,10 +91,24 @@ contract BasketsTest is Utility {
         basket = new Basket();
 
         // Deploy basketManager
-        basketManager = new BasketManager(
-            address(basket),
-            address(factoryProvider)
+        basketManager = new BasketManager();
+
+        // Deploy proxy for basketManager
+        basketManagerProxy = new TransparentUpgradeableProxy(
+            address(basketManager),
+            address(admin),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryProvider)
+            )
         );
+        basketManager = BasketManager(address(basketManagerProxy));
+
+        // vm.prank(PROXY);
+        // basketManager.initialize(
+        //     address(basket),
+        //     address(factoryProvider)
+        // );
 
         // Deplot tnft deployer
         tnftDeployer = new TangibleNFTDeployerV2(
@@ -150,19 +174,6 @@ contract BasketsTest is Utility {
             false // TODO: Revisit -> This should be true -> Will deploy rent manager
         );
 
-        // Deploy Basket
-        uint256[] memory features = new uint256[](0);
-        vm.prank(address(basketManager));
-        basket.initialize(
-            "Tangible Basket Token",
-            "TBT",
-            address(factoryProvider),
-            TNFTTYPE,
-            address(MUMBAI_USDC),
-            features,
-            address(this)
-        );
-
 
         // Create new category with TNFTType on the Factory -> deploying TangibleNFT contract
         vm.prank(TANGIBLE_LABS);
@@ -226,6 +237,35 @@ contract BasketsTest is Utility {
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");
+
+
+        // Deploy Basket
+        uint256[] memory features = new uint256[](0);
+        // vm.prank(address(basketManager));
+        // basket.initialize(
+        //     "Tangible Basket Token",
+        //     "TBT",
+        //     address(factoryProvider),
+        //     TNFTTYPE,
+        //     address(MUMBAI_USDC),
+        //     features,
+        //     address(this)
+        // );
+
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 1);
+        (IBasket _basket,) = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
+        );
+        vm.stopPrank();
+
+        basket = Basket(address(_basket));
         
     }
 

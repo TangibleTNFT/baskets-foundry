@@ -48,6 +48,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     mapping(address => uint256[]) public tokenIdLibrary;
 
+    mapping(address => mapping(uint256 => uint256)) public valueTracker; // tracks USD value of TNFT
+
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
     mapping(address => mapping(uint256 => bool)) public tokenDeposited;
 
@@ -110,7 +112,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     // ~ Constructor ~
 
-    constructor() FactoryModifiers(address(0)) {} // TODO: Remove
+    constructor() FactoryModifiers(address(0)) {
+        _disableInitializers();
+    }
+
+
+    // ~ Initializer ~
 
     /**
      * @notice Initializes Basket contract.
@@ -193,11 +200,18 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         // get token fingerprint
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
 
+        // calculate usd value of TNFT with 18 decimals
+        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId); // TODO: This value could be stored in the TokenData obj in the depositedTNFTs array
+        require(usdValue > 0, "Unsupported TNFT");
+
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = true;
+        valueTracker[_tangibleNFT][_tokenId] = usdValue;
+
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
-        tokenIdLibrary[_tangibleNFT].push(_tokenId); // TODO: Test with mul tnft address and mul arrays.
-        (, bool exists) = _isSupportedTnft(_tangibleNFT); // TODO: Test
+        tokenIdLibrary[_tangibleNFT].push(_tokenId);
+
+        (, bool exists) = _isSupportedTnft(_tangibleNFT);
         if (!exists) {
             tnftsSupported.push(_tangibleNFT);
         }
@@ -221,13 +235,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
 
-        // calculate usd value of TNFT with 18 decimals
-        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
-        require(usdValue > 0, "Unsupported TNFT");
-
         // find share price
         uint256 sharePrice = getSharePrice();
-        basketShare = (usdValue * 10 ** decimals()) / sharePrice; // TODO: Revisit
+        basketShare = (usdValue * 10 ** decimals()) / sharePrice; // TODO: Verify math
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
@@ -249,16 +259,21 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
 
         // get usd value of TNFT token being redeemed.
-        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
+        uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
         require(usdValue > 0, "Unsupported TNFT");
         emit Debug("usd value", usdValue); // NOTE: For testing only
 
         // Calculate amount of rent to send to redeemer.
-        uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Test, revisit
+        uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue;
         emit Debug("amount rent", amountRent); // NOTE: For testing only
+        emit Debug("share price", getSharePrice()); // NOTE: For testing only
+        emit Debug("usdVal + amount rent * 10^12", (usdValue + (amountRent * 10**12))); // NOTE: For testing only
+        emit Debug("usdVal + amount rent * 10^12 with decimals", (usdValue + (amountRent * 10**12)) * 10 ** decimals()); // NOTE: For testing only
+        emit Debug("shares Required", ((usdValue + (amountRent * 10**12)) * 10 ** decimals()) / getSharePrice()); // NOTE: For testing only
 
-        // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-        uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
+        
+        // sharesRequired = ((usdValue + (amountRent * 10**12)) * 10 ** decimals()) / getSharePrice();
+        uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
         emit Debug("shares required", sharesRequired); // NOTE: For testing only
 
         // Verify the user has sufficient amount of tokens.
@@ -276,7 +291,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         require(!redeemerHasRequestInFlight[redeemer], "redeem request in progress");
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
-        (,, bool validBudget) = checkBudget(_budget);
+        (,, bool validBudget) = checkBudget(_budget); // TODO: Remove from this function -> call before redeemRandomTNFT
         require(validBudget, "Insufficient budget");
 
         requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
@@ -302,15 +317,15 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         for (uint256 i; i < len;) {
 
             // get usd value of TNFT token being redeemed
-            uint256 usdValue = _getUSDValue(depositedTnfts[i].tnft, depositedTnfts[i].tokenId);
+            uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
             //emit Debug("usd value", usdValue); // NOTE: For testing only
 
             // Calculate amount of rent to send to redeemer
-            uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Test, revisit
+            uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Verify math
             //emit Debug("amount rent", amountRent); // NOTE: For testing only
 
             // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-            uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
+            uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
             //emit Debug("shares required", sharesRequired); // NOTE: For testing only
 
             if (budget >= sharesRequired) {
@@ -331,7 +346,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         }
 
         len = tokensInBudget.length;
-        require(len > 0, "0"); // TODO: How does chainlink handle a reverted callback
+        require(len > 0, "0"); // TODO: How does chainlink handle a reverted callback?
 
         // b. use randomWord to shuffle array
         for (uint256 i; i < len;) {
@@ -442,18 +457,18 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @dev This should be called by the front end prior to allowing any user from executing redeemRandomTNFT to ensure
      *      when a callback occurs from vrf, it wasn't wasted fees to find the budget is not eligible for any redeemable TNFTs.
      */
-    function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) {
+    function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) { // TODO: Optimize
         uint256 len = depositedTnfts.length;
         inBudget = new RedeemData[](len);
 
         for (uint256 i; i < len;) {
 
             // get usd value of TNFT token
-            uint256 usdValue = _getUSDValue(depositedTnfts[i].tnft, depositedTnfts[i].tokenId);
+            uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
             // Calculate amount of rent that would be received
             uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue;
             // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-            uint256 sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals();
+            uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
 
             if (_budget >= sharesRequired) {
                 inBudget[quantity] = 
@@ -512,7 +527,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
      */
-    function getRentBal() public view returns (uint256 totalRent) {
+    function getRentBal() public view returns (uint256 totalRent) { // TODO: Optimize
         uint256 decimals = decimals() - IERC20Metadata(primaryRentToken).decimals();
 
         // iterate through all supported tnfts and tokenIds deposited for each tnft. // TODO: Test when tnftsSupported.length > 1.
@@ -546,9 +561,19 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     // ~ Internal Functions ~
 
     /**
+     * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
+     * @dev If primaryRentToken.decimals == 18, this func will fail.
+     */
+    function _getSharesRequired(uint256 usdValue, uint256 amountRent) internal view returns (uint256 sharesRequired) {
+        amountRent > 0 ?
+            sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals() : // TODO: VERIFY MATH
+            sharesRequired = (usdValue * 10 ** decimals()) / getSharePrice();
+    }
+
+    /**
      * @notice This internal method claims rent from the Rent Manager and transfers a specified amount to redeemer.
      */
-    function _redeemRent(address _tnft, uint256 _tokenId, uint256 _amount, address _redeemer) internal { // TODO: Needs stress testing -> 1000+ NFTs
+    function _redeemRent(address _tnft, uint256 _tokenId, uint256 _amount, address _redeemer) internal { // TODO: Needs stress testing -> 1000+ NFTs // TODO: Optimize
 
         // TODO:
         // 1. Claim from USDC balance

@@ -9,6 +9,8 @@ import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Rec
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
@@ -43,10 +45,14 @@ import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 
-/// @notice This test file is for "stress" testing. Advanced testing methods and integration tests combined to identify
-///         the stability of the baskets protocol.
-/// @dev This testing file takes advantage of Foundry's advanced testing tools: Fuzzing and Invariant testing.
-contract MumbaiBasketsTest is Utility {
+/**
+ * @title StressTests
+ * @author Chase Brown
+ * @notice This test file is for "stress" testing. Advanced testing methods and integration tests combined to identify
+ *         the stability of the baskets protocol.
+ * @dev This testing file takes advantage of Foundry's advanced testing tools: Fuzzing and Invariant testing.
+ */
+contract StressTests is Utility {
 
     // ~ Contracts ~
 
@@ -70,6 +76,11 @@ contract MumbaiBasketsTest is Utility {
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
     IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
 
+    // proxies
+    TransparentUpgradeableProxy public basketManagerProxy;
+    TransparentUpgradeableProxy public basketVrfConsumerProxy;
+    ProxyAdmin public proxyAdmin;
+
     // ~ Actors and Variables ~
 
     address public factoryOwner;
@@ -90,6 +101,7 @@ contract MumbaiBasketsTest is Utility {
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+        proxyAdmin = new ProxyAdmin();
 
         // vrf config
         vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
@@ -98,10 +110,20 @@ contract MumbaiBasketsTest is Utility {
 
         // basket stuff
         basket = new Basket();
-        basketManager = new BasketManager(
-            address(basket),
-            address(factoryProvider)
+        
+        // Deploy basketManager
+        basketManager = new BasketManager();
+
+        // Deploy proxy for basketManager -> initialize
+        basketManagerProxy = new TransparentUpgradeableProxy(
+            address(basketManager),
+            address(proxyAdmin),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryProvider)
+            )
         );
+        basketManager = BasketManager(address(basketManagerProxy));
 
         // updateDepositor for rent manager
         vm.prank(TANGIBLE_LABS);
@@ -115,34 +137,21 @@ contract MumbaiBasketsTest is Utility {
         vm.prank(factoryOwner);
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
-        // Deploy Basket
-        uint256[] memory features = new uint256[](0);
-        vm.prank(address(basket)); // NOTE: Should be proxy
-        basket.initialize( 
-            "Tangible Basket Token",
-            "TBT",
-            address(factoryProvider),
-            RE_TNFTTYPE,
-            address(MUMBAI_USDC),
-            features,
-            address(this)
-        );
-
         // Deploy BasketsVrfConsumer
         basketVrfConsumer = new BasketsVrfConsumer();
 
-        // Initialize BasketsVrfConsumer
-        vm.prank(PROXY);
-        basketVrfConsumer.initialize(
-            address(factoryProvider),
-            subId,
-            address(vrfCoordinatorMock),
-            MUMBAI_VRF_KEY_HASH
+        // Initialize BasketsVrfConsumer with proxy
+        basketVrfConsumerProxy = new TransparentUpgradeableProxy(
+            address(basketVrfConsumer),
+            address(proxyAdmin),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(factoryProvider),
+                subId,
+                address(vrfCoordinatorMock),
+                MUMBAI_VRF_KEY_HASH
+            )
         );
-
-        // add basket to basketManager
-        vm.prank(factoryOwner);
-        basketManager.addBasket(address(basket));
+        basketVrfConsumer = BasketsVrfConsumer(address(basketVrfConsumerProxy));
 
         vm.prank(factoryOwner);
         basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
@@ -174,6 +183,43 @@ contract MumbaiBasketsTest is Utility {
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
+        // uint256[] memory tokenIds = _createItemAndMint(
+        //     address(realEstateTnft),
+        //     100_000, // 100 GBP
+        //     1,       // stock
+        //     1,       // mint
+        //     RE_FINGERPRINT_2,
+        //     CREATOR
+        // );
+
+       uint256[] memory tokenIds = _mintToken(address(realEstateTnft), 1, RE_FINGERPRINT_1, CREATOR);
+
+        // Deploy basket
+        uint256[] memory features = new uint256[](0);
+        
+        vm.startPrank(CREATOR);
+        realEstateTnft.approve(address(basketManager), tokenIds[0]);
+        (IBasket _basket,) = basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(tokenIds[0])
+        );
+        vm.stopPrank();
+
+        emit log_named_uint("totalNftValue", basket.totalNftValue());
+        emit log_named_uint("USDVAL", _getUsdValueOfNft(address(realEstateTnft), 1));
+
+        basket = Basket(address(_basket));
+
+        // creator redeems token to isolate tests.
+        vm.startPrank(CREATOR);
+        basket.redeemTNFT(address(realEstateTnft), tokenIds[0], basket.balanceOf(CREATOR));
+        vm.stopPrank();
+
         // labels
         vm.label(address(factoryV2), "FACTORY");
         vm.label(address(realEstateTnft), "RealEstate_TNFT");
@@ -190,6 +236,9 @@ contract MumbaiBasketsTest is Utility {
         vm.label(NIK, "NIK");
         vm.label(ALICE, "ALICE");
         vm.label(BOB, "BOB");
+
+        // init state check
+        assertEq(basket.totalSupply(), 0);
     }
 
 
@@ -305,8 +354,8 @@ contract MumbaiBasketsTest is Utility {
 
     // TODO:
     // a. deposit testing with multiple TNFT addresses and multiple tokens for each TNFT contract
-    //    - test deposit and batch deposits with fuzzing
-    //    - again, but with rent accruing -> changing share price
+    //    - test deposit and batch deposits with fuzzing - DONE
+    //    - again, but with rent accruing -> changing share price - DONE
     // b. stress test fulfillRandomRedeem
     //    - 1000+ depositedTnfts
     //    - tokensInBudget.length == depositedTnfts.length when > 1000 or smaller
@@ -319,12 +368,12 @@ contract MumbaiBasketsTest is Utility {
     // ~ stress depositTNFT ~
 
     /// @notice Stress test of depositTNFT method.
-    function test_stress_depositTNFT() public {
+    function test_stress_depositTNFT_single() public {
         
         // ~ Config ~
 
-        uint256 newCategories = 10;
-        uint256 amountFingerprints = 30;
+        uint256 newCategories = 4;
+        uint256 amountFingerprints = 25;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         uint256 totalTokens = newCategories * amountFingerprints;
@@ -986,4 +1035,111 @@ contract MumbaiBasketsTest is Utility {
         // reset tokenIdMap
         for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
     }
+
+
+    // ~ stress checkBudget ~
+
+    /// @notice Stress test of checkBudget method with max tokensInBudget.
+    /// NOTE: 1x10 (100 tokens)  -> checkBudget costs 23_442_928 gas
+    /// NOTE: 4x25 (100 tokens)  -> checkBudget costs 26_967_717 gas
+    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 34_143_566 gas -> OVER LIMIT
+    function test_stress_checkBudget() public {
+
+        // ~ Config ~
+
+        uint256 newCategories = 10;
+        uint256 amountFingerprints = 10;
+
+        // NOTE: Amount of TNFTs == newCategories * amountFingerprints
+        uint256 totalTokens = newCategories * amountFingerprints;
+
+        uint256[] memory fingerprints = new uint256[](amountFingerprints);
+        address[] memory tnfts = new address[](newCategories);
+
+        // declare arrays that will be used for args for batchDepositTNFT
+        address[] memory batchTnftArr = new address[](totalTokens);
+        uint256[] memory batchTokenIdArr = new uint256[](totalTokens);
+
+        // store all new fingerprints in array.
+        for (uint256 i; i < amountFingerprints; ++i) {
+            fingerprints[i] = i;
+        }
+
+        // create multiple tnfts.
+        uint256 count;
+        for (uint256 i; i < newCategories; ++i) {
+            tnfts[i] = _deployNewTnftContract(Strings.toString(i));
+            
+            // initialize batchTnftArr
+            for (uint256 j; j < amountFingerprints; ++j) {
+                batchTnftArr[count] = tnfts[i];
+                ++count;
+            }
+        }
+
+        // mint multiple tokens for each contract
+        count = 0;
+        for (uint256 i; i < newCategories; ++i) {
+            address tnft = tnfts[i];
+            for (uint256 j; j < amountFingerprints; ++j) {
+                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+
+                uint256[] memory tokenIds = _createItemAndMint(
+                    tnft,
+                    100_000, // 100 GBP
+                    1,       // stock
+                    1,       // mint
+                    fingerprints[j],
+                    JOE
+                );
+                tokenIdMap[tnfts[i]].push(tokenIds[0]);
+
+                // initialize batchTokenIdArr
+                batchTokenIdArr[count] = tokenIds[0];
+                ++count;
+
+                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+            }
+            assertEq(ITangibleNFT(tnft).balanceOf(JOE), amountFingerprints);
+        }
+
+        uint256 usdValue = _getUsdValueOfNft(tnfts[0], tokenIdMap[tnfts[0]][0]);
+
+        // deposit tokens via batch
+        vm.startPrank(JOE);
+        for (uint256 i; i < totalTokens; ++i) {
+            ITangibleNFT(batchTnftArr[i]).approve(
+                address(basket),
+                batchTokenIdArr[i]
+            );
+        }
+        basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+
+        vm.stopPrank();
+
+        // ~ Execute checkBudget ~
+
+        uint256 gas_start = gasleft();
+        (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(usdValue);
+        uint256 gas_used = gas_start - gasleft();
+
+        // ~ Post-state check ~
+
+        assertEq(quantity, totalTokens);
+        assertEq(inBudget.length, totalTokens);
+        assertEq(valid, true);
+
+        // report gas metering
+        emit log_named_uint("Gas Metering", gas_used);
+
+        // reset tokenIdMap
+        for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
+    }
+
+
+    // ~ stress fulfillRandomRedeem ~
+
+    // TODO
+
 }

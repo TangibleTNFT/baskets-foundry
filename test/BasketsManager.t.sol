@@ -2,7 +2,11 @@
 pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+
+// oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
@@ -34,6 +38,11 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
+/**
+ * @title BasketsManagerTest
+ * @author Chase Brown
+ * @notice This test file contains integration unit tests for the BasketManager contract. 
+ */
 contract BasketsManagerTest is Utility {
 
     Basket public basket;
@@ -50,6 +59,11 @@ contract BasketsManagerTest is Utility {
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
 
+    // proxies
+    TransparentUpgradeableProxy public basketManagerProxy;
+    TransparentUpgradeableProxy public basketVrfConsumerProxy;
+    ProxyAdmin public proxyAdmin;
+
     // ~ Actors ~
 
     address public factoryOwner;
@@ -64,14 +78,23 @@ contract BasketsManagerTest is Utility {
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+        proxyAdmin = new ProxyAdmin();
 
         basket = new Basket();
 
-        // Deploy BasketManager
-        basketManager = new BasketManager(
-            address(basket),
-            address(factoryProvider)
+        // Deploy basketManager
+        basketManager = new BasketManager();
+
+        // Deploy proxy for basketManager -> initialize
+        basketManagerProxy = new TransparentUpgradeableProxy(
+            address(basketManager),
+            address(proxyAdmin),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryProvider)
+            )
         );
+        basketManager = BasketManager(address(basketManagerProxy));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
