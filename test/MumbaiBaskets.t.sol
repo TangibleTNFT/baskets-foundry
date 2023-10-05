@@ -662,7 +662,7 @@ contract MumbaiBasketsTest is Utility {
         // Execute a deposit
         vm.startPrank(JOE);
         realEstateTnft.approve(address(_basket), JOE_TOKEN_ID);
-        vm.expectRevert("TNFT missing feature");
+        vm.expectRevert("Token incompatible");
         _basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
@@ -747,7 +747,7 @@ contract MumbaiBasketsTest is Utility {
         // Try to execute a deposit
         vm.startPrank(JOE);
         realEstateTnft.approve(address(_basket), JOE_TOKEN_ID);
-        vm.expectRevert("TNFT missing feature");
+        vm.expectRevert("Token incompatible");
         _basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
@@ -759,7 +759,7 @@ contract MumbaiBasketsTest is Utility {
 
         // Try to execute a deposit
         vm.startPrank(JOE);
-        vm.expectRevert("TNFT missing feature");
+        vm.expectRevert("Token incompatible");
         _basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
@@ -771,7 +771,7 @@ contract MumbaiBasketsTest is Utility {
 
         // Try to execute a deposit
         vm.startPrank(JOE);
-        vm.expectRevert("TNFT missing feature");
+        vm.expectRevert("Token incompatible");
         _basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
@@ -2367,15 +2367,12 @@ contract MumbaiBasketsTest is Utility {
 
         uint256 tokenId = tokenIds[0];
 
-        // deal rent to basket
-        deal(address(MUMBAI_USDC), address(basket), _rent);
-
         // verify Joe received token
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
         // sanity check
-        assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
+        //assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
         assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), 0);
@@ -2393,6 +2390,9 @@ contract MumbaiBasketsTest is Utility {
         realEstateTnft.approve(address(basket), tokenId);
         basket.depositTNFT(address(realEstateTnft), tokenId);
         vm.stopPrank();
+
+        // deal rent to basket
+        deal(address(MUMBAI_USDC), address(basket), _rent);
 
         // state check
         assertEq(

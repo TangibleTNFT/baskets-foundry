@@ -1032,15 +1032,15 @@ contract StressTests is Utility {
     // ~ stress checkBudget ~
 
     /// @notice Stress test of checkBudget method with max tokensInBudget.
-    /// NOTE: 1x10 (100 tokens)  -> checkBudget costs 23_442_928 gas
-    /// NOTE: 4x25 (100 tokens)  -> checkBudget costs 26_967_717 gas
-    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 34_143_566 gas -> OVER LIMIT
+    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 11_200_560 gas
+    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 12_386_688 gas
+    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 14_796_555 gas
     function test_stress_checkBudget() public {
 
         // ~ Config ~
 
-        uint256 newCategories = 10;
-        uint256 amountFingerprints = 10;
+        uint256 newCategories = 1;
+        uint256 amountFingerprints = 100;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         uint256 totalTokens = newCategories * amountFingerprints;

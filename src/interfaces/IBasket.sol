@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 
+/// @notice Defines interface for Basket contract.
 interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
 
     struct TokenData {
@@ -60,4 +61,7 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
     function getTotalValueOfBasket() external view returns (uint256 totalValue);
 
     function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external;
+
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external view returns (bool);
+
 }

@@ -125,7 +125,7 @@ contract DeployBasketsToMumbai is Script {
         vm.stopBroadcast();
     }
 
-    // Deployment 1: 
+    // Deployment 1: TODO: Put into confluence
     //   == Logs ==
     //   1. ProxyAdmin: 0x7c501F5f0A23Dc39Ac43d4927ff9f7887A01869B
     //   2. Mock Vrf Coordinator: 0x6a2EA328DE836222BFC7bEA20C348856d2770a99

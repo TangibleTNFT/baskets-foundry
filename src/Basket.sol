@@ -42,7 +42,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     TokenData[] public depositedTnfts;
 
-    RedeemData[] internal tokensInBudget; // Note: Only used during runtime. Otherwise empty
+    //RedeemData[] internal tokensInBudget; // Note: Only used during runtime. Otherwise empty
 
     address[] public tnftsSupported;
 
@@ -195,7 +195,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      */
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
-        require(ITangibleNFTExt(_tangibleNFT).tnftType() == tnftType, "Token incompatible");
+        // if contract supports features, make sure tokenId has a supported feature
+        require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
 
         // get token fingerprint
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
@@ -214,22 +215,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         (, bool exists) = _isSupportedTnft(_tangibleNFT);
         if (!exists) {
             tnftsSupported.push(_tangibleNFT);
-        }
-
-        // if contract supports features, make sure tokenId has a supported feature
-        uint256 length = supportedFeatures.length;
-        if(length > 0) {
-            for (uint256 i; i < length;) {
-                bool supported;
-
-                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-                if (featureData.added) supported = true;
-
-                require(supported, "TNFT missing feature");
-                unchecked {
-                    ++i;
-                }
-            }
         }
 
         // take token from depositor
@@ -312,40 +297,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         delete redeemRequestInFlightData[requestId];
 
         // a. Create an array of TNFTs within budget
-        uint256 len = depositedTnfts.length;
-        for (uint256 i; i < len;) {
+        (RedeemData[] memory tokensInBudget,,) = checkBudget(budget);
 
-            // get usd value of TNFT token being redeemed
-            uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
-            //emit Debug("usd value", usdValue); // NOTE: For testing only
-
-            // Calculate amount of rent to send to redeemer
-            uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue; // TODO: Verify math
-            //emit Debug("amount rent", amountRent); // NOTE: For testing only
-
-            // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-            uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
-            //emit Debug("shares required", sharesRequired); // NOTE: For testing only
-
-            if (budget >= sharesRequired) {
-                tokensInBudget.push(
-                    RedeemData(
-                        depositedTnfts[i].tnft,
-                        depositedTnfts[i].tokenId,
-                        usdValue,
-                        amountRent,
-                        sharesRequired
-                    )
-                );
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        len = tokensInBudget.length;
-        require(len > 0, "0"); // TODO: How does chainlink handle a reverted callback?
+        uint256 len = tokensInBudget.length;
+        require(len > 0, "0");
 
         // b. use randomWord to shuffle array
         for (uint256 i; i < len;) {
@@ -371,9 +326,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
             tokensInBudget[0].amountRent,
             tokensInBudget[0].sharesRequired
         );
-
-        // wipe state array
-        delete tokensInBudget;
     }
 
     /**
@@ -449,7 +401,30 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         return supportedFeatures;
     }
 
+    
     // ~ Public Functions ~
+
+    /**
+     * @notice This view method returns true if a specified token contains the features needed to be deposited into this basket.
+     */
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
+        if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
+        
+        uint256 length = supportedFeatures.length;
+        if(length > 0) {
+            for (uint256 i; i < length;) {
+
+                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
+                if (!featureData.added) return false;
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        return true;
+    }
 
     /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
@@ -460,12 +435,15 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 len = depositedTnfts.length;
         inBudget = new RedeemData[](len);
 
+        uint256 rentBal = getRentBal() / 10**12;
+        uint256 totalNftVal = totalNftValue;
+
         for (uint256 i; i < len;) {
 
             // get usd value of TNFT token
             uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
             // Calculate amount of rent that would be received
-            uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue;
+            uint256 amountRent = (usdValue * rentBal) / totalNftVal;
             // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
             uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
 
@@ -529,12 +507,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     function getRentBal() public view returns (uint256 totalRent) { // TODO: Optimize
         uint256 decimals = decimals() - IERC20Metadata(primaryRentToken).decimals();
 
+        IFactory factory = IFactory(IFactoryProvider(factoryProvider).factory());
+
         // iterate through all supported tnfts and tokenIds deposited for each tnft. // TODO: Test when tnftsSupported.length > 1.
         for (uint256 i; i < tnftsSupported.length;) {
             address tnft = tnftsSupported[i];
 
-            IRentManager rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(tnft));
-            uint256[] memory claimables = rentManager.claimableRentForTokenBatch(tokenIdLibrary[tnft]);
+            IRentManager rentManager = factory.rentManager(ITangibleNFT(tnft));
+            uint256[] memory claimables = rentManager.claimableRentForTokenBatch(tokenIdLibrary[tnft]); // TODO: Get total
 
             for (uint256 j; j < claimables.length;) {
                 if (claimables[j] > 0) {
@@ -585,7 +565,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         //      a. sort array -> too comlpex, would need to build a single array of type (uint) and we'd lose which token IDs were in which TNFT contract.
         //                       Unless we wrote a custom sort method in this contract.
         //      b. Loop through main array, find largest claimable, claim that -> implemented.
-        //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem?
+        //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem TODO: Try this
 
         // fetch current balance of USDC in this contract
         uint256 preBal = primaryRentToken.balanceOf(address(this));
@@ -650,7 +630,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     /**
-     * @dev Get value of TNFT in native currency
+     * @dev Get value of TNFT in native currency TODO: Maybe put this code into a separate contract?
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
         address factory = IFactoryProvider(factoryProvider).factory();
