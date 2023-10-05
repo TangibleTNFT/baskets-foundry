@@ -183,16 +183,8 @@ contract StressTests is Utility {
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
-        // uint256[] memory tokenIds = _createItemAndMint(
-        //     address(realEstateTnft),
-        //     100_000, // 100 GBP
-        //     1,       // stock
-        //     1,       // mint
-        //     RE_FINGERPRINT_2,
-        //     CREATOR
-        // );
 
-       uint256[] memory tokenIds = _mintToken(address(realEstateTnft), 1, RE_FINGERPRINT_1, CREATOR);
+        uint256[] memory tokenIds = _mintToken(address(realEstateTnft), 1, RE_FINGERPRINT_1, CREATOR);
 
         // Deploy basket
         uint256[] memory features = new uint256[](0);

@@ -2265,6 +2265,169 @@ contract MumbaiBasketsTest is Utility {
         assertEq(tokenIdLib.length, batchSize - 1);
     }
 
+    /// @notice Verifies precision calculation of shares when depositing or redeeming
+    function test_baskets_mumbai_checkPrecision_noRent_fuzzing(uint256 _value) public {
+        _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M)
+
+        // creator redeems token to isolate test.
+        vm.startPrank(CREATOR);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
+        vm.stopPrank();
+
+        // ~ Config ~
+
+        uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
+        uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
+
+        // create and mint nft to actor
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            _value, // 100,000 GBP
+            1,   // stock
+            1,   // mintCount
+            1,   // fingerprint
+            JOE  // receiver
+        );
+
+        uint256 tokenId = tokenIds[0];
+
+        // verify Joe received token
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
+        assertEq(realEstateTnft.ownerOf(tokenId), JOE);
+
+        // sanity check
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(),  0);
+
+        // get usd value of token
+        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        uint256 sharePrice = basket.getSharePrice();
+
+        emit log_named_uint("Usd val of token", usdValue);
+
+        // ~ Joe deposits ~
+
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // state check
+        assertEq(
+            (basket.balanceOf(JOE) * sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
+        assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
+        assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+
+        assertEq(basket.balanceOf(JOE), usdValue);
+        assertEq(basket.totalSupply(),  usdValue);
+
+        // ~ Joe redeems ~
+
+        vm.startPrank(JOE);
+        basket.redeemTNFT(address(realEstateTnft), tokenId, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // state check -> verify totalSup is 0. SharesRequired == total balance of actor
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+        assertEq(realEstateTnft.ownerOf(tokenId), JOE);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(),  0);
+    }
+
+    /// @notice Verifies precision calculation of shares when depositing or redeeming
+    function test_baskets_mumbai_checkPrecision_rent_fuzzing(uint256 _value, uint256 _rent) public {
+        _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M) decimals = 3
+        _rent  = bound(_rent, 1, 1_000_000_000_000); // range (.000001 -> 1M) decimals = 6
+
+        // creator redeems token to isolate test.
+        vm.startPrank(CREATOR);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
+        vm.stopPrank();
+
+        // ~ Config ~
+
+        uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
+        uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
+
+        // create and mint nft to actor
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            _value, // 100,000 GBP
+            1,   // stock
+            1,   // mintCount
+            1,   // fingerprint
+            JOE  // receiver
+        );
+
+        uint256 tokenId = tokenIds[0];
+
+        // deal rent to basket
+        deal(address(MUMBAI_USDC), address(basket), _rent);
+
+        // verify Joe received token
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
+        assertEq(realEstateTnft.ownerOf(tokenId), JOE);
+
+        // sanity check
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(),  0);
+
+        // get usd value of token
+        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        uint256 sharePrice = basket.getSharePrice();
+
+        emit log_named_uint("Usd val of token", usdValue);
+
+        // ~ Joe deposits ~
+
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // state check
+        assertEq(
+            (basket.balanceOf(JOE) * sharePrice) / 1 ether + (_rent * 10**12),
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
+
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
+        assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
+        assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+
+        assertEq(basket.balanceOf(JOE), usdValue);
+        assertEq(basket.totalSupply(),  usdValue);
+
+        // ~ Joe redeems ~
+
+        vm.startPrank(JOE);
+        basket.redeemTNFT(address(realEstateTnft), tokenId, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // state check -> verify totalSup is 0. SharesRequired == total balance of actor
+        assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+        assertEq(realEstateTnft.ownerOf(tokenId), JOE);
+
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), 0);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), _rent);
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertEq(basket.totalSupply(),  0);
+    }
+
 
     // ----------------------
     // View Method Unit Tests

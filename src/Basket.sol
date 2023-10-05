@@ -235,9 +235,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
 
-        // find share price
-        uint256 sharePrice = getSharePrice();
-        basketShare = (usdValue * 10 ** decimals()) / sharePrice; // TODO: Verify math
+        // calculate share for depositor with share price
+        basketShare = (usdValue * 10 ** decimals()) / getSharePrice(); // TODO: Verify math
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
@@ -267,11 +266,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue;
         emit Debug("amount rent", amountRent); // NOTE: For testing only
         emit Debug("share price", getSharePrice()); // NOTE: For testing only
-        emit Debug("usdVal + amount rent * 10^12", (usdValue + (amountRent * 10**12))); // NOTE: For testing only
-        emit Debug("usdVal + amount rent * 10^12 with decimals", (usdValue + (amountRent * 10**12)) * 10 ** decimals()); // NOTE: For testing only
-        emit Debug("shares Required", ((usdValue + (amountRent * 10**12)) * 10 ** decimals()) / getSharePrice()); // NOTE: For testing only
 
-        
+        emit Debug("(usdValue + (amountRent * 10**12))", (usdValue + (amountRent * 10**12)));
+        emit Debug("((usdValue + (amountRent * 10**12)) * 1 ether)", ((usdValue + (amountRent * 10**12)) * 1 ether));
+        emit Debug("(((usdValue + (amountRent * 10**12)) * 1 ether) / getSharePrice())", (((usdValue + (amountRent * 10**12)) * 1 ether) / getSharePrice()));
+
         // sharesRequired = ((usdValue + (amountRent * 10**12)) * 10 ** decimals()) / getSharePrice();
         uint256 sharesRequired = _getSharesRequired(usdValue, amountRent);
         emit Debug("shares required", sharesRequired); // NOTE: For testing only
@@ -565,8 +564,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @dev If primaryRentToken.decimals == 18, this func will fail.
      */
     function _getSharesRequired(uint256 usdValue, uint256 amountRent) internal view returns (uint256 sharesRequired) {
+
         amountRent > 0 ?
-            sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals() : // TODO: VERIFY MATH
+            //sharesRequired = ((usdValue + (amountRent * 10**12)) * 10 ** decimals()) / getSharePrice()
+            sharesRequired = ((usdValue + (amountRent * 10**12)) / getSharePrice()) * 10 ** decimals() : // TODO: VERIFY MATH to make sure we're not losing precision
+            //sharesRequired = (((usdValue + (amountRent * 10**12)) * 1 ether) / getSharePrice()) :
+
             sharesRequired = (usdValue * 10 ** decimals()) / getSharePrice();
     }
 
