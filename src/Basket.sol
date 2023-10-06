@@ -196,7 +196,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         // if contract supports features, make sure tokenId has a supported feature
-        require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
+        require(_isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
 
         // get token fingerprint
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
@@ -261,7 +261,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         require(usdValue > 0, "Unsupported TNFT");
 
         // Calculate amount of rent to send to redeemer.
-        uint256 amountRent = (usdValue * (getRentBal() / 10**12)) / totalNftValue;
+        uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
 
         // Get shares required
         uint256 sharesRequired = _quoteShares(usdValue, amountRent);
@@ -385,6 +385,29 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     /**
+     * @notice This view method returns true if a specified token contains the features needed to be deposited into this basket.
+     */
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external view returns (bool) { // TODO: Remove public
+        return _isCompatibleTnft(_tangibleNFT, _tokenId);
+    }
+
+    /**
+     * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
+     * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
+     */
+    function getRentBal() external view returns (uint256 totalRent) {
+        return _getRentBal();
+    }
+
+    function getQuoteIn(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 shares) {
+        return _getQuoteIn(_tangibleNFT, _tokenId);
+    }
+
+    function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) {
+        return _getQuoteOut(_tangibleNFT, _tokenId);
+    }
+
+    /**
      * @notice Allows address(this) to receive ERC721 tokens.
      */
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
@@ -411,28 +434,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     // ~ Public Functions ~
 
     /**
-     * @notice This view method returns true if a specified token contains the features needed to be deposited into this basket.
-     */
-    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
-        if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
-
-        uint256 length = supportedFeatures.length;
-        if(length > 0) {
-            for (uint256 i; i < length;) {
-
-                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-                if (!featureData.added) return false;
-
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
      * @dev This should be called by the front end prior to allowing any user from executing redeemRandomTNFT to ensure
      *      when a callback occurs from vrf, it wasn't wasted fees to find the budget is not eligible for any redeemable TNFTs.
@@ -441,7 +442,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 len = depositedTnfts.length;
         inBudget = new RedeemData[](len);
 
-        uint256 rentBal = getRentBal() / 10**12;
+        uint256 rentBal = _getRentBal() / 10**12;
         uint256 totalNftVal = totalNftValue;
 
         for (uint256 i; i < len;) {
@@ -479,7 +480,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @notice Return the USD value of share token for underlying assets, 18 decimals
      * @dev Underyling assets = TNFT + Accrued revenue
      */
-    function getSharePrice() public view returns (uint256 sharePrice) {
+    function getSharePrice() public view returns (uint256 sharePrice) { // TODO: Remove?
         if (totalSupply() == 0) {
             // initial share price is $1
             return 1e18;
@@ -503,14 +504,42 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         totalValue += totalNftValue;
 
         // get value of rent accrued by this contract
-        totalValue += getRentBal();
+        totalValue += _getRentBal();
+    }
+
+    
+    // ~ Internal Functions ~
+
+    function _getQuoteIn(address _tangibleNFT, uint256 _tokenId) internal view returns (uint256 shares) { // TODO: move off chain
+        // calculate usd value of TNFT with 18 decimals
+        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
+        require(usdValue > 0, "Unsupported TNFT");
+        
+        // get rent amount claimable
+        IRentManager rentManager = _getRentManager(_tangibleNFT);
+        uint256 claimableRent = rentManager.claimableRentForToken(_tokenId);
+
+        // calculate shares for depositor
+        shares = _quoteShares(usdValue, claimableRent);
+    }
+
+    function _getQuoteOut(address _tangibleNFT, uint256 _tokenId) internal view returns (uint256 sharesRequired) { // TODO: move off chain
+        // fetch usd value of tnft
+        uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
+        require(usdValue > 0, "Unsupported TNFT");
+        
+        // get get rent amount
+        uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
+
+        // Get shares required
+        sharesRequired = _quoteShares(usdValue, amountRent);
     }
 
     /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
      */
-    function getRentBal() public view returns (uint256 totalRent) { // TODO: Optimize
+    function _getRentBal() internal view returns (uint256 totalRent) { // TODO: Optimize
         uint256 decimals = decimals() - IERC20Metadata(primaryRentToken).decimals();
 
         // iterate through all supported tnfts and tokenIds deposited for each tnft. // TODO: Test when tnftsSupported.length > 1.
@@ -538,9 +567,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
             totalRent += primaryRentToken.balanceOf(address(this)) * 10**decimals :
             totalRent += primaryRentToken.balanceOf(address(this));
     }
-
-
-    // ~ Internal Functions ~
 
     /**
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
@@ -628,6 +654,28 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
         // send rent to redeemer
         assert(primaryRentToken.transfer(_redeemer, _amount));
+    }
+
+    /**
+     * @notice This view method returns true if a specified token contains the features needed to be deposited into this basket.
+     */
+    function _isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) internal view returns (bool) {
+        if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
+
+        uint256 length = supportedFeatures.length;
+        if(length > 0) {
+            for (uint256 i; i < length;) {
+
+                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
+                if (!featureData.added) return false;
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

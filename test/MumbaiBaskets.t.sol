@@ -489,6 +489,8 @@ contract MumbaiBasketsTest is Utility {
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
         uint256 sharePrice = basket.getSharePrice();
 
+        uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
+
         // Execute a deposit
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), tokenId);
@@ -508,6 +510,7 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
 
         assertEq(basket.balanceOf(JOE), usdValue);
+        assertEq(basket.balanceOf(JOE), quote);
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
 
