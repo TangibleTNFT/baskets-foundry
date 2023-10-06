@@ -547,7 +547,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @dev If primaryRentToken.decimals == 18, this func will fail.
      */
     function _quoteShares(uint256 usdValue, uint256 amountRent) internal view returns (uint256 shares) {
-
         uint256 combinedValue = (usdValue + (amountRent * 10**12));
 
         if (totalSupply() == 0) {
@@ -575,7 +574,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         uint256 preBal = primaryRentToken.balanceOf(address(this));
 
         // first, claim rent for TNFT being redeemed.
-        //IRentManager rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(_tnft));
         uint256 received = _getRentManager(_tnft).claimRentForToken(_tokenId);
 
         // verify claimed balance
@@ -593,7 +591,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
                 address tnft = tnftsSupported[i];
 
                 // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
-                //rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(tnft));
                 uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
 
                 // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
@@ -640,7 +637,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         address factory = IFactoryProvider(factoryProvider).factory();
 
         ITangiblePriceManager priceManager = IFactory(factory).priceManager();
-        //IPriceOracle oracle = priceManager.getPriceOracleForCategory(ITangibleNFT(_tangibleNFT));
         IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
 
         uint256 currencyNum;

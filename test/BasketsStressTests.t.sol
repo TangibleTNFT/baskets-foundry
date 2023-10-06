@@ -94,6 +94,17 @@ contract StressTests is Utility {
     // State variables for VRF.
     uint64 internal subId;
 
+    struct TestConfig {
+        uint256 newCategories;
+        uint256 amountFingerprints;
+        uint256 totalTokens;
+        uint256 rent;
+        uint256[] fingerprints;
+        address[] tnfts;
+    }
+
+    TestConfig config;
+
 
     /// @notice Unit test config method
     function setUp() public {
@@ -999,9 +1010,7 @@ contract StressTests is Utility {
             );
         }
 
-        uint256 gas_start = gasleft();
         uint256[] memory shares = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
-        uint256 gas_used = gas_start - gasleft();
 
         vm.stopPrank();
 
@@ -1020,9 +1029,6 @@ contract StressTests is Utility {
 
         // verify Joe balances
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-
-        // report gas metering
-        emit log_named_uint("Gas Metering", gas_used);
 
         // reset tokenIdMap
         for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
@@ -1112,18 +1118,13 @@ contract StressTests is Utility {
 
         // ~ Execute checkBudget ~
 
-        uint256 gas_start = gasleft();
         (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(usdValue);
-        uint256 gas_used = gas_start - gasleft();
 
         // ~ Post-state check ~
 
         assertEq(quantity, totalTokens);
         assertEq(inBudget.length, totalTokens);
         assertEq(valid, true);
-
-        // report gas metering
-        emit log_named_uint("Gas Metering", gas_used);
 
         // reset tokenIdMap
         for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
@@ -1132,6 +1133,114 @@ contract StressTests is Utility {
 
     // ~ stress fulfillRandomRedeem ~
 
+    // struct TestConfig {
+    //     uint256 newCategories;
+    //     uint256 amountFingerprints;
+    //     uint256 totalTokens;
+    //     uint256[] fingerprints;
+    //     address[] tnfts;
+    // }
+
+    function test_stress_fulfillRandomRedeem_fuzzing(uint256 randomWord) public {
+        
+        // ~ Config ~
+
+        config.newCategories = 5;
+        config.amountFingerprints = 5;
+        config.totalTokens = config.newCategories * config.amountFingerprints;
+
+        // declare arrays that will be used for args for batchDepositTNFT
+        address[] memory batchTnftArr = new address[](config.totalTokens);
+        uint256[] memory batchTokenIdArr = new uint256[](config.totalTokens);
+
+        // store all new fingerprints in array.
+        uint256 i;
+        for (; i < config.amountFingerprints; ++i) {
+            config.fingerprints.push(i);
+        }
+
+        // create multiple tnfts.
+        uint256 count;
+        for (i = 0; i < config.newCategories; ++i) {
+            config.tnfts.push(_deployNewTnftContract(Strings.toString(i)));
+            
+            // initialize batchTnftArr
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                batchTnftArr[count] = config.tnfts[i];
+                ++count;
+            }
+        }
+
+        // mint multiple tokens for each contract
+        count = 0;
+        for (i = 0; i < config.newCategories; ++i) {
+            address tnft = config.tnfts[i];
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+
+                uint256[] memory tokenIds = _createItemAndMint(
+                    tnft,
+                    100_000, // 100 GBP
+                    1,       // stock
+                    1,       // mint
+                    config.fingerprints[j],
+                    JOE
+                );
+                tokenIdMap[config.tnfts[i]].push(tokenIds[0]);
+
+                // initialize batchTokenIdArr
+                batchTokenIdArr[count] = tokenIds[0];
+                ++count;
+
+                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+            }
+            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
+        }
+
+        uint256 usdValue = _getUsdValueOfNft(config.tnfts[0], tokenIdMap[config.tnfts[0]][0]);
+
+        // deposit tokens via batch
+        vm.startPrank(JOE);
+        for (i = 0; i < config.totalTokens; ++i) {
+            ITangibleNFT(batchTnftArr[i]).approve(
+                address(basket),
+                batchTokenIdArr[i]
+            );
+        }
+        uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+
+        vm.stopPrank();
+
+        // ~ Execute redeemRandomTNFT ~
+
+        vm.prank(JOE);
+        uint256 requestId = basket.redeemRandomTNFT(sharesReceived[0]);
+
+        // Post-state check 1
+
+        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
+        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
+        assertEq(redeemer, JOE);
+        assertEq(budget, sharesReceived[0]);
+
+        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
+        assertEq(basketVrfConsumer.fulfilled(requestId), false);
+
+        // ~ Execute fulfillRandomRedeem ~
+
+        vm.prank(address(vrfCoordinatorMock));
+        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
+
+        // ~ Post-state check 2 ~
+
+        //
+
+        // reset tokenIdMap
+        for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
+    }
+
     // TODO
+    function test_stress_fulfillRandomRedeem_rent_fuzzing(uint256 randomWord) public {}
 
 }
