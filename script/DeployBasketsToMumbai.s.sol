@@ -134,4 +134,14 @@ contract DeployBasketsToMumbai is Script {
     //   5. BasketManager Proxy: 0x95A3Af3e65A669792d5AbD2e058C4EcC34A98eBb
     //   6. BasketVrfConsumer Implementation: 0xAf960b9B057f59c68e55Ff9aC29966d9bf62b71B
     //   7. BasketVrfConsumer Proxy: 0x63284a454E9217c01c900428F1029dBBb784D9E3
+
+    // Deployment 2:
+    //     == Logs ==
+    //   1. ProxyAdmin: 0x400f6195fd33E22DFB551F9e65AACf7BA4557040
+    //   2. Mock Vrf Coordinator: 0x297670562a8BcfACBe5c30BBAC5ca7062ac7f652
+    //   3. Basket Implementation: 0x7d262e3e7bb98e99595086fdE99c8AEDcc97d0fe
+    //   4. BasketManager Implementation: 0x13bb0a0106ff48C422F6d91168f40FD66327549f
+    //   5. BasketManager Proxy: 0x301AB99BbB929708bd18544D3D44d60BdE5ccF44
+    //   6. BasketVrfConsumer Implementation: 0xb3221B24e57F7f6786FedE090D46a612f598Eff9
+    //   7. BasketVrfConsumer Proxy: 0x366055CA18a4c21719BEC16a4dF5fBC43FFD4E64
 }

@@ -1032,9 +1032,9 @@ contract StressTests is Utility {
     // ~ stress checkBudget ~
 
     /// @notice Stress test of checkBudget method with max tokensInBudget.
-    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 11_200_560 gas
-    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 12_386_688 gas
-    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 14_796_555 gas
+    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 11_201_368 gas
+    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 12_865_715 gas
+    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 16_391_683 gas
     function test_stress_checkBudget() public {
 
         // ~ Config ~

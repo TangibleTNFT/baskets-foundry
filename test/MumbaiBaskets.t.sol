@@ -2371,8 +2371,11 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
+        // deal rent to basket
+        deal(address(MUMBAI_USDC), address(basket), _rent);
+
         // sanity check
-        //assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
+        assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
         assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), 0);
@@ -2391,8 +2394,7 @@ contract MumbaiBasketsTest is Utility {
         basket.depositTNFT(address(realEstateTnft), tokenId);
         vm.stopPrank();
 
-        // deal rent to basket
-        deal(address(MUMBAI_USDC), address(basket), _rent);
+        
 
         // state check
         assertEq(
