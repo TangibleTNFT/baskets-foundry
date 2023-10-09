@@ -356,12 +356,13 @@ contract StressTests is Utility {
     // a. deposit testing with multiple TNFT addresses and multiple tokens for each TNFT contract
     //    - test deposit and batch deposits with fuzzing - DONE
     //    - again, but with rent accruing -> changing share price - DONE
+    //    - test deposit with rent vs deposit with no rent claimable TODO
     // b. stress test fulfillRandomRedeem
     //    - 1000+ depositedTnfts
-    //    - tokensInBudget.length == depositedTnfts.length when > 1000 or smaller
     // c. stress test _redeemRent
-    //    - 10-100+ tnftsSupported
-    //    - refactor iterating thru claimable rent array and test multiple iterations with 100-1000+ TNFTs
+    //    - 10-100+ tnftsSupported DONE
+    //    - refactor iterating thru claimable rent array and test multiple iterations with 100-1000+ TNFTs DONE
+    //    - test multiple redeems in succession. TODO
     // d. multiple baskets
 
 
@@ -1266,15 +1267,15 @@ contract StressTests is Utility {
     /// @notice Stress test of Basket::fullfillRandomRedeem with numerous tokens and random rent claimable for each token.
     /// @dev basis: 100 tokens to iterate through.
 
-    /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 11_018_250 gas
-    /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 25_376_503 gas
-    /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 28_733_056 gas
+    /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 23_802_084 gas
+    /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 25_241_626 gas
+    /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 28_793_880 gas
     function test_stress_fulfillRandomRedeem_rent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
 
-        config.newCategories = 4;
-        config.amountFingerprints = 25;
+        config.newCategories = 10;
+        config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1363,8 +1364,6 @@ contract StressTests is Utility {
             );
             vm.stopPrank();
         }
-
-        //uint256 usdValue = _getUsdValueOfNft(config.tnfts[0], tokenIdMap[config.tnfts[0]][0]);
 
         // deposit tokens via batch
         vm.startPrank(JOE);

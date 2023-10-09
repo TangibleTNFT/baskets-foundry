@@ -70,6 +70,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     address public deployer;
 
+    uint256 internal claimIndex;
+
 
     // ~ Events ~
 
@@ -631,23 +633,40 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
                 }
             }
 
-            // we now iterate through the master claimable rent array, find the largest amount claimable, claim, then check if we need more
+            // start iterating through the master claimable rent array, starting from where we left off before using claimIndex.
             while (_amount > primaryRentToken.balanceOf(address(this))) {
-                uint256 mostValuableIndex;
-                for (uint256 i; i < claimableRent.length;) {  // TODO: Refactor -> finding largest claimable multiple times can get expensive.
-                    if (claimableRent[i].amountClaimable > claimableRent[mostValuableIndex].amountClaimable) {
-                        mostValuableIndex = i;
-                    }
-                    unchecked {
-                        ++i;
-                    }
-                }
-                //rentManager = IFactory(factory).rentManager(ITangibleNFT(claimableRent[mostValuableIndex].tnft));
-                preBal = primaryRentToken.balanceOf(address(this));
+                // if claimIndex gets to the end of array, reset to beginning.
+                if (claimIndex >= claimableRent.length) claimIndex = 0;
 
-                received = _getRentManager(claimableRent[mostValuableIndex].tnft).claimRentForToken(claimableRent[mostValuableIndex].tokenId);
-                require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
+                IRentManager rentManager = _getRentManager(claimableRent[claimIndex].tnft);
+                uint256 tokenId = claimableRent[claimIndex].tokenId;
+
+                if (rentManager.claimableRentForToken(tokenId) > 0) {
+                    preBal = primaryRentToken.balanceOf(address(this));
+                    received = rentManager.claimRentForToken(tokenId);
+                    require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
+                }
+
+                unchecked {
+                    ++claimIndex;
+                }
             }
+            //while (_amount > primaryRentToken.balanceOf(address(this))) {
+            //    uint256 mostValuableIndex;
+            //    for (uint256 i; i < claimableRent.length;) {  // TODO: Refactor -> finding largest claimable multiple times can get expensive.
+            //        if (claimableRent[i].amountClaimable > claimableRent[mostValuableIndex].amountClaimable) {
+            //            mostValuableIndex = i;
+            //        }
+            //        unchecked {
+            //            ++i;
+            //        }
+            //    }
+            //    //rentManager = IFactory(factory).rentManager(ITangibleNFT(claimableRent[mostValuableIndex].tnft));
+            //    preBal = primaryRentToken.balanceOf(address(this));
+
+            //    received = _getRentManager(claimableRent[mostValuableIndex].tnft).claimRentForToken(claimableRent[mostValuableIndex].tokenId);
+            //    require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
+            //}
 
         }
 
