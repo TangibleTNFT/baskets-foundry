@@ -9,7 +9,6 @@ import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfa
 
 // tangible imports
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 
 // local imports
@@ -57,7 +56,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     /// @notice Modifier to verify msg.sender was the basket manager contract.
     modifier onlyBasket() {
-        IBasketManager basketManager = IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager());
+        IBasketManager basketManager = IBasketManager(IFactory(factory).basketsManager());
         require(basketManager.isBasket(msg.sender), "Caller is not valid basket");
         _;
     }
@@ -65,7 +64,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
     // ~ Constructor ~
 
-    constructor() FactoryModifiers(address(0)) {
+    constructor() {
         _disableInitializers();
     }
 
@@ -75,9 +74,9 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     /**
      * @notice Initializes BasketVrfConsumer contract.
      */
-    function initialize(address _factoryProvider, uint64 _subId, address _vrfCoordinator, bytes32 _keyHash) external initializer {
+    function initialize(address _factory, uint64 _subId, address _vrfCoordinator, bytes32 _keyHash) external initializer {
         __VRFConsumerBase_init(_vrfCoordinator);
-        __FactoryModifiers_init(_factoryProvider);
+        __FactoryModifiers_init(_factory);
 
         subId = _subId;
         keyHash = _keyHash;

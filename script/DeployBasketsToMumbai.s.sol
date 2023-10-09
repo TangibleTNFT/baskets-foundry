@@ -7,9 +7,6 @@ import {Script, console2} from "../lib/forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
-// tangible interface imports
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
-
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
@@ -41,9 +38,6 @@ contract DeployBasketsToMumbai is Script {
     TransparentUpgradeableProxy public basketManagerProxy;
     TransparentUpgradeableProxy public basketVrfConsumerProxy;
     ProxyAdmin public proxyAdmin;
-
-    // integration contracts
-    IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
 
     // wallets
     address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
@@ -88,7 +82,7 @@ contract DeployBasketsToMumbai is Script {
             address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryProvider)
+                Mumbai_FactoryV2
             )
         );
 
@@ -100,7 +94,7 @@ contract DeployBasketsToMumbai is Script {
             address(basketVrfConsumer),
             address(proxyAdmin),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                address(factoryProvider),
+                Mumbai_FactoryV2,
                 subId,
                 address(vrfCoordinatorMock),
                 MUMBAI_VRF_KEY_HASH

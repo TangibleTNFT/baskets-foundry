@@ -16,9 +16,6 @@ import { BasketManager } from "../src/BasketsManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
-// tangible contract imports
-import { FactoryProvider } from "@tangible/FactoryProvider.sol";
-
 // tangible interface imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
@@ -27,7 +24,6 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
@@ -54,7 +50,6 @@ contract BasketsManagerTest is Utility {
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
     IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
@@ -77,7 +72,7 @@ contract BasketsManagerTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
-        factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+        factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin();
 
         basket = new Basket();
@@ -91,7 +86,7 @@ contract BasketsManagerTest is Utility {
             address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryProvider)
+                address(factoryV2)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -192,7 +187,6 @@ contract BasketsManagerTest is Utility {
         vm.label(address(realEstateOracle), "RealEstate_ORACLE");
         vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
         vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(factoryProvider), "FACTORY_PROVIDER");
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");
@@ -222,7 +216,7 @@ contract BasketsManagerTest is Utility {
     function test_basketManager_init_state() public {
         assertEq(basketManager.featureLimit(), 10);
         assertEq(basketManager.beacon().implementation(), address(basket));
-        assertEq(basketManager.factoryProvider(), address(factoryProvider));
+        assertEq(basketManager.factory(), address(factoryV2));
     }
 
 

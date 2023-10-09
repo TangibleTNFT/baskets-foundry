@@ -12,7 +12,6 @@ import { BasketBeaconProxy } from "./proxy/BasketBeaconProxy.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -67,7 +66,7 @@ contract BasketManager is Initializable, FactoryModifiers {
 
     // ~ Constructor ~
 
-    constructor() FactoryModifiers(address(0)) {
+    constructor() {
         _disableInitializers();
     }
 
@@ -77,10 +76,10 @@ contract BasketManager is Initializable, FactoryModifiers {
     /**
      * @notice Initializes BasketManager contract.
      * @param _initBasketImplementation Contract address of Basket implementation contract.
-     * @param _factoryProvider Contract address of FactoryProvider contract.
+     * @param _factory Contract address of Factory contract.
      */
-    function initialize(address _initBasketImplementation, address _factoryProvider) external initializer {
-        __FactoryModifiers_init(_factoryProvider);
+    function initialize(address _initBasketImplementation, address _factory) external initializer {
+        __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(_initBasketImplementation);
 
         featureLimit = 10; // TODO: Add setter
@@ -116,7 +115,7 @@ contract BasketManager is Initializable, FactoryModifiers {
         require(featureLimit >= _features.length, "Too many features");
 
         // verify _tnftType is a supported type in the Metadata contract.
-        address metadata = IFactory(IFactoryProvider(factoryProvider).factory()).tnftMetadata();
+        address metadata = IFactory(factory).tnftMetadata();
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
@@ -140,7 +139,7 @@ contract BasketManager is Initializable, FactoryModifiers {
             abi.encodeWithSelector(Basket.initialize.selector,  // TODO: Verify all this data is indeed being stored in proxy
                 _name,
                 _symbol,
-                factoryProvider,
+                factory,
                 _tnftType,
                 _rentToken,
                 _features,

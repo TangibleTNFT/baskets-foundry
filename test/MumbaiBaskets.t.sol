@@ -21,8 +21,7 @@ import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
-// tangible contract imports
-import { FactoryProvider } from "@tangible/FactoryProvider.sol";
+// tangible contract
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
 
 // tangible interface imports
@@ -33,7 +32,6 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
@@ -67,7 +65,6 @@ contract MumbaiBasketsTest is Utility {
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
     IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
@@ -102,7 +99,7 @@ contract MumbaiBasketsTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
-        factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+        factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin();
 
         // vrf config
@@ -122,7 +119,7 @@ contract MumbaiBasketsTest is Utility {
             address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryProvider)
+                address(factoryV2)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -147,7 +144,7 @@ contract MumbaiBasketsTest is Utility {
             address(basketVrfConsumer),
             address(proxyAdmin),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                address(factoryProvider),
+                address(factoryV2),
                 subId,
                 address(vrfCoordinatorMock),
                 MUMBAI_VRF_KEY_HASH
@@ -298,7 +295,6 @@ contract MumbaiBasketsTest is Utility {
         vm.label(address(realEstateOracle), "RealEstate_ORACLE");
         vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
         vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(factoryProvider), "FACTORY_PROVIDER");
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
@@ -431,9 +427,6 @@ contract MumbaiBasketsTest is Utility {
         // verify realEstateTnft
         assertEq(realEstateTnft.tokensFingerprint(1), RE_FINGERPRINT_1); // 2032
 
-        // verify factoryProvider has correct factory
-        assertEq(factoryProvider.factory(), address(factoryV2));
-
         // verify factoryV2 has correct priceManager
         assertEq(address(factoryV2.priceManager()), address(priceManager));
 
@@ -443,7 +436,6 @@ contract MumbaiBasketsTest is Utility {
         // verify BasketsVrfConsumer initial state
         assertEq(basketVrfConsumer.subId(), subId);
         assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
-        assertEq(basketVrfConsumer.factoryProvider(), address(factoryProvider));
         assertEq(basketVrfConsumer.requestConfirmations(), 20);
         assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
         assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));

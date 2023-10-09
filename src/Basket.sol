@@ -15,7 +15,6 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 // tangible imports
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
@@ -112,7 +111,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     // ~ Constructor ~
 
-    constructor() FactoryModifiers(address(0)) {
+    constructor() {
         _disableInitializers();
     }
 
@@ -238,7 +237,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         basketShare = _quoteShares(usdValue, receivedRent);
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
-        if (msg.sender == IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()) {
+        if (msg.sender == IFactory(factory).basketsManager()) {
             _depositor = deployer;
         }
 
@@ -643,7 +642,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
                         ++i;
                     }
                 }
-                //rentManager = IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(claimableRent[mostValuableIndex].tnft));
+                //rentManager = IFactory(factory).rentManager(ITangibleNFT(claimableRent[mostValuableIndex].tnft));
                 preBal = primaryRentToken.balanceOf(address(this));
 
                 received = _getRentManager(claimableRent[mostValuableIndex].tnft).claimRentForToken(claimableRent[mostValuableIndex].tokenId);
@@ -682,15 +681,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @dev Get value of TNFT in native currency TODO: Maybe put this code into a separate contract?
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
-        address factory = IFactoryProvider(factoryProvider).factory();
-
+        
         ITangiblePriceManager priceManager = IFactory(factory).priceManager();
         IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
 
         uint256 currencyNum;
         (value, currencyNum) = oracle.marketPriceNativeCurrency(_fingerprint);
 
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(IFactoryProvider(factoryProvider).factory()).currencyFeed());
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory).currencyFeed());
         currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
 
         decimals = oracle.decimals();
@@ -711,7 +709,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @dev Get USD Price of given currency from ChainLink
      */
     function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(IFactoryProvider(factoryProvider).factory()).currencyFeed());
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory).currencyFeed());
         AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
         
         (, int256 price, , , ) = priceFeed.latestRoundData();
@@ -721,11 +719,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     function _getBasketVrfConsumer() internal returns (address) {
-        return IBasketManager(IFactory(IFactoryProvider(factoryProvider).factory()).basketsManager()).basketsVrfConsumer();
+        return IBasketManager(IFactory(factory).basketsManager()).basketsVrfConsumer();
     }
 
     function _getRentManager(address _tangibleNFT) internal view returns (IRentManager) {
-        return IFactory(IFactoryProvider(factoryProvider).factory()).rentManager(ITangibleNFT(_tangibleNFT));
+        return IFactory(factory).rentManager(ITangibleNFT(_tangibleNFT));
     }
 
     /**

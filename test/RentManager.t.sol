@@ -2,12 +2,16 @@
 pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
-import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 
+// oz imports
+import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+
+// tangible contracs
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
 import { RentManager } from "@tangible/RentManager.sol";
 import { RentManagerDeployer } from "@tangible/RentManagerDeployer.sol";
-import { FactoryProvider } from "@tangible/FactoryProvider.sol";
 import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";
 import { TangiblePriceManagerV2 } from "@tangible/TangiblePriceManagerV2.sol";
 import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
@@ -16,10 +20,12 @@ import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
 import { TangibleNFTDeployerV2 } from "@tangible/TangibleNFTDeployerV2.sol";
 import { TNFTMarketplaceV2 } from "@tangible/MarketplaceV2.sol";
 
+// interfaces
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
+// local
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -30,17 +36,29 @@ import "./utils/Utility.sol";
  */
 contract RentManagerTest is Utility {
     RentManager public rentManager;
-    RentManagerDeployer public rentManagerDeployer;
+    TransparentUpgradeableProxy public rentManagerProxy;
 
-    FactoryProvider public factoryProvider;
+    RentManagerDeployer public rentManagerDeployer;
+    TransparentUpgradeableProxy public rentManagerDeployerProxy;
+
+    ProxyAdmin public proxyAdmin;
+
     FactoryV2 public factory;
+    TransparentUpgradeableProxy public factoryProxy;
     TangibleNFTV2 public realEstateTnft;
+    TransparentUpgradeableProxy public realEstateTnftProxy;
     CurrencyFeedV2 public currencyFeed;
+    TransparentUpgradeableProxy public currencyFeedProxy;
     TNFTMetadata public metadata;
+    TransparentUpgradeableProxy public metadataProxy;
     TangiblePriceManagerV2 public priceManager;
+    TransparentUpgradeableProxy public priceManagerProxy;
     RealtyOracleTangibleV2 public realEstateOracle;
+    TransparentUpgradeableProxy public realEstateOracleProxy;
     TangibleNFTDeployerV2 public tnftDeployer;
+    TransparentUpgradeableProxy public tnftDeployerProxy;
     TNFTMarketplaceV2 public marketplace;
+    TransparentUpgradeableProxy public marketplaceProxy;
 
     address public constant TANGIBLE_LABS = address(bytes20(bytes("Tangible labs MultiSig")));
     address public constant CATEGORY_OWNER = address(bytes20(bytes("Category Owner")));
@@ -59,96 +77,152 @@ contract RentManagerTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
+        proxyAdmin = new ProxyAdmin();
+
         // ~ deployment ~
 
-        // Deploy Factory
-        factory = new FactoryV2(
-            address(MUMBAI_USDC),
-            TANGIBLE_LABS
+        // Deploy Factory with proxy
+        factory = new FactoryV2();
+        factoryProxy = new TransparentUpgradeableProxy(
+            address(factory),
+            address(proxyAdmin),
+            abi.encodeWithSelector(FactoryV2.initialize.selector,
+                address(MUMBAI_USDC),
+                TANGIBLE_LABS
+            )
         );
+        factory = FactoryV2(address(factoryProxy));
 
-        // Deploy Factory Provider
-        factoryProvider = new FactoryProvider();
-        factoryProvider.initialize(address(factory));
-
-        // Deplot tnft deployer
-        tnftDeployer = new TangibleNFTDeployerV2(
-            address(factoryProvider)
+        // Deplot tnft deployer with proxy
+        tnftDeployer = new TangibleNFTDeployerV2();
+        tnftDeployerProxy = new TransparentUpgradeableProxy(
+            address(tnftDeployer),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TangibleNFTDeployerV2.initialize.selector,
+                address(factory)
+            )
         );
+        tnftDeployer = TangibleNFTDeployerV2(address(tnftDeployerProxy));
 
-        // Deploy Marketplace
-        marketplace = new TNFTMarketplaceV2(
-            address(factoryProvider)
+        // Deploy Marketplace with proxy
+        marketplace = new TNFTMarketplaceV2();
+        marketplaceProxy = new TransparentUpgradeableProxy(
+            address(marketplace),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TNFTMarketplaceV2.initialize.selector,
+                address(factory)
+            )
         );
+        marketplace = TNFTMarketplaceV2(address(marketplaceProxy));
 
         // Deploy Currency Feed
-        currencyFeed = new CurrencyFeedV2(
-            address(factoryProvider)
-        );
-
-        // Deploy Price Manager
-        priceManager = new TangiblePriceManagerV2(
-            address(factoryProvider)
-        );
-
-        // Deploy Real Estate Oracle
-        realEstateOracle = new RealtyOracleTangibleV2(
-            address(factoryProvider),
+        currencyFeed = new CurrencyFeedV2();
+        currencyFeedProxy = new TransparentUpgradeableProxy(
             address(currencyFeed),
-            TANGIBLE_ORACLE
+            address(proxyAdmin),
+            abi.encodeWithSelector(CurrencyFeedV2.initialize.selector,
+                address(factory)
+            )
         );
+        currencyFeed = CurrencyFeedV2(address(currencyFeedProxy));
 
-        // Deploy TNFT Metadata
-        metadata = new TNFTMetadata(
-            address(factoryProvider)
+        // Deploy Price Manager with proxy
+        priceManager = new TangiblePriceManagerV2();
+        priceManagerProxy = new TransparentUpgradeableProxy(
+            address(priceManager),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TangiblePriceManagerV2.initialize.selector,
+                address(factory)
+            )
         );
+        priceManager = TangiblePriceManagerV2(address(priceManagerProxy));
 
-        // Deploy TangibleNFTV2 -> for real estate
-        realEstateTnft = new TangibleNFTV2(
-            address(factoryProvider),
-            "TangibleREstate",
-            "RLTY", 
-            BASE_URI,
-            false,
-            false,
-            false,
-            TNFTTYPE
+        // Deploy Real Estate Oracle with proxy
+        realEstateOracle = new RealtyOracleTangibleV2();
+        realEstateOracleProxy = new TransparentUpgradeableProxy(
+            address(realEstateOracle),
+            address(proxyAdmin),
+            abi.encodeWithSelector(RealtyOracleTangibleV2.initialize.selector,
+                address(factory),
+                address(currencyFeed),
+                TANGIBLE_ORACLE
+            )
         );
+        realEstateOracle = RealtyOracleTangibleV2(address(realEstateOracleProxy));
 
-        rentManager = new RentManager(
-            address(realEstateTnft),
-            address(factoryProvider)
+        // Deploy TNFT Metadata with proxy
+        metadata = new TNFTMetadata();
+        metadataProxy = new TransparentUpgradeableProxy(
+            address(metadata),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TNFTMetadata.initialize.selector,
+                address(factory)
+            )
         );
+        metadata = TNFTMetadata(address(metadataProxy));
+
+        // Deploy rent manager deployer with proxy
+        rentManagerDeployer = new RentManagerDeployer();
+        rentManagerDeployerProxy = new TransparentUpgradeableProxy(
+            address(rentManagerDeployer),
+            address(proxyAdmin),
+            abi.encodeWithSelector(RentManagerDeployer.initialize.selector,
+                address(factory)
+            )
+        );
+        rentManagerDeployer = RentManagerDeployer(address(rentManagerDeployerProxy));
+
+        // Deploy rent manager with proxy
+        rentManager = new RentManager();
+        rentManagerProxy = new TransparentUpgradeableProxy(
+            address(rentManager),
+            address(proxyAdmin),
+            abi.encodeWithSelector(RentManager.initialize.selector,
+                address(rentManager),
+                address(factory)
+            )
+        );
+        rentManager = RentManager(address(rentManagerProxy));
 
 
         // set contracts on Factory
-        factory.setContract(FactoryV2.FACT_ADDRESSES.LABS,            TANGIBLE_LABS);
-        factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER,   address(priceManager));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META,       address(metadata));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE,     address(marketplace));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER,   address(tnftDeployer));
-        factory.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED,   address(currencyFeed));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.LABS,                  TANGIBLE_LABS);
+        factory.setContract(FactoryV2.FACT_ADDRESSES.PRICE_MANAGER,         address(priceManager));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_META,             address(metadata));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.MARKETPLACE,           address(marketplace));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.TNFT_DEPLOYER,         address(tnftDeployer));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED,         address(currencyFeed));
+        factory.setContract(FactoryV2.FACT_ADDRESSES.RENT_MANAGER_DEPLOYER, address(rentManagerDeployer));
 
         // Add TNFTType on TNFTMetadata contract
         metadata.addTNFTType(
             TNFTTYPE,
             "RealEstateType1",
-            false // TODO: Revisit -> This should be true -> Will deploy rent manager
+            true
         );
 
         // Create new category with TNFTType on the Factory -> deploying TangibleNFT contract
-        factory.setCategory(
+        vm.prank(TANGIBLE_LABS);
+        ITangibleNFT tnft = factory.newCategory(
             "TangibleREstate",
-            realEstateTnft,
-            rentManager,
+            "RLTY",
+            BASE_URI,
+            false,
+            false,
             address(realEstateOracle),
-            CATEGORY_OWNER
+            false,
+            TNFTTYPE
         );
+        realEstateTnft = TangibleNFTV2(address(tnft));
 
-        vm.prank(CATEGORY_OWNER);
+        IRentManager rm = factory.rentManager(tnft);
+        rentManager = RentManager(address(rm));
+
+        vm.prank(TANGIBLE_LABS);
         rentManager.updateDepositor(CATEGORY_OWNER);
 
         // Add fingerprints to TNFT contract
+        vm.prank(TANGIBLE_LABS);
         realEstateTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
 
         // Add TNFTType oracle to chainlinkRWA oracle and create item -> stocking item
@@ -194,7 +268,6 @@ contract RentManagerTest is Utility {
         vm.label(TANGIBLE_ORACLE, "CHAINLINK_ORACLE");
         vm.label(CATEGORY_OWNER, "CATEGORY OWNER");
         vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(factoryProvider), "FACTORY_PROVIDER");
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");

@@ -3,9 +3,11 @@ pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
 import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
-import { FactoryProvider } from "@tangible/FactoryProvider.sol";
 
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
@@ -18,9 +20,13 @@ import "./utils/Utility.sol";
  * @notice Testing file for TnftMetadata contract.
  */
 contract TnftMetadataTest is Utility {
-    FactoryProvider public factoryProvider;
     FactoryV2 public factory;
+    TransparentUpgradeableProxy public factoryProxy;
+
     TNFTMetadata public metadata;
+    TransparentUpgradeableProxy public metadataProxy;
+
+    ProxyAdmin public proxyAdmin;
 
     //ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
     //address public factoryOwner = IOwnable(Mumbai_FactoryV2).contractOwner();
@@ -41,21 +47,31 @@ contract TnftMetadataTest is Utility {
 
 
     function setUp() public {
-        // Deploy Factory
-        factory = new FactoryV2(
-            address(MUMBAI_USDC),
-            TANGIBLE_LABS
+
+        proxyAdmin = new ProxyAdmin();
+
+        // Deploy Factory with proxy
+        factory = new FactoryV2();
+        factoryProxy = new TransparentUpgradeableProxy(
+            address(factory),
+            address(proxyAdmin),
+            abi.encodeWithSelector(FactoryV2.initialize.selector,
+                address(MUMBAI_USDC),
+                TANGIBLE_LABS
+            )
         );
+        factory = FactoryV2(address(factoryProxy));
 
-        // Deploy Factory Provider
-        factoryProvider = new FactoryProvider();
-        factoryProvider.initialize(address(factory));
-
-        // Deploy TNFT Metadata
-        metadata = new TNFTMetadata(
-            address(factoryProvider)
+        // Deploy TNFT Metadata with proxy
+        metadata = new TNFTMetadata();
+        metadataProxy = new TransparentUpgradeableProxy(
+            address(metadata),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TNFTMetadata.initialize.selector,
+                address(factory)
+            )
         );
-
+        metadata = TNFTMetadata(address(metadataProxy));
     }
 
 
