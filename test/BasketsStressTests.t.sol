@@ -357,6 +357,7 @@ contract StressTests is Utility {
     //    - test deposit and batch deposits with fuzzing - DONE
     //    - again, but with rent accruing -> changing share price - DONE
     //    - test deposit with rent vs deposit with no rent claimable TODO
+    //    - test what would happen if deployer immediately deposits 1-100 TNFTs at once
     // b. stress test fulfillRandomRedeem
     //    - 1000+ depositedTnfts
     // c. stress test _redeemRent

@@ -302,13 +302,43 @@ contract BasketsManagerTest is Utility {
         features[0] = RE_FEATURE_1;
         features[1] = RE_FEATURE_2;
 
-        // deploy another basket with same features
+        // deploy another basket with same name -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 2);
+        vm.expectRevert("Name not available");
+        basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
+        );
+        vm.stopPrank();
+
+        // deploy another basket with same symbol -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), 2);
+        vm.expectRevert("Symbol not available");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(1)
+        );
+        vm.stopPrank();
+
+        // deploy another basket with same features -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), 2);
         vm.expectRevert("Basket already exists");
         basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
+            "Tangible Basket Token1",
+            "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,

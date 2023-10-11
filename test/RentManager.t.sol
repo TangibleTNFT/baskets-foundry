@@ -549,11 +549,12 @@ contract RentManagerTest is Utility {
         assertEq(claimables.length, amountTNFTs);
         assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
         uint256 totalRentClaimable;
-        for (uint256 i; i < amountTNFTs; ++i) {
+        for (uint256 i; i < claimables.length; ++i) {
             assertEq(claimables[i], baseDeposit/2);
             totalRentClaimable += claimables[i];
         }
         assertEq(totalRentClaimable, amount/2);
+        assertEq(totalRentClaimable, rentManager.claimableRentForTokenBatchTotal(tokenIds));
 
         // Execute claimRentForTokenBatch
         vm.prank(JOE);

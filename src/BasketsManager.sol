@@ -37,6 +37,12 @@ contract BasketManager is Initializable, FactoryModifiers {
     /// @notice Mapping that stores whether a specified address is a basket.
     mapping(address => bool) public isBasket;
 
+    /// @notice Mapping that stores each name (as a hash) for each basket.
+    mapping(address => bytes32) public basketNames;
+
+    /// @notice Mapping that stores each symbol (as a hash) for each basket.
+    mapping(address => bytes32) public basketSymbols;
+
     /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
     UpgradeableBeacon public beacon;
 
@@ -119,6 +125,12 @@ contract BasketManager is Initializable, FactoryModifiers {
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
+        // verify _name is unique and available
+        require(checkBasketNameAvailability(keccak256(abi.encodePacked(_name))), "Name not available");
+
+        // verify _symbol is unique and available
+        require(checkBasketSymbolAvailability(keccak256(abi.encodePacked(_symbol))), "Symbol not available");
+
         // create unique hash
         bytes32 hashedFeatures = createHash(_tnftType, _features);
 
@@ -148,9 +160,13 @@ contract BasketManager is Initializable, FactoryModifiers {
         );
 
         // store hash and new newBasketBeacon
-        hashedFeaturesForBasket[address(newBasketBeacon)] = hashedFeatures;
         baskets.push(address(newBasketBeacon));
+
+        hashedFeaturesForBasket[address(newBasketBeacon)] = hashedFeatures;
         isBasket[address(newBasketBeacon)] = true;
+
+        basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
+        basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
@@ -214,6 +230,38 @@ contract BasketManager is Initializable, FactoryModifiers {
     function checkBasketAvailability(bytes32 _featuresHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
             if (hashedFeaturesForBasket[baskets[i]] == _featuresHash) return false;
+            unchecked {
+                ++i;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @notice This method checks whether a basket with a given name is taken.
+     * @dev No 2 baskets that have the same name can co-exist.
+     * @param _nameHash unique bytes32 hash created from string name.
+     * @return If true, name is available to be created. If false, already exists.
+     */
+    function checkBasketNameAvailability(bytes32 _nameHash) public view returns (bool) { // TODO: Taken off chain?
+        for (uint256 i; i < baskets.length;) {
+            if (basketNames[baskets[i]] == _nameHash) return false;
+            unchecked {
+                ++i;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @notice This method checks whether a basket with a given symbol is taken.
+     * @dev No 2 baskets that have the same symbol can co-exist.
+     * @param _symbolHash unique bytes32 hash created from string symbol.
+     * @return If true, symbol is available to be created. If false, already exists.
+     */
+    function checkBasketSymbolAvailability(bytes32 _symbolHash) public view returns (bool) {
+        for (uint256 i; i < baskets.length;) {
+            if (basketSymbols[baskets[i]] == _symbolHash) return false;
             unchecked {
                 ++i;
             }

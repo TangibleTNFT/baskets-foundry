@@ -639,8 +639,8 @@ contract MumbaiBasketsTest is Utility {
         // create new basket with feature
         realEstateTnft.approve(address(basketManager), tokenId);
         (IBasket tbasket,) = basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
+            "Tangible Basket Token1",
+            "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             features,
@@ -721,8 +721,8 @@ contract MumbaiBasketsTest is Utility {
         // create new basket with feature
         realEstateTnft.approve(address(basketManager), tokenId);
         (IBasket tbasket,) = basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
+            "Tangible Basket Token1",
+            "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
             featuresToAdd,
@@ -923,6 +923,9 @@ contract MumbaiBasketsTest is Utility {
         uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 2);
 
+        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(JOE));
+
         // Joe performs a redeem
         vm.startPrank(JOE);
         basket.redeemTNFT(address(realEstateTnft), JOE_TOKEN_ID, basket.balanceOf(JOE));
@@ -983,6 +986,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited.length, 2);
 
         uint256 diff = basket.totalSupply() / basket.balanceOf(JOE);
+
+        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(JOE));
 
         // Joe performs a redeem
         vm.startPrank(JOE);
@@ -1056,6 +1062,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited.length, 2);
 
         uint256 diff = basket.totalSupply() / basket.balanceOf(JOE);
+
+        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(JOE));
 
         // Joe performs a redeem
         vm.startPrank(JOE);
@@ -1142,6 +1151,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(tokenIdLib[1], JOE_TOKEN_ID);
         assertEq(tokenIdLib[2], NIK_TOKEN_ID);
 
+        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(JOE));
+
         // ~ Joe performs a redeem ~
 
         vm.startPrank(JOE);
@@ -1177,6 +1189,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(tokenIdLib.length, 2);
         assertEq(tokenIdLib[0], 1);
         assertEq(tokenIdLib[1], NIK_TOKEN_ID);
+
+        quote = basket.getQuoteOut(address(realEstateTnft), NIK_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(NIK));
 
         // ~ Nik performs a redeem ~
 
@@ -1303,6 +1318,9 @@ contract MumbaiBasketsTest is Utility {
         portion = (basket.balanceOf(NIK) * USD / basket.totalSupply());
         emit log_named_uint("Nik's portion of rent", portion);
 
+        uint256 quote = basket.getQuoteOut(address(realEstateTnft), NIK_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(NIK));
+
         // Nik performs a redeem of TNFT 2
         vm.startPrank(NIK);
         basket.redeemTNFT(address(realEstateTnft), NIK_TOKEN_ID, basket.balanceOf(NIK));
@@ -1347,6 +1365,9 @@ contract MumbaiBasketsTest is Utility {
 
         portion = (basket.balanceOf(JOE) * USD / basket.totalSupply() * USD);
         emit log_named_uint("Joe's portion of rent", portion);
+
+        quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
+        assertEq(quote, basket.balanceOf(JOE));
 
         // Joe performs a redeem of TNFT 1
         vm.startPrank(JOE);

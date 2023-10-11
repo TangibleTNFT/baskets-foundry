@@ -64,4 +64,5 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
 
     function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external view returns (bool);
 
+    function checkBudget(uint256 _budget) external view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid);
 }
