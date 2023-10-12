@@ -236,7 +236,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
 
         // calculate shares for depositor
-        basketShare = _quoteShares(usdValue);
+        basketShare = _quoteShares(usdValue, receivedRent); // TODO: Test
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(factory).basketsManager()) {
@@ -265,7 +265,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         //uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
 
         // Get shares required
-        uint256 sharesRequired = _quoteShares(usdValue);
+        uint256 sharesRequired = _quoteShares(usdValue, 0);
 
         // Verify the user has sufficient amount of tokens.
         require(_amountBasketTokens >= sharesRequired, "Insufficient offer");
@@ -409,7 +409,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         //uint256 claimableRent = rentManager.claimableRentForToken(_tokenId);
 
         // calculate shares for depositor
-        shares = _quoteShares(usdValue);
+        shares = _quoteShares(usdValue, 0);
     }
 
     /**
@@ -427,7 +427,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         //uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
 
         // Get shares required
-        sharesRequired = _quoteShares(usdValue);
+        sharesRequired = _quoteShares(usdValue, 0);
     }
 
     /**
@@ -483,7 +483,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
             // Calculate amount of rent that would be received
             //uint256 amountRent = (usdValue * rentBal) / totalNftVal;
             // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-            uint256 sharesRequired = _quoteShares(usdValue);
+            uint256 sharesRequired = _quoteShares(usdValue, 0);
 
             if (_budget >= sharesRequired) {
                 inBudget[quantity] = 
@@ -616,11 +616,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
      * @dev If primaryRentToken.decimals == 18, this func will fail.
      */
-    function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
+    function _quoteShares(uint256 usdValue, uint256 amountRent) internal view returns (uint256 shares) {
+        uint256 combinedValue = (usdValue + (amountRent * 10**12));
+
         if (totalSupply() == 0) {
-            shares = usdValue;
+            shares = combinedValue;
         } else {
-            shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
+            shares = ((combinedValue * totalSupply()) / getTotalValueOfBasket());
         }
     }
 
