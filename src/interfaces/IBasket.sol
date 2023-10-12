@@ -23,7 +23,7 @@ interface IBasket is IERC20Upgradeable, IERC20MetadataUpgradeable {
         address tnft;
         uint256 tokenId;
         uint256 usdValue;
-        uint256 amountRent;
+        //uint256 amountRent;
         uint256 sharesRequired;
     }
 
