@@ -28,7 +28,6 @@ import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 
-// TODO: How to handle total value? TBA
 
 /**
  * @title Basket
@@ -56,15 +55,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     uint256[] public supportedFeatures;
 
-    string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
+    //string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
 
     uint256 public tnftType;
 
     uint256 public totalNftValue; // NOTE: For testing. Will be replaced
-
-    mapping(uint256 => RedeemRequest) public redeemRequestInFlightData;
-
-    mapping(address => bool) public redeemerHasRequestInFlight;
 
     IERC20Metadata public primaryRentToken; // USDC by default
 
@@ -84,13 +79,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     event TNFTDeposited(address prevOwner, address indexed tnft, uint256 indexed tokenId);
 
     /**
-     * @notice This event is emitted when a TNFT random redeem has been requested and is "in flight".
-     * @param redeemer Address of redeemer.
-     * @param budget Budget of basket tokens redeemer wishes to work with.
-     */
-    event RedeemRequestInFlight(address redeemer, uint256 budget);
-
-    /**
      * @notice This event is emitted when a TNFT is redeemed from this basket.
      * @param newOwner New owner before deposit. Aka redeemer.
      * @param tnft TNFT contract address of token being redeemed.
@@ -104,11 +92,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     
     // ~ Modifiers ~
 
-    /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
-    modifier onlyBasketVrfConsumer() {
-        require(msg.sender == _getBasketVrfConsumer());
-        _;
-    }
+    //
 
 
     // ~ Constructor ~
@@ -275,54 +259,33 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     /**
-     * @notice This method is used to fetch a random number to then receive a random TNFT.
-     */
-    function redeemRandomTNFT(uint256 _budget) external returns (uint256 requestId) {
-        address redeemer = msg.sender;
-        require(!redeemerHasRequestInFlight[redeemer], "redeem request in progress");
-        require(balanceOf(redeemer) >= _budget, "Insufficient balance");
-
-        (,, bool validBudget) = checkBudget(_budget); // TODO: Remove from this function -> call before redeemRandomTNFT
-        require(validBudget, "Insufficient budget");
-
-        requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
-
-        redeemRequestInFlightData[requestId] = RedeemRequest(redeemer, _budget);
-        redeemerHasRequestInFlight[redeemer] = true;
-
-        emit RedeemRequestInFlight(redeemer, _budget);
-    }
-
-    /**
      * @notice This method is the vrf callback method. Will use the random seed to choose a random TNFT for redeemer.
      */
-    function fulfillRandomRedeem(uint256 requestId, uint256 randomWord) external onlyBasketVrfConsumer {
-        address redeemer = redeemRequestInFlightData[requestId].redeemer;
-        uint256 budget = redeemRequestInFlightData[requestId].budget;
-
-        redeemerHasRequestInFlight[redeemer] = false;
-        delete redeemRequestInFlightData[requestId];
+    function fulfillRandomRedeem(uint256 _budget) external { // TODO: Change name
+        address redeemer = msg.sender;
+        require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
         // a. Create an array of TNFTs within budget
-        (RedeemData[] memory tokensInBudget,,) = checkBudget(budget);
+        (RedeemData[] memory tokensInBudget,, bool valid) = checkBudget(_budget);
+        require(valid, "Insufficient budget");
 
         uint256 len = tokensInBudget.length;
         require(len > 0, "0");
 
-        // b. use randomWord to shuffle array
-        for (uint256 i; i < len;) {
-            uint256 key = i + (randomWord % (len - i));
+        // b. use randomWord to shuffle array TODO: REWORK -> choose lowest yielding nft
+        // for (uint256 i; i < len;) {
+        //     uint256 key = i + (randomWord % (len - i));
 
-            if (i != key) {
-                RedeemData memory temp = tokensInBudget[key];
-                tokensInBudget[key] = tokensInBudget[i];
-                tokensInBudget[i] = temp;
-            }
+        //     if (i != key) {
+        //         RedeemData memory temp = tokensInBudget[key];
+        //         tokensInBudget[key] = tokensInBudget[i];
+        //         tokensInBudget[i] = temp;
+        //     }
 
-            unchecked {
-                ++i;
-            }
-        }
+        //     unchecked {
+        //         ++i;
+        //     }
+        // }
 
         // c. redeem NFT in index 0
         _redeemTNFT(
@@ -560,6 +523,14 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         return true;
     }
 
+    function rebase() public {
+        // a. update rent
+        // b. calculate new basket token price based off new rent amount
+        // c. skim pools
+        // d. wrap extra skimmed tokens from pool
+        // e. use wrapped tokens for auto-bribe
+    }
+
     
     // ~ Internal Functions ~
 
@@ -756,10 +727,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         if (price < 0) price = 0;
 
         return (uint256(price), priceFeed.decimals());
-    }
-
-    function _getBasketVrfConsumer() internal returns (address) {
-        return IBasketManager(IFactory(factory).basketsManager()).basketsVrfConsumer();
     }
 
     function _getRentManager(address _tangibleNFT) internal view returns (IRentManager) {

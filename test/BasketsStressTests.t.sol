@@ -16,9 +16,7 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
-import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 
-import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -57,10 +55,6 @@ contract StressTests is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
-    BasketsVrfConsumer public basketVrfConsumer;
-
-    // helper
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
     // imported mumbai tangible contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
@@ -75,7 +69,6 @@ contract StressTests is Utility {
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
-    TransparentUpgradeableProxy public basketVrfConsumerProxy;
     ProxyAdmin public proxyAdmin;
 
     // ~ Actors and Variables ~
@@ -112,11 +105,6 @@ contract StressTests is Utility {
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin();
 
-        // vrf config
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        subId = vrfCoordinatorMock.createSubscription();
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
-
         // basket stuff
         basket = new Basket();
         
@@ -146,26 +134,6 @@ contract StressTests is Utility {
         vm.prank(factoryOwner);
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
-        // Deploy BasketsVrfConsumer
-        basketVrfConsumer = new BasketsVrfConsumer();
-
-        // Initialize BasketsVrfConsumer with proxy
-        basketVrfConsumerProxy = new TransparentUpgradeableProxy(
-            address(basketVrfConsumer),
-            address(proxyAdmin),
-            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                address(factoryV2),
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
-            )
-        );
-        basketVrfConsumer = BasketsVrfConsumer(address(basketVrfConsumerProxy));
-
-        vm.prank(factoryOwner);
-        basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
-
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -230,8 +198,6 @@ contract StressTests is Utility {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
-        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
-        vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
         vm.label(JOE, "JOE");
         vm.label(NIK, "NIK");
         vm.label(ALICE, "ALICE");
@@ -1138,12 +1104,12 @@ contract StressTests is Utility {
     /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 11_018_250 gas
     /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 12_666_981 gas
     /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 16_032_690 gas
-    function test_stress_fulfillRandomRedeem_fuzzing(uint256 randomWord) public {
+    function test_stress_fulfillRandomRedeem_fuzzing(uint256 randomWord) public { // TODO: Rewrite
         
         // ~ Config ~
 
-        config.newCategories = 10;
-        config.amountFingerprints = 10;
+        config.newCategories = 4;
+        config.amountFingerprints = 25;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1209,25 +1175,10 @@ contract StressTests is Utility {
 
         vm.stopPrank();
 
-        // ~ Execute redeemRandomTNFT ~
+        // ~ Execute redeem ~
 
         vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(sharesReceived[0]);
-
-        // Post-state check 1
-
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, sharesReceived[0]);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        // ~ Execute fulfillRandomRedeem ~
-
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
+        basket.fulfillRandomRedeem(sharesReceived[0]);
 
         // ~ Post-state check 2 ~
 
@@ -1246,12 +1197,6 @@ contract StressTests is Utility {
                 // 981, 3
             }
         }
-
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
@@ -1380,25 +1325,11 @@ contract StressTests is Utility {
 
         skip(1); // skip to end of vesting
 
-        // ~ Execute redeemRandomTNFT ~
-
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(sharesReceived[0]);
-
-        // Post-state check 1
-
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, sharesReceived[0]);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
 
         // ~ Execute fulfillRandomRedeem ~
 
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
+        vm.prank(JOE);
+        basket.fulfillRandomRedeem(sharesReceived[0]);
 
         // ~ Post-state check 2 ~
 
@@ -1415,12 +1346,6 @@ contract StressTests is Utility {
                 // 981, 3
             }
         }
-
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);

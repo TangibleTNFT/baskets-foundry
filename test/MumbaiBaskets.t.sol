@@ -15,9 +15,7 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
-import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 
-import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -54,10 +52,6 @@ contract MumbaiBasketsTest is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
-    BasketsVrfConsumer public basketVrfConsumer;
-
-    // helper
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
     // tangible mumbai contracts
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
@@ -102,11 +96,6 @@ contract MumbaiBasketsTest is Utility {
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin();
 
-        // vrf config
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        subId = vrfCoordinatorMock.createSubscription();
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
-
         // basket stuff
         basket = new Basket();
 
@@ -135,31 +124,6 @@ contract MumbaiBasketsTest is Utility {
         // set currencyFeed
         vm.prank(factoryOwner);
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
-
-        // Deploy BasketsVrfConsumer
-        basketVrfConsumer = new BasketsVrfConsumer();
-
-        // Initialize BasketsVrfConsumer with proxy
-        basketVrfConsumerProxy = new TransparentUpgradeableProxy(
-            address(basketVrfConsumer),
-            address(proxyAdmin),
-            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                address(factoryV2),
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
-            )
-        );
-        basketVrfConsumer = BasketsVrfConsumer(address(basketVrfConsumerProxy));
-
-        // add basket to basketManager
-        vm.prank(factoryOwner);
-        basketManager.addBasket(address(basket));
-
-        vm.prank(factoryOwner);
-        basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
-
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -298,8 +262,6 @@ contract MumbaiBasketsTest is Utility {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
-        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
-        vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
         vm.label(JOE, "JOE");
         vm.label(NIK, "NIK");
         vm.label(ALICE, "ALICE");
@@ -432,13 +394,6 @@ contract MumbaiBasketsTest is Utility {
 
         // verify priceManager has oracle set
         assertEq(address(IPriceManagerExt(address(priceManager)).oracleForCategory(realEstateTnft)), address(realEstateOracle));
-
-        // verify BasketsVrfConsumer initial state
-        assertEq(basketVrfConsumer.subId(), subId);
-        assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
-        assertEq(basketVrfConsumer.requestConfirmations(), 20);
-        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
-        assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
     }
 
 
@@ -1372,58 +1327,7 @@ contract MumbaiBasketsTest is Utility {
     }
 
 
-    // ~ Randomized Redeem Testing (redeemRandomTNFT & fulfillRandomRedeem) ~
-
-    /// @notice Verifies restrictions and correct state changes when Basket::redeemRandomTNFT() is executed.
-    function test_baskets_mumbai_redeemRandomTNFT() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
-        vm.startPrank(JOE);
-        realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
-        basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
-        vm.stopPrank();
-
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 joeBal = basket.balanceOf(JOE);
-        uint256 foreshadowRequestId = 1;
-
-        // sanity check
-        assertEq(joeBal, usdValue);
-        assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
-
-        // Pre-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(foreshadowRequestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        // Attempt to execute redeemRandomTNFT with more tokens than what is in balance -> revert
-        vm.prank(JOE);
-        vm.expectRevert("Insufficient balance");
-        basket.redeemRandomTNFT(joeBal + 1);
-
-        // Execute redeemRandomTNFT -> success
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(joeBal);
-
-        // Post-state check
-        assertEq(foreshadowRequestId, requestId);
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, joeBal);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        // Attempt to execute redeemRandomTNFT while Joe already has request in-flight -> revert
-        vm.prank(JOE);
-        vm.expectRevert("redeem request in progress");
-        basket.redeemRandomTNFT(joeBal);
-    }
+    // ~ Redeem Testing fulfillRandomRedeem ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::fulfillRandomRedeem() is executed.
     function test_baskets_mumbai_fulfillRandomRedeem_single() public {
@@ -1439,7 +1343,6 @@ contract MumbaiBasketsTest is Utility {
 
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         uint256 joeBal = basket.balanceOf(JOE);
-        uint256 foreshadowRequestId = 1;
 
         // sanity check
         assertEq(joeBal, usdValue);
@@ -1447,56 +1350,9 @@ contract MumbaiBasketsTest is Utility {
 
         // Execute redeemRandomTNFT
         vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(joeBal);
-
-        // Pre-state check
-        assertEq(foreshadowRequestId, requestId);
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, joeBal);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        assertEq(realEstateTnft.balanceOf(JOE), 0);
-        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
-
-        assertEq(basket.balanceOf(JOE), usdValue);
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-        assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
-
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, JOE_TOKEN_ID);
-        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
-
-        address[] memory supportedTnfts = basket.getTnftsSupported();
-        assertEq(supportedTnfts.length, 1);
-        assertEq(supportedTnfts[0], address(realEstateTnft));
-
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, 1);
-        assertEq(tokenIdLib[0], JOE_TOKEN_ID);
-
-        // Create randomWords
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 61178987073406078724701307170779414601596042041161032433419212917987219263374; // Random Input from real VRF response.
-        // NOTE: Wont be used since array will only be of size 1.
-
-        // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords);
+        basket.fulfillRandomRedeem(joeBal);
 
         // Post-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
 
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), 0);
@@ -1505,470 +1361,14 @@ contract MumbaiBasketsTest is Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
 
-        deposited = basket.getDepositedTnfts();
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
 
-        supportedTnfts = basket.getTnftsSupported();
+        address[] memory supportedTnfts = basket.getTnftsSupported();
         assertEq(supportedTnfts.length, 0);
 
-        tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
+        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 0);
-    }
-
-    /// @notice Verifies restrictions and correct state changes when Basket::fulfillRandomRedeem() is executed.
-    /// @dev This test is used to test the predictability of the randomWord var in fulfillRandomRedeem.
-    ///      We will hard code the randomWord var to select a targeted tokenId. In this case, tokenId 3 in the
-    ///      tokensInBudget array.
-    function test_baskets_mumbai_fulfillRandomRedeem_multiple_tokenId_4() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
-        uint256 batchSize = 4;
-        uint256 preBal = realEstateTnft.balanceOf(JOE);
-        uint256 targetedIndex = 0;
-
-        // Mint Joe 4 TNFTs to be deposited. They will all be the same price to ensure max random possibilities
-        uint256[] memory tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000, // 100,000 GBP
-            batchSize,   // stock
-            batchSize,   // mintCount
-            1,           // fingerprint
-            JOE          // receiver
-        );
-
-        uint256 targetedTokenId = tokenIds[targetedIndex]; // 4
-
-        address[] memory tnfts = new address[](tokenIds.length);
-        for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
-
-        // deposit all new TNFTs via batchDepositTNFT
-        vm.startPrank(JOE);
-        for (uint i; i < tokenIds.length; ++i) {
-            realEstateTnft.approve(address(basket), tokenIds[i]);
-        }
-        basket.batchDepositTNFT(tnfts, tokenIds);
-        vm.stopPrank();
-
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-
-        // Execute redeemRandomTNFT
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(usdValue);
-
-        // Pre-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, usdValue);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize);
-
-        assertEq(basket.balanceOf(JOE), usdValue * batchSize);
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
-        }
-
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(deposited[i].tnft, address(realEstateTnft));
-            assertEq(deposited[i].tokenId, tokenIds[i]);
-            assertEq(deposited[i].fingerprint, 1);
-        }
-
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(tokenIdLib[i], tokenIds[i]);
-        }
-
-        // Note: We will specify a random number to redeem tokenId 3
-        //       tokensInBudget = [{4}, 5, 6, 7]
-        //       tokensInBudget[0] = tokensInBudget[key] -> index 0 will be chosen to redeem ALWAYS
-        //       key = i + (randomWord % (len - i))
-        //       key = 0 + (4 % (4 - 0))
-        //       key = 0 -> index 0 -> tokenId 4
-        //       randomWord = 4
-
-        // Create randomWords
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 4;
-
-        // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords);
-
-        // Post-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal + 1);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize - 1);
-        assertEq(realEstateTnft.ownerOf(targetedTokenId), JOE);
-
-        assertEq(basket.balanceOf(JOE), usdValue * (batchSize - 1));
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-
-        deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize - 1);
-
-        tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize - 1);
-    }
-
-    /// @notice Verifies restrictions and correct state changes when Basket::fulfillRandomRedeem() is executed.
-    /// @dev This test is used to test the predictability of the randomWord var in fulfillRandomRedeem.
-    ///      We will hard code the randomWord var to select a targeted tokenId. In this case, tokenId 4 in the
-    ///      tokensInBudget array.
-    function test_baskets_mumbai_fulfillRandomRedeem_multiple_tokenId_5() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
-        uint256 batchSize = 4;
-        uint256 preBal = realEstateTnft.balanceOf(JOE);
-        uint256 targetedIndex = 1;
-
-        // Mint Joe 4 TNFTs to be deposited. They will all be the same price to ensure max random possibilities
-        uint256[] memory tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000, // 100,000 GBP
-            batchSize,   // stock
-            batchSize,   // mintCount
-            1,           // fingerprint
-            JOE          // receiver
-        );
-
-        uint256 targetedTokenId = tokenIds[targetedIndex]; // 5
-
-        address[] memory tnfts = new address[](tokenIds.length);
-        for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
-
-        // deposit all new TNFTs via batchDepositTNFT
-        vm.startPrank(JOE);
-        for (uint i; i < tokenIds.length; ++i) {
-            realEstateTnft.approve(address(basket), tokenIds[i]);
-        }
-        basket.batchDepositTNFT(tnfts, tokenIds);
-        vm.stopPrank();
-
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-
-        // Execute redeemRandomTNFT
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(usdValue);
-
-        // Pre-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, usdValue);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize);
-
-        assertEq(basket.balanceOf(JOE), usdValue * batchSize);
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
-        }
-
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(deposited[i].tnft, address(realEstateTnft));
-            assertEq(deposited[i].tokenId, tokenIds[i]);
-            assertEq(deposited[i].fingerprint, 1);
-        }
-
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(tokenIdLib[i], tokenIds[i]);
-        }
-
-        // Note: We will specify a random number to redeem tokenId 4
-        //       tokensInBudget = [4, {5}, 6, 7]
-        //       tokensInBudget[0] = tokensInBudget[key] -> index 0 will be chosen to redeem ALWAYS
-        //       key = i + (randomWord % (len - i))
-        //       key = 0 + (5 % (4 - 0))
-        //       key = 1 -> index 1 -> tokenId 5
-        //       randomWord = 5
-
-        // Create randomWords
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 5;
-
-        // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords);
-
-        // Post-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal + 1);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize - 1);
-        assertEq(realEstateTnft.ownerOf(targetedTokenId), JOE);
-
-        assertEq(basket.balanceOf(JOE), usdValue * (batchSize - 1));
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-
-        deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize - 1);
-
-        tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize - 1);
-    }
-
-    /// @notice Verifies restrictions and correct state changes when Basket::fulfillRandomRedeem() is executed.
-    /// @dev This test is used to test the predictability of the randomWord var in fulfillRandomRedeem.
-    ///      We will hard code the randomWord var to select a targeted tokenId. In this case, tokenId 5 in the
-    ///      tokensInBudget array.
-    function test_baskets_mumbai_fulfillRandomRedeem_multiple_tokenId_6() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
-        uint256 batchSize = 4;
-        uint256 preBal = realEstateTnft.balanceOf(JOE);
-        uint256 targetedIndex = 2;
-
-        // Mint Joe 4 TNFTs to be deposited. They will all be the same price to ensure max random possibilities
-        uint256[] memory tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000, // 100,000 GBP
-            batchSize,   // stock
-            batchSize,   // mintCount
-            1,           // fingerprint
-            JOE          // receiver
-        );
-
-        uint256 targetedTokenId = tokenIds[targetedIndex]; // 6
-
-        address[] memory tnfts = new address[](tokenIds.length);
-        for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
-
-        // deposit all new TNFTs via batchDepositTNFT
-        vm.startPrank(JOE);
-        for (uint i; i < tokenIds.length; ++i) {
-            realEstateTnft.approve(address(basket), tokenIds[i]);
-        }
-        basket.batchDepositTNFT(tnfts, tokenIds);
-        vm.stopPrank();
-
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-
-        // Execute redeemRandomTNFT
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(usdValue);
-
-        // Pre-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, usdValue);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize);
-
-        assertEq(basket.balanceOf(JOE), usdValue * batchSize);
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
-        }
-
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(deposited[i].tnft, address(realEstateTnft));
-            assertEq(deposited[i].tokenId, tokenIds[i]);
-            assertEq(deposited[i].fingerprint, 1);
-        }
-
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(tokenIdLib[i], tokenIds[i]);
-        }
-
-        // Note: We will specify a random number to redeem tokenId 5
-        //       tokensInBudget = [4, 5, {6}, 7]
-        //       tokensInBudget[0] = tokensInBudget[key] -> index 0 will be chosen to redeem ALWAYS
-        //       key = i + (randomWord % (len - i))
-        //       key = 0 + (6 % (4 - 0))
-        //       key = 2 -> index 2 -> tokenId 6
-        //       randomWord = 6
-
-        // Create randomWords
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 6;
-
-        // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords);
-
-        // Post-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal + 1);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize - 1);
-        assertEq(realEstateTnft.ownerOf(targetedTokenId), JOE);
-
-        assertEq(basket.balanceOf(JOE), usdValue * (batchSize - 1));
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-
-        deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize - 1);
-
-        tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize - 1);
-    }
-
-    /// @notice Verifies restrictions and correct state changes when Basket::fulfillRandomRedeem() is executed.
-    /// @dev This test is used to test the predictability of the randomWord var in fulfillRandomRedeem.
-    ///      We will hard code the randomWord var to select a targeted tokenId. In this case, tokenId 6 in the
-    ///      tokensInBudget array.
-    function test_baskets_mumbai_fulfillRandomRedeem_multiple_tokenId_7() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
-        uint256 batchSize = 4;
-        uint256 preBal = realEstateTnft.balanceOf(JOE);
-        uint256 targetedIndex = 3;
-
-        // Mint Joe 4 TNFTs to be deposited. They will all be the same price to ensure max random possibilities
-        uint256[] memory tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000, // 100,000 GBP
-            batchSize,   // stock
-            batchSize,   // mintCount
-            1,           // fingerprint
-            JOE          // receiver
-        );
-
-        uint256 targetedTokenId = tokenIds[targetedIndex]; // 7
-
-        address[] memory tnfts = new address[](tokenIds.length);
-        for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
-
-        // deposit all new TNFTs via batchDepositTNFT
-        vm.startPrank(JOE);
-        for (uint i; i < tokenIds.length; ++i) {
-            realEstateTnft.approve(address(basket), tokenIds[i]);
-        }
-        basket.batchDepositTNFT(tnfts, tokenIds);
-        vm.stopPrank();
-
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-
-        // Execute redeemRandomTNFT
-        vm.prank(JOE);
-        uint256 requestId = basket.redeemRandomTNFT(usdValue);
-
-        // Pre-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), true);
-        (address redeemer, uint256 budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, JOE);
-        assertEq(budget, usdValue);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize);
-
-        assertEq(basket.balanceOf(JOE), usdValue * batchSize);
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
-        }
-
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(deposited[i].tnft, address(realEstateTnft));
-            assertEq(deposited[i].tokenId, tokenIds[i]);
-            assertEq(deposited[i].fingerprint, 1);
-        }
-
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize);
-        for (uint i; i < tokenIds.length; ++i) { 
-            assertEq(tokenIdLib[i], tokenIds[i]);
-        }
-
-        // Note: We will specify a random number to redeem tokenId 6
-        //       tokensInBudget = [4, 5, 6, {7}]
-        //       tokensInBudget[0] = tokensInBudget[key] -> index 0 will be chosen to redeem ALWAYS
-        //       key = i + (randomWord % (len - i))
-        //       key = 0 + (7 % (4 - 0))
-        //       key = 3 -> index 3 -> tokenId 7
-        //       randomWord = 7
-
-        // Create randomWords
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 7;
-
-        // Vrf coordinator executes basketsVrfConsumer::rawfulfillRandomWords which calls basket::fulfillRandomRedeem
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, randomWords); // 625_351 gas
-
-        // Post-state check
-        assertEq(basket.redeemerHasRequestInFlight(JOE), false);
-        (redeemer, budget) = basket.redeemRequestInFlightData(requestId);
-        assertEq(redeemer, address(0));
-        assertEq(budget, 0);
-
-        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
-
-        assertEq(realEstateTnft.balanceOf(JOE), preBal + 1);
-        assertEq(realEstateTnft.balanceOf(address(basket)), batchSize - 1);
-        assertEq(realEstateTnft.ownerOf(targetedTokenId), JOE);
-
-        assertEq(basket.balanceOf(JOE), usdValue * (batchSize - 1));
-        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
-
-        deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, batchSize - 1);
-
-        tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
-        assertEq(tokenIdLib.length, batchSize - 1);
     }
 
     /// @notice Verifies precision calculation of shares when depositing or redeeming

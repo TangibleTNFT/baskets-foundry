@@ -11,7 +11,6 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
-import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 
 import { VRFCoordinatorV2Mock } from "../test/utils/VRFCoordinatorV2Mock.sol";
 import "../test/utils/MumbaiAddresses.sol";
@@ -29,10 +28,6 @@ contract DeployBasketsToMumbai is Script {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
-    BasketsVrfConsumer public basketVrfConsumer;
-
-    // helper Note: temporary
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
@@ -65,18 +60,13 @@ contract DeployBasketsToMumbai is Script {
         // 1. Deploy proxy admin -> TODO verify owner == deployerAddress
         proxyAdmin = new ProxyAdmin();
 
-        // 2. Configure vrf
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        subId = vrfCoordinatorMock.createSubscription();
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
-
-        // 3. deploy basket
+        // 2. deploy basket
         basket = new Basket();
 
-        // 4. Deploy basketManager
+        // 3. Deploy basketManager
         basketManager = new BasketManager();
 
-        // 5. Deploy proxy for basketManager & initialize
+        // 4. Deploy proxy for basketManager & initialize
         basketManagerProxy = new TransparentUpgradeableProxy(
             address(basketManager),
             address(proxyAdmin),
@@ -86,35 +76,14 @@ contract DeployBasketsToMumbai is Script {
             )
         );
 
-        // 6. Deploy BasketsVrfConsumer
-        basketVrfConsumer = new BasketsVrfConsumer();
-
-        // 7. Initialize BasketsVrfConsumer with proxy
-        basketVrfConsumerProxy = new TransparentUpgradeableProxy(
-            address(basketVrfConsumer),
-            address(proxyAdmin),
-            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                Mumbai_FactoryV2,
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
-            )
-        );
-
-        // 8. Add consumer to vrf coordinator
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
-
-        // 9. deploy new basket -> NEED TOKENS
+        // 5. deploy new basket -> NEED TOKENS TODO
         
 
         // log addresses
         console2.log("1. ProxyAdmin: %s", address(proxyAdmin));
-        console2.log("2. Mock Vrf Coordinator: %s", address(vrfCoordinatorMock));
-        console2.log("3. Basket Implementation: %s", address(basket));
-        console2.log("4. BasketManager Implementation: %s", address(basketManager));
-        console2.log("5. BasketManager Proxy: %s", address(basketManagerProxy));
-        console2.log("6. BasketVrfConsumer Implementation: %s", address(basketVrfConsumer));
-        console2.log("7. BasketVrfConsumer Proxy: %s", address(basketVrfConsumerProxy));
+        console2.log("2. Basket Implementation: %s", address(basket));
+        console2.log("3. BasketManager Implementation: %s", address(basketManager));
+        console2.log("4. BasketManager Proxy: %s", address(basketManagerProxy));
 
         vm.stopBroadcast();
     }

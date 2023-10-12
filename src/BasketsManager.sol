@@ -52,9 +52,6 @@ contract BasketManager is Initializable, FactoryModifiers {
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
-    /// @notice Contract address of basketsVrfConsumer contract.
-    address public basketsVrfConsumer;
-
     // ~ Events ~
 
     /// @notice Emitted when a new basket instance is created // beaconProxy deployed.
@@ -182,15 +179,6 @@ contract BasketManager is Initializable, FactoryModifiers {
 
         emit BasketCreated(msg.sender, address(newBasketBeacon));
         return (IBasket(address(newBasketBeacon)), basketShares);
-    }
-
-    /**
-     * @notice This method allows the factory owner to update the basketsVrfConsumer contract address.
-     * @param _basketsVrfConsumer New contract address.
-     */
-    function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
-        require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
-        basketsVrfConsumer = _basketsVrfConsumer;
     }
 
     /**
