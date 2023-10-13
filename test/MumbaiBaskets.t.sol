@@ -146,39 +146,21 @@ contract MumbaiBasketsTest is Utility {
             address(realEstateOracle)
         );
         // create new item with fingerprint.
-        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-        //     RE_FINGERPRINT_1,  // fingerprint
-        //     500_000_000,     // weSellAt
-        //     0,            // lockedAmount
-        //     10,           // stock
-        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
-        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
-        // );
-        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-        //     RE_FINGERPRINT_2,  // fingerprint
-        //     600_000_000,     // weSellAt
-        //     0,            // lockedAmount
-        //     10,           // stock
-        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
-        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
-        // );
-        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
+        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
             RE_FINGERPRINT_1,  // fingerprint
             500_000_000,     // weSellAt
-            0             // lockedAmount
+            0,            // lockedAmount
+            10,           // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE
+            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
-        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
-            RE_FINGERPRINT_1,  // fingerprint
-            10                 // stock
-        );
-        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
+        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
             RE_FINGERPRINT_2,  // fingerprint
             600_000_000,     // weSellAt
-            0             // lockedAmount
-        );
-        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
-            RE_FINGERPRINT_2,  // fingerprint
-            10                 // stock
+            0,            // lockedAmount
+            10,           // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE
+            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
         vm.stopPrank();
 

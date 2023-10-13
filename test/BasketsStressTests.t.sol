@@ -218,25 +218,14 @@ contract StressTests is Utility {
 
         vm.startPrank(ORACLE_OWNER);
         // create new item with fingerprint.
-        try IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-                _fingerprint, // fingerprint
-                _sellAt,      // weSellAt
-                0,            // lockedAmount
-                _stock,       // stock
-                uint16(826),  // currency -> GBP ISO NUMERIC CODE
-                uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
-            ) { }
-        catch {
-            IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
-                _fingerprint,  // fingerprint
-                _sellAt,     // weSellAt
-                0             // lockedAmount
-            );
-            IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
-                _fingerprint,  // fingerprint
-                _stock                 // stock
-            );
-        }
+        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+            _fingerprint, // fingerprint
+            _sellAt,      // weSellAt
+            0,            // lockedAmount
+            _stock,       // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE
+            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        );
         vm.stopPrank();
 
         vm.prank(TANGIBLE_LABS);
@@ -1014,15 +1003,15 @@ contract StressTests is Utility {
     // ~ stress checkBudget ~
 
     /// @notice Stress test of checkBudget method with max tokensInBudget.
-    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 11_201_368 gas
-    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 12_865_715 gas
-    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 16_391_683 gas
+    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 7_278_280 gas
+    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 8_678_789 gas
+    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 11_486_824 gas
     function test_stress_checkBudget() public {
 
         // ~ Config ~
 
-        uint256 newCategories = 1;
-        uint256 amountFingerprints = 100;
+        uint256 newCategories = 10;
+        uint256 amountFingerprints = 10;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         uint256 totalTokens = newCategories * amountFingerprints;

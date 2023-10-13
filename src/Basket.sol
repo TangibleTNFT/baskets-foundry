@@ -539,38 +539,18 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         for (uint256 i; i < tnftsSupported.length;) {
             address tnft = tnftsSupported[i];
 
-            uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]); // TODO: Get total
+            uint256 claimable = _getRentManager(tnft).claimableRentForTokenBatchTotal(tokenIdLibrary[tnft]);
 
-            for (uint256 j; j < claimables.length;) {
-                if (claimables[j] > 0) {
-                    decimals > 0 ?
-                        totalRent += claimables[j] * 10**decimals :
-                        totalRent += claimables[j];
-                }
-                unchecked {
-                    ++j;
-                }
+            if (claimable > 0) {
+                decimals > 0 ?
+                    totalRent += claimable * 10**decimals :
+                    totalRent += claimable;
             }
+
             unchecked {
                 ++i;
             }
         }
-
-        // for (uint256 i; i < tnftsSupported.length;) {
-        //     address tnft = tnftsSupported[i];
-
-        //     uint256 claimable = _getRentManager(tnft).claimableRentForTokenBatchTotal(tokenIdLibrary[tnft]);
-
-        //     if (claimable > 0) {
-        //         decimals > 0 ?
-        //             totalRent += claimable * 10**decimals :
-        //             totalRent += claimable;
-        //     }
-
-        //     unchecked {
-        //         ++i;
-        //     }
-        // }
 
         decimals > 0 ?
             totalRent += primaryRentToken.balanceOf(address(this)) * 10**decimals :

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.21;
+
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+
+library RebaseTokenMath is ERC20Upgradeable {
+
+    function toShares(uint256 amount, uint256 rebaseIndex) internal pure returns (uint256 shares) {
+        shares = MathUpgradeable.mulDiv(amount, 1 ether, rebaseIndex);
+    }
+
+    function toTokens(uint256 shares, uint256 rebaseIndex) internal pure returns (uint256 amount) {
+        amount = MathUpgradeable.mulDiv(shares, rebaseIndex, 1 ether);
+    }
+
+}
