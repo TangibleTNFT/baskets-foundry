@@ -524,7 +524,7 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
         // ~ Execute notify with prank ~
 
-        vm.prank(address(realEstateOracle));
+        vm.prank(address(mockMatrixOracle));
         notificationDispatcher.notify(FINGERPRINT, 100_000_000, newPrice, 826);
 
         // ~ Post-state check ~
@@ -568,7 +568,7 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenId), address(this));
         assertEq(notificationDispatcher.whitelistedReceiver(address(this)), true);
         assertEq(totalContractUsdValue, usdValue);
-        
+
         (uint256 fingerprint, uint256 weSellAt,,, uint16 currency,,) = mockMatrixOracle.fingerprintData(FINGERPRINT);
         assertEq(fingerprint, FINGERPRINT);
         assertEq(weSellAt,    100_000_000);
@@ -585,7 +585,7 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenId), address(this));
         assertEq(notificationDispatcher.whitelistedReceiver(address(this)), true);
         assertEq(totalContractUsdValue, _convertToUsd(newPrice, 826));
-        
+
         (fingerprint, weSellAt,,, currency,,) = mockMatrixOracle.fingerprintData(FINGERPRINT);
         assertEq(fingerprint, FINGERPRINT);
         assertEq(weSellAt,    250_000_000);

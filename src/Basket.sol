@@ -22,6 +22,8 @@ import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
+import { IRWAPriceNotificationReceiver } from "@tangible/notifications/IRWAPriceNotificationReceiver.sol";
+import { IRWAPriceNotificationDispatcher } from "@tangible/interfaces/IRWAPriceNotificationDispatcher.sol";
 
 // local imports
 import { IBasket } from "./interfaces/IBasket.sol";
@@ -34,7 +36,7 @@ import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, ReentrancyGuardUpgradeable {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, FactoryModifiers, ReentrancyGuardUpgradeable {
 
     // ~ State Variables ~
 
@@ -204,6 +206,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
+        
+        // register for price notifications
+        ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
+        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
+        IRWAPriceNotificationDispatcher notificationDispatcher = oracle.notificationDispatcher();
+
+        address(notificationDispatcher).call(abi.encodeWithSignature("registerForNotification(uint256)", _tokenId)); // TODO: Use interface once updated
 
         // Claim rent from tnft::rentManager and keep it in this contract TODO TEST
         uint256 preBal = primaryRentToken.balanceOf(address(this));
@@ -220,7 +229,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
         require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
 
         // calculate shares for depositor
-        basketShare = _quoteShares(usdValue, receivedRent); // TODO: Test
+        basketShare = _quoteShares(usdValue, receivedRent);
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(factory).basketsManager()) {
@@ -347,6 +356,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
             require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
         }
 
+        // unregister from price notifications
+        ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
+        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
+        IRWAPriceNotificationDispatcher notificationDispatcher = oracle.notificationDispatcher();
+
+        address(notificationDispatcher).call(abi.encodeWithSignature("unregisterForNotification(uint256)", _tokenId)); // TODO: Use interface once updated
+
         // Transfer tokenId to user
         IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);
 
@@ -399,6 +415,25 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
      */
     function getRentBal() external view returns (uint256 totalRent) {
         return _getRentBal();
+    }
+
+    /**
+     * @notice ALlows this contract to get notified of a price change
+     * @dev Defined on interface IRWAPriceNotificationReceiver::notify
+     */
+    function notify(
+        address tnft,
+        uint256 tokenId,
+        uint256 fingerprint,
+        uint256 oldNativePrice,
+        uint256 newNativePrice,
+        uint16 currency
+    ) external {
+        uint256 oldPriceUsd = valueTracker[tnft][tokenId];
+        uint256 newPriceUsd = _getUSDValue(tnft, tokenId); // TODO: TEST
+
+        valueTracker[tnft][tokenId] = newPriceUsd;
+        totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
     }
 
     /**
