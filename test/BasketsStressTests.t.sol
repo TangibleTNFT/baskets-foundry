@@ -218,14 +218,25 @@ contract StressTests is Utility {
 
         vm.startPrank(ORACLE_OWNER);
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-            _fingerprint, // fingerprint
-            _sellAt,      // weSellAt
-            0,            // lockedAmount
-            _stock,       // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
-        );
+        try IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+                _fingerprint, // fingerprint
+                _sellAt,      // weSellAt
+                0,            // lockedAmount
+                _stock,       // stock
+                uint16(826),  // currency -> GBP ISO NUMERIC CODE
+                uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+            ) { }
+        catch {
+            IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
+                _fingerprint,  // fingerprint
+                _sellAt,     // weSellAt
+                0             // lockedAmount
+            );
+            IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
+                _fingerprint,  // fingerprint
+                _stock                 // stock
+            );
+        }
         vm.stopPrank();
 
         vm.prank(TANGIBLE_LABS);

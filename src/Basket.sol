@@ -488,15 +488,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
     }
 
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
-        // Get value of each TNFTs by currency
-        // for (uint256 i; i < supportedCurrency.length;) {
-        //     totalValue += _getUSDValue(supportedCurrency[i], currencyBalance[supportedCurrency[i]], 18);
-        //     unchecked {
-        //         ++i;
-        //     }
-        // }
         totalValue += totalNftValue;
-
         // get value of rent accrued by this contract
         totalValue += _getRentBal();
     }
@@ -525,10 +517,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     function rebase() public {
         // a. update rent
-        // b. calculate new basket token price based off new rent amount
+        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
         // c. skim pools
         // d. wrap extra skimmed tokens from pool
         // e. use wrapped tokens for auto-bribe
+
+        // rebase - 
     }
 
     
@@ -585,7 +579,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
 
     /**
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
-     * @dev If primaryRentToken.decimals == 18, this func will fail.
+     * @dev If primaryRentToken.decimals != 6, this func will fail.
      */
     function _quoteShares(uint256 usdValue, uint256 amountRent) internal view returns (uint256 shares) {
         uint256 combinedValue = (usdValue + (amountRent * 10**12));
@@ -596,97 +590,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, FactoryModifiers, R
             shares = ((combinedValue * totalSupply()) / getTotalValueOfBasket());
         }
     }
-
-    /**
-     * @notice This internal method claims rent from the Rent Manager and transfers a specified amount to redeemer.
-     */
-    // function _redeemRent(address _tnft, uint256 _tokenId, uint256 _amount, address _redeemer) internal { // TODO: Needs stress testing -> 1000+ NFTs // TODO: Optimize
-
-    //     // NOTE:
-    //     // 1. Claim from USDC balance
-    //     // 2. Claim from TNFT rent being redeemed
-    //     // 3. Claim from other TNFTs in basket -> best method for this:
-    //     //      a. sort array -> too comlpex, would need to build a single array of type (uint) and we'd lose which token IDs were in which TNFT contract.
-    //     //                       Unless we wrote a custom sort method in this contract.
-    //     //      b. Loop through main array, find largest claimable, claim that.
-    //     //      c. Iterate through main array from beginning to end until sufficient rent is claimed, save index until next redeem -> implemented.
-
-    //     // fetch current balance of USDC in this contract
-    //     uint256 preBal = primaryRentToken.balanceOf(address(this));
-
-    //     // first, claim rent for TNFT being redeemed.
-    //     uint256 received = _getRentManager(_tnft).claimRentForToken(_tokenId);
-
-    //     // verify claimed balance
-    //     require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
-
-    //     // if we still need more rent, start claiming rent from TNFTs in basket.
-    //     if (_amount > primaryRentToken.balanceOf(address(this))) {
-
-    //         // declare master array to store all claimable rent data.
-    //         RentData[] memory claimableRent = new RentData[](depositedTnfts.length);
-    //         uint256 counter;
-
-    //         // iterate through all TNFT contracts supported by this basket.
-    //         for (uint256 i; i < tnftsSupported.length;) {
-    //             address tnft = tnftsSupported[i];
-
-    //             // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
-    //             uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
-
-    //             // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
-    //             for (uint256 j; j < claimables.length;) {
-    //                 claimableRent[counter] = RentData(tnft, tokenIdLibrary[tnft][j], claimables[j]); // TODO: Verify claimables[x] == correct tokenId at tokenIdLibrary[tnft][x]
-    //                 unchecked {
-    //                     ++counter;
-    //                     ++j;
-    //                 }
-    //             }
-    //             unchecked {
-    //                 ++i;
-    //             }
-    //         }
-
-    //         // start iterating through the master claimable rent array, starting from where we left off before using claimIndex.
-    //         while (_amount > primaryRentToken.balanceOf(address(this))) {
-    //             // if claimIndex gets to the end of array, reset to beginning.
-    //             if (claimIndex >= claimableRent.length) claimIndex = 0;
-
-    //             IRentManager rentManager = _getRentManager(claimableRent[claimIndex].tnft);
-    //             uint256 tokenId = claimableRent[claimIndex].tokenId;
-
-    //             if (rentManager.claimableRentForToken(tokenId) > 0) {
-    //                 preBal = primaryRentToken.balanceOf(address(this));
-    //                 received = rentManager.claimRentForToken(tokenId);
-    //                 require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
-    //             }
-
-    //             unchecked {
-    //                 ++claimIndex;
-    //             }
-    //         }
-    //         //while (_amount > primaryRentToken.balanceOf(address(this))) {
-    //         //    uint256 mostValuableIndex;
-    //         //    for (uint256 i; i < claimableRent.length;) {  // TODO: Refactor -> finding largest claimable multiple times can get expensive.
-    //         //        if (claimableRent[i].amountClaimable > claimableRent[mostValuableIndex].amountClaimable) {
-    //         //            mostValuableIndex = i;
-    //         //        }
-    //         //        unchecked {
-    //         //            ++i;
-    //         //        }
-    //         //    }
-    //         //    //rentManager = IFactory(factory).rentManager(ITangibleNFT(claimableRent[mostValuableIndex].tnft));
-    //         //    preBal = primaryRentToken.balanceOf(address(this));
-
-    //         //    received = _getRentManager(claimableRent[mostValuableIndex].tnft).claimRentForToken(claimableRent[mostValuableIndex].tokenId);
-    //         //    require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
-    //         //}
-
-    //     }
-
-    //     // send rent to redeemer
-    //     assert(primaryRentToken.transfer(_redeemer, _amount));
-    // }
 
     /**
      * @dev Get value of TNFT in native currency TODO: Maybe put this code into a separate contract?

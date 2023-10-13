@@ -125,6 +125,7 @@ interface IPriceOracleExt {
         uint16 currency,
         uint16 location
     ) external;
+    function updateItem(uint256 fingerprint, uint256 weSellAt, uint256 lockedAmount) external;
 }
 
 interface IFactoryExt {

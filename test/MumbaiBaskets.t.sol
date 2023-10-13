@@ -113,6 +113,21 @@ contract MumbaiBasketsTest is Utility {
         );
         basketManager = BasketManager(address(basketManagerProxy));
 
+        // labels
+        vm.label(address(factoryV2), "FACTORY");
+        vm.label(address(realEstateTnft), "RealEstate_TNFT");
+        vm.label(address(realEstateOracle), "RealEstate_ORACLE");
+        vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
+        vm.label(address(marketplace), "MARKETPLACE");
+        vm.label(address(priceManager), "PRICE_MANAGER");
+        vm.label(address(basket), "BASKET");
+        vm.label(address(currencyFeed), "CURRENCY_FEED");
+        vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
+        vm.label(JOE, "JOE");
+        vm.label(NIK, "NIK");
+        vm.label(ALICE, "ALICE");
+        vm.label(BOB, "BOB");
+
         // updateDepositor for rent manager
         vm.prank(TANGIBLE_LABS);
         rentManager.updateDepositor(TANGIBLE_LABS);
@@ -131,21 +146,39 @@ contract MumbaiBasketsTest is Utility {
             address(realEstateOracle)
         );
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        //     RE_FINGERPRINT_1,  // fingerprint
+        //     500_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        //     RE_FINGERPRINT_2,  // fingerprint
+        //     600_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
             RE_FINGERPRINT_1,  // fingerprint
             500_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+            0             // lockedAmount
         );
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
+            RE_FINGERPRINT_1,  // fingerprint
+            10                 // stock
+        );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem(
             RE_FINGERPRINT_2,  // fingerprint
             600_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+            0             // lockedAmount
+        );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
+            RE_FINGERPRINT_2,  // fingerprint
+            10                 // stock
         );
         vm.stopPrank();
 
@@ -253,19 +286,7 @@ contract MumbaiBasketsTest is Utility {
 
         basket = Basket(address(_basket));
 
-        // labels
-        vm.label(address(factoryV2), "FACTORY");
-        vm.label(address(realEstateTnft), "RealEstate_TNFT");
-        vm.label(address(realEstateOracle), "RealEstate_ORACLE");
-        vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
-        vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(priceManager), "PRICE_MANAGER");
-        vm.label(address(basket), "BASKET");
-        vm.label(address(currencyFeed), "CURRENCY_FEED");
-        vm.label(JOE, "JOE");
-        vm.label(NIK, "NIK");
-        vm.label(ALICE, "ALICE");
-        vm.label(BOB, "BOB");
+        
     }
 
 
