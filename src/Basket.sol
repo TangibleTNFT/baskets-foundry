@@ -6,7 +6,6 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // chainlink imports
@@ -24,11 +23,13 @@ import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
 import { IRWAPriceNotificationReceiver } from "@tangible/notifications/IRWAPriceNotificationReceiver.sol";
 import { IRWAPriceNotificationDispatcher } from "@tangible/interfaces/IRWAPriceNotificationDispatcher.sol";
+import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhitelister.sol";
 
 // local imports
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
+import { IGetNotificationDispenser } from "./interfaces/IGetNotificationDispenser.sol";
 
 
 /**
@@ -36,7 +37,7 @@ import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, FactoryModifiers, ReentrancyGuardUpgradeable {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, FactoryModifiers {
 
     // ~ State Variables ~
 
@@ -66,8 +67,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     IERC20Metadata public primaryRentToken; // USDC by default
 
     address public deployer;
-
-    uint256 internal claimIndex;
 
 
     // ~ Events ~
@@ -210,9 +209,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         // register for price notifications
         ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
         IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
-        IRWAPriceNotificationDispatcher notificationDispatcher = oracle.notificationDispatcher();
+        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
 
-        address(notificationDispatcher).call(abi.encodeWithSignature("registerForNotification(uint256)", _tokenId)); // TODO: Use interface once updated
+        require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
+        INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
 
         // Claim rent from tnft::rentManager and keep it in this contract TODO TEST
         uint256 preBal = primaryRentToken.balanceOf(address(this));
@@ -308,7 +308,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @notice Internal method for redeeming a specified TNFT in the basket
+     * @notice Internal method for redeeming a specified TNFT in the basket TODO: Add re-entrancy guard
      */
     function _redeemTNFT(
         address _redeemer,
@@ -317,7 +317,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         uint256 _usdValue,
         //uint256 _amountRent,
         uint256 _amountBasketTokens
-    ) internal nonReentrant {
+    ) internal {
         require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
         require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
 
@@ -359,9 +359,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         // unregister from price notifications
         ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
         IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
-        IRWAPriceNotificationDispatcher notificationDispatcher = oracle.notificationDispatcher();
-
-        address(notificationDispatcher).call(abi.encodeWithSignature("unregisterForNotification(uint256)", _tokenId)); // TODO: Use interface once updated
+        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
+        INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
 
         // Transfer tokenId to user
         IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);

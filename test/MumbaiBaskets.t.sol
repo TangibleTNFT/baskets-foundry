@@ -34,6 +34,7 @@ import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManage
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -63,6 +64,7 @@ contract MumbaiBasketsTest is Utility {
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
     IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
@@ -135,6 +137,10 @@ contract MumbaiBasketsTest is Utility {
         // set basketManager
         vm.prank(factoryOwner);
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
+
+        // whitelist basketManager on NotificationDispatcher
+        vm.prank(address(0));
+        notificationDispatcher.addWhitelister(address(basketManager));
 
         // set currencyFeed
         vm.prank(factoryOwner);
@@ -252,6 +258,7 @@ contract MumbaiBasketsTest is Utility {
 
         // Deploy basket
         uint256[] memory features = new uint256[](0);
+
         
         vm.startPrank(CREATOR);
         realEstateTnft.approve(address(basketManager), 1);

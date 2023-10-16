@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
+// oz imports
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+// tangible imports
+import { IFactory } from "@tangible/interfaces/IFactory.sol";
+import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
+import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
+import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
+import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
+import { IRWAPriceNotificationDispatcher } from "@tangible/interfaces/IRWAPriceNotificationDispatcher.sol";
+import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhitelister.sol";
+import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
+
 // local imports
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 import { UpgradeableBeacon } from "./proxy/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "./proxy/BasketBeaconProxy.sol";
-
-// tangible imports
-import { IFactory } from "@tangible/interfaces/IFactory.sol";
-import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
-import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
-
-// oz imports
-import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { IGetNotificationDispenser } from "./interfaces/IGetNotificationDispenser.sol";
 
 
 /**
@@ -51,6 +57,7 @@ contract BasketManager is Initializable, FactoryModifiers {
 
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
+
 
     // ~ Events ~
 
@@ -165,8 +172,18 @@ contract BasketManager is Initializable, FactoryModifiers {
         basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
         basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
 
+        // fetch priceManager to whitelist basket for notifications on RWApriceNotificationDispatcher
+        ITangiblePriceManager priceManager = IFactory(factory).priceManager();
+
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
+            IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFTDeposit[i]));
+            IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
+
+            if (!INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(newBasketBeacon))) {
+                INotificationWhitelister(address(notificationDispatcher)).whitelistAddressAndReceiver(address(newBasketBeacon));
+            }
+
             IERC721(_tangibleNFTDeposit[i]).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit[i]);
             IERC721(_tangibleNFTDeposit[i]).approve(address(newBasketBeacon), _tokenIdDeposit[i]);
             unchecked {
