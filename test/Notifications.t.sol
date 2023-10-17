@@ -99,7 +99,7 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // TODO: 
         // deploy mockMatrix for realtyOracle
@@ -524,7 +524,7 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
         // ~ Execute notify with prank ~
 
-        vm.prank(address(mockMatrixOracle));
+        vm.prank(address(realEstateOracle));
         notificationDispatcher.notify(FINGERPRINT, 100_000_000, newPrice, 826);
 
         // ~ Post-state check ~
@@ -576,7 +576,6 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
         // ~ Execute notify with prank ~
 
-        vm.prank(address(realEstateOracle));
         mockMatrixOracle.updateItem(FINGERPRINT, 250_000_000, 0);
 
         // ~ Post-state check ~

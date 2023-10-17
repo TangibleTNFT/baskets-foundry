@@ -75,7 +75,7 @@ contract BasketsTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
-        admin = new ProxyAdmin();
+        admin = new ProxyAdmin(address(this));
 
         // Deploy Factory
         factory = new FactoryV2(

@@ -58,7 +58,7 @@ contract DeployBasketsToMumbai is Script {
         vm.startBroadcast(deployerPrivKey);
 
         // 1. Deploy proxy admin -> TODO verify owner == deployerAddress
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // 2. deploy basket
         basket = new Basket();

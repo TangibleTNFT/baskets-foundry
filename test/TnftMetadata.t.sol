@@ -48,7 +48,7 @@ contract TnftMetadataTest is Utility {
 
     function setUp() public {
 
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // Deploy Factory with proxy
         factory = new FactoryV2();

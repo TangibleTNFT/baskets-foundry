@@ -27,6 +27,7 @@ import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
 import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -53,6 +54,7 @@ contract BasketsManagerTest is Utility {
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
@@ -73,7 +75,7 @@ contract BasketsManagerTest is Utility {
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         basket = new Basket();
 
@@ -90,6 +92,10 @@ contract BasketsManagerTest is Utility {
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
+
+        // whitelist basketManager on notificationDispatcher
+        vm.prank(TANGIBLE_LABS); // category owner
+        notificationDispatcher.addWhitelister(address(basketManager));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.

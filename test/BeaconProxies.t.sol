@@ -40,7 +40,10 @@ contract BeaconProxyTest is Test {
         counterContract = new CounterContract();
 
         // deploy upgradeableBeacon.
-        beacon = new UpgradeableBeacon(address(counterContract));
+        beacon = new UpgradeableBeacon(
+            address(counterContract),
+            address(this)
+        );
 
         // Verify implementation for beacon is counterContract.
         assertEq(beacon.implementation(), address(counterContract));

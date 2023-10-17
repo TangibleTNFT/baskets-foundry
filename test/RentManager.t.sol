@@ -77,7 +77,7 @@ contract RentManagerTest is Utility {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
 
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // ~ deployment ~
 

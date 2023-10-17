@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import { IRWAPriceNotificationDispatcher } from "@tangible/interfaces/IRWAPriceNotificationDispatcher.sol";
 
-interface IGetNotificationDispenser {
+interface IGetNotificationDispatcher {
 
     function notificationDispatcher() external returns (IRWAPriceNotificationDispatcher);
 }

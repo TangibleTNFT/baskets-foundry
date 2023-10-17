@@ -5,6 +5,7 @@ import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
+import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -126,6 +127,7 @@ interface IPriceOracleExt {
         uint16 location
     ) external;
     function updateItem(uint256 fingerprint, uint256 weSellAt, uint256 lockedAmount) external;
+    function chainlinkRWAOracle() external returns (IChainlinkRWAOracle);
 }
 
 interface IFactoryExt {

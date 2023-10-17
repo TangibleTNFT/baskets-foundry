@@ -29,7 +29,7 @@ import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhit
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
-import { IGetNotificationDispenser } from "./interfaces/IGetNotificationDispenser.sol";
+import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
 
 /**
@@ -68,6 +68,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     address public deployer;
 
+    uint256[20] private __gap;
+
 
     // ~ Events ~
 
@@ -86,6 +88,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @param tokenId TokenId identifier of token being redeemed.
      */
     event TNFTRedeemed(address newOwner, address indexed tnft, uint256 indexed tokenId);
+
+    event PriceNotificationReceived(address tnft, uint256 tokenId, uint256 oldPrice, uint256 newPrice);
 
     // TODO: FOR TESTING ONLY
     event Debug(string, uint256);
@@ -207,9 +211,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
         
         // register for price notifications
-        ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
-        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
-        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
+        IPriceOracle oracle = _getOracle(_tangibleNFT);
+        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
 
         require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
         INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
@@ -232,7 +235,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         basketShare = _quoteShares(usdValue, receivedRent);
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
-        if (msg.sender == IFactory(factory).basketsManager()) {
+        if (msg.sender == IFactory(factory()).basketsManager()) {
             _depositor = deployer;
         }
 
@@ -357,9 +360,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         }
 
         // unregister from price notifications
-        ITangiblePriceManager priceManager = IFactory(factory).priceManager(); // TODO TEST
-        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
-        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
+        IPriceOracle oracle = _getOracle(_tangibleNFT);
+        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
         INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
 
         // Transfer tokenId to user
@@ -423,16 +425,22 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     function notify(
         address tnft,
         uint256 tokenId,
-        uint256 fingerprint,
-        uint256 oldNativePrice,
-        uint256 newNativePrice,
-        uint16 currency
+        uint256, // fingerprint
+        uint256, // oldNativePrice
+        uint256, // newNativePrice
+        uint16   // currency
     ) external {
+        require(msg.sender == address(IGetNotificationDispatcher(address(_getOracle(tnft))).notificationDispatcher()),
+            "msg.sender != oracle"
+        );
+
         uint256 oldPriceUsd = valueTracker[tnft][tokenId];
         uint256 newPriceUsd = _getUSDValue(tnft, tokenId); // TODO: TEST
 
         valueTracker[tnft][tokenId] = newPriceUsd;
         totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
+
+        emit PriceNotificationReceived(tnft, tokenId, oldPriceUsd, newPriceUsd);
     }
 
     /**
@@ -609,14 +617,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @dev Get value of TNFT in native currency TODO: Maybe put this code into a separate contract?
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
-        
-        ITangiblePriceManager priceManager = IFactory(factory).priceManager();
-        IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
+        IPriceOracle oracle = _getOracle(_tangibleNFT);
 
         uint256 currencyNum;
         (value, currencyNum) = oracle.marketPriceNativeCurrency(_fingerprint);
 
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory).currencyFeed());
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
         currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
 
         decimals = oracle.decimals();
@@ -637,7 +643,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @dev Get USD Price of given currency from ChainLink
      */
     function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory).currencyFeed());
+        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
         AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
         
         (, int256 price, , , ) = priceFeed.latestRoundData();
@@ -647,7 +653,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     function _getRentManager(address _tangibleNFT) internal view returns (IRentManager) {
-        return IFactory(factory).rentManager(ITangibleNFT(_tangibleNFT));
+        return IFactory(factory()).rentManager(ITangibleNFT(_tangibleNFT));
+    }
+
+    function _getOracle(address _tangibleNFT) internal view returns (IPriceOracle) {
+        ITangiblePriceManager priceManager = IFactory(factory()).priceManager();
+        return ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
     }
 
     /**

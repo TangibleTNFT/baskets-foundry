@@ -23,7 +23,7 @@ import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 import { UpgradeableBeacon } from "./proxy/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "./proxy/BasketBeaconProxy.sol";
-import { IGetNotificationDispenser } from "./interfaces/IGetNotificationDispenser.sol";
+import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
 
 /**
@@ -58,6 +58,8 @@ contract BasketManager is Initializable, FactoryModifiers {
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
+    uint256[20] private __gap;
+
 
     // ~ Events ~
 
@@ -90,7 +92,10 @@ contract BasketManager is Initializable, FactoryModifiers {
      */
     function initialize(address _initBasketImplementation, address _factory) external initializer {
         __FactoryModifiers_init(_factory);
-        beacon = new UpgradeableBeacon(_initBasketImplementation);
+        beacon = new UpgradeableBeacon(
+            _initBasketImplementation,
+            address(this) // TODO: Test to see implications of new owner
+        );
 
         featureLimit = 10; // TODO: Add setter
     }
@@ -125,7 +130,7 @@ contract BasketManager is Initializable, FactoryModifiers {
         require(featureLimit >= _features.length, "Too many features");
 
         // verify _tnftType is a supported type in the Metadata contract.
-        address metadata = IFactory(factory).tnftMetadata();
+        address metadata = IFactory(factory()).tnftMetadata();
         (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
@@ -155,7 +160,7 @@ contract BasketManager is Initializable, FactoryModifiers {
             abi.encodeWithSelector(Basket.initialize.selector,  // TODO: Verify all this data is indeed being stored in proxy
                 _name,
                 _symbol,
-                factory,
+                factory(),
                 _tnftType,
                 _rentToken,
                 _features,
@@ -173,12 +178,12 @@ contract BasketManager is Initializable, FactoryModifiers {
         basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
 
         // fetch priceManager to whitelist basket for notifications on RWApriceNotificationDispatcher
-        ITangiblePriceManager priceManager = IFactory(factory).priceManager();
+        ITangiblePriceManager priceManager = IFactory(factory()).priceManager();
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
             IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFTDeposit[i]));
-            IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispenser(address(oracle)).notificationDispatcher();
+            IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
 
             if (!INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(newBasketBeacon))) {
                 INotificationWhitelister(address(notificationDispatcher)).whitelistAddressAndReceiver(address(newBasketBeacon));

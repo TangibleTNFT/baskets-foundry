@@ -15,6 +15,7 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
+import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
@@ -35,6 +36,7 @@ import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
+import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -58,7 +60,7 @@ contract MumbaiBasketsTest is Utility {
     IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
     ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
-    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
+    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
@@ -96,7 +98,7 @@ contract MumbaiBasketsTest is Utility {
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // basket stuff
         basket = new Basket();
@@ -115,21 +117,6 @@ contract MumbaiBasketsTest is Utility {
         );
         basketManager = BasketManager(address(basketManagerProxy));
 
-        // labels
-        vm.label(address(factoryV2), "FACTORY");
-        vm.label(address(realEstateTnft), "RealEstate_TNFT");
-        vm.label(address(realEstateOracle), "RealEstate_ORACLE");
-        vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
-        vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(priceManager), "PRICE_MANAGER");
-        vm.label(address(basket), "BASKET");
-        vm.label(address(currencyFeed), "CURRENCY_FEED");
-        vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
-        vm.label(JOE, "JOE");
-        vm.label(NIK, "NIK");
-        vm.label(ALICE, "ALICE");
-        vm.label(BOB, "BOB");
-
         // updateDepositor for rent manager
         vm.prank(TANGIBLE_LABS);
         rentManager.updateDepositor(TANGIBLE_LABS);
@@ -139,8 +126,9 @@ contract MumbaiBasketsTest is Utility {
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
 
         // whitelist basketManager on NotificationDispatcher
-        vm.prank(address(0));
+        vm.prank(TANGIBLE_LABS); // category owner
         notificationDispatcher.addWhitelister(address(basketManager));
+        assertEq(notificationDispatcher.approvedWhitelisters(address(basketManager)), true);
 
         // set currencyFeed
         vm.prank(factoryOwner);
@@ -148,20 +136,28 @@ contract MumbaiBasketsTest is Utility {
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
-        IPriceOracleExt(address(chainlinkRWAOracle)).setTangibleWrapperAddress(
+        chainlinkRWAOracle.setTangibleWrapperAddress(
             address(realEstateOracle)
         );
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        chainlinkRWAOracle.createItem(
             RE_FINGERPRINT_1,  // fingerprint
+            200_000_000,     // weSellAt
+            0,            // lockedAmount
+            10,           // stock
+            uint16(826),  // currency -> GBP ISO NUMERIC CODE
+            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        );
+        chainlinkRWAOracle.createItem(
+            RE_FINGERPRINT_2,  // fingerprint
             500_000_000,     // weSellAt
             0,            // lockedAmount
             10,           // stock
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
             uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-            RE_FINGERPRINT_2,  // fingerprint
+        chainlinkRWAOracle.createItem(
+            RE_FINGERPRINT_3,  // fingerprint
             600_000_000,     // weSellAt
             0,            // lockedAmount
             10,           // stock
@@ -201,7 +197,7 @@ contract MumbaiBasketsTest is Utility {
             0,                                      // price -> since token is going to vendor, dont need price
             TANGIBLE_LABS,                          // vendor
             address(0),                             // buyer
-            RE_FINGERPRINT_1,                       // fingerprint
+            RE_FINGERPRINT_2,                       // fingerprint
             true                                    // sendToVender
         );
 
@@ -212,13 +208,15 @@ contract MumbaiBasketsTest is Utility {
             0,                                      // price -> since token is going to vendor, dont need price
             TANGIBLE_LABS,                          // vendor
             address(0),                             // buyer
-            RE_FINGERPRINT_2,                       // fingerprint
+            RE_FINGERPRINT_3,                       // fingerprint
             true                                    // sendToVender
         );
 
         //emit log_named_address("Oracle for category", address(priceManager.oracleForCategory(realEstateTnft)));
 
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
+        assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_2), true);
+        assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_3), true);
         //emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
         // mint fingerprint RE_1 and RE_2
@@ -275,7 +273,24 @@ contract MumbaiBasketsTest is Utility {
 
         basket = Basket(address(_basket));
 
-        
+        // labels
+        vm.label(address(factoryV2), "FACTORY");
+        vm.label(address(realEstateTnft), "RealEstate_TNFT");
+        vm.label(address(realEstateOracle), "RealEstate_ORACLE");
+        vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
+        vm.label(address(marketplace), "MARKETPLACE");
+        vm.label(address(priceManager), "PRICE_MANAGER");
+        vm.label(address(basket), "BASKET");
+        vm.label(address(currencyFeed), "CURRENCY_FEED");
+        vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
+
+        vm.label(address(this), "TEST_FILE");
+        vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
+        vm.label(JOE, "JOE");
+        vm.label(NIK, "NIK");
+        vm.label(ALICE, "ALICE");
+        vm.label(BOB, "BOB");
+
     }
 
 
@@ -343,7 +358,7 @@ contract MumbaiBasketsTest is Utility {
 
         vm.startPrank(ORACLE_OWNER);
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        chainlinkRWAOracle.createItem(
             _fingerprint, // fingerprint
             _sellAt,      // weSellAt
             0,            // lockedAmount
@@ -404,6 +419,9 @@ contract MumbaiBasketsTest is Utility {
 
         // verify priceManager has oracle set
         assertEq(address(IPriceManagerExt(address(priceManager)).oracleForCategory(realEstateTnft)), address(realEstateOracle));
+
+        // verify notification dispatcher state
+        assertEq(notificationDispatcher.whitelistedReceiver(address(basket)), true);
     }
 
 
@@ -420,9 +438,12 @@ contract MumbaiBasketsTest is Utility {
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preSupply = basket.totalSupply();
 
-        // Pre-state check
+        // ~ Pre-state check ~
+
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), preSupply);
@@ -448,7 +469,8 @@ contract MumbaiBasketsTest is Utility {
 
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
 
-        // Execute a deposit
+        // ~ Execute a deposit ~
+
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), tokenId);
         basket.depositTNFT(address(realEstateTnft), tokenId);
@@ -457,7 +479,8 @@ contract MumbaiBasketsTest is Utility {
         emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
         emit log_named_uint("SHARE PRICE", sharePrice);
 
-        // Post-state check
+        // ~ Post-state check ~
+
         assertEq(
             ((preSupply + basket.balanceOf(JOE)) * sharePrice) / 1 ether,
             basket.getTotalValueOfBasket()
@@ -465,6 +488,8 @@ contract MumbaiBasketsTest is Utility {
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
 
         assertEq(basket.balanceOf(JOE), usdValue);
         assertEq(basket.balanceOf(JOE), quote);
@@ -478,7 +503,7 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, tokenId);
-        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
 
         tnftsSupported = basket.getTnftsSupported();
         assertEq(tnftsSupported.length, 1);
@@ -495,10 +520,14 @@ contract MumbaiBasketsTest is Utility {
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preSupply = basket.totalSupply();
 
-        // Pre-state check
+        // ~ Pre-state check ~
+
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(NIK), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.balanceOf(NIK), 0);
@@ -525,13 +554,15 @@ contract MumbaiBasketsTest is Utility {
         uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
         uint256 sharePrice = basket.getSharePrice();
 
-        // Joe deposits TNFT
+        // ~ Joe deposits TNFT ~
+
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
-        // Nik deposits TNFT
+        // ~ Nik deposits TNFT ~
+
         vm.startPrank(NIK);
         realEstateTnft.approve(address(basket), NIK_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), NIK_TOKEN_ID);
@@ -541,7 +572,8 @@ contract MumbaiBasketsTest is Utility {
         emit log_named_uint("NIK's BASKET BALANCE", basket.balanceOf(NIK));
         emit log_named_uint("SHARE PRICE", sharePrice);
 
-        // Post-state check
+        // ~ Post-state check ~
+
         assertEq(
             ((preSupply + basket.balanceOf(JOE) + basket.balanceOf(NIK)) * sharePrice) / 1 ether,
             basket.getTotalValueOfBasket()
@@ -550,6 +582,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(NIK), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 2);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
 
         assertEq(basket.balanceOf(JOE), usdValue1);
         assertEq(basket.balanceOf(NIK), usdValue2);
@@ -564,10 +599,10 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, JOE_TOKEN_ID);
-        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
         assertEq(deposited[2].tnft, address(realEstateTnft));
         assertEq(deposited[2].tokenId, NIK_TOKEN_ID);
-        assertEq(deposited[2].fingerprint, RE_FINGERPRINT_2);
+        assertEq(deposited[2].fingerprint, RE_FINGERPRINT_3);
 
         tnftsSupported = basket.getTnftsSupported();
         assertEq(tnftsSupported.length, 1);
@@ -776,7 +811,7 @@ contract MumbaiBasketsTest is Utility {
 
         uint256 amountTNFTs = 3;
 
-        uint256[] memory tokenIds = _mintToken(address(realEstateTnft), amountTNFTs, RE_FINGERPRINT_1, JOE);
+        uint256[] memory tokenIds = _mintToken(address(realEstateTnft), amountTNFTs, RE_FINGERPRINT_2, JOE);
         address[] memory tnfts = new address[](amountTNFTs);
         for (uint256 i; i < tokenIds.length; ++i) {
             tnfts[i] = address(realEstateTnft);
@@ -791,6 +826,8 @@ contract MumbaiBasketsTest is Utility {
 
         for (uint256 i; i < amountTNFTs; ++i) {
             assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), false);
+            assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenIds[i]), address(0));
+            assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenIds[i]), address(0));
         }
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
@@ -830,6 +867,8 @@ contract MumbaiBasketsTest is Utility {
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE));
         for (uint256 i; i < amountTNFTs; ++i) {
             assertEq(basket.tokenDeposited(address(realEstateTnft), tokenIds[i]), true);
+            assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenIds[i]), address(basket));
+            assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenIds[i]), address(basket));
         }
 
         deposited = basket.getDepositedTnfts();
@@ -837,7 +876,7 @@ contract MumbaiBasketsTest is Utility {
 
         for (uint256 i = 1; i < deposited.length; ++i) { // skip initial token
             assertEq(deposited[i].tokenId, tokenIds[i-1]);
-            assertEq(deposited[i].fingerprint, RE_FINGERPRINT_1);
+            assertEq(deposited[i].fingerprint, RE_FINGERPRINT_2);
         }
 
         // Try to call batchDepositNFT with diff size arrays -> revert
@@ -874,6 +913,8 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
 
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
+
         assertEq(basket.balanceOf(JOE), usdValue);
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), 1), true);
@@ -899,6 +940,8 @@ contract MumbaiBasketsTest is Utility {
         // Post-state check
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), preSupply);
@@ -950,6 +993,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 2);
 
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
+
         assertEq(basket.balanceOf(JOE), usdValue1);
         assertEq(basket.balanceOf(NIK), usdValue2);
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE) + basket.balanceOf(NIK));
@@ -963,10 +1009,10 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, JOE_TOKEN_ID);
-        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_1);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
         assertEq(deposited[2].tnft, address(realEstateTnft));
         assertEq(deposited[2].tokenId, NIK_TOKEN_ID);
-        assertEq(deposited[2].fingerprint, RE_FINGERPRINT_2);
+        assertEq(deposited[2].fingerprint, RE_FINGERPRINT_3);
 
         address[] memory supportedTnfts = basket.getTnftsSupported();
         assertEq(supportedTnfts.length, 1);
@@ -993,6 +1039,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
 
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
+
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.balanceOf(NIK), usdValue2);
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(NIK));
@@ -1006,7 +1055,7 @@ contract MumbaiBasketsTest is Utility {
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
         assertEq(deposited[1].tokenId, NIK_TOKEN_ID);
-        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
+        assertEq(deposited[1].fingerprint, RE_FINGERPRINT_3);
 
         supportedTnfts = basket.getTnftsSupported();
         assertEq(supportedTnfts.length, 1);
@@ -1031,6 +1080,9 @@ contract MumbaiBasketsTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
+
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.balanceOf(NIK), 0);
@@ -1765,5 +1817,79 @@ contract MumbaiBasketsTest is Utility {
         assertEq(inBudget[3].sharesRequired, usdValue);
         assertEq(quantity, batchSize);
         assertEq(valid, true);
+    }
+
+
+    // ~ notify ~
+
+    /// @notice Verifies state changes when a successful call to Basket::notify is executed.
+    function test_baskets_mumbai_notify() public {
+        // creator redeems token to isolate test.
+        vm.startPrank(CREATOR);
+        basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
+        vm.stopPrank();
+
+        // ~ config ~
+
+        uint256 tokenId = JOE_TOKEN_ID;
+        uint256 newNftValue = 625_000_000; //GBP -> 25% more expensive
+
+        // get fingerprint
+        uint256 fingerprint = realEstateTnft.tokensFingerprint(tokenId);
+
+        // Joe deposits NFT
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // ~ Pre-state check ~
+
+        uint256 pre_usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        uint256 pre_sharePrice = basket.getSharePrice();
+        uint256 pre_totalBasketVal = basket.getTotalValueOfBasket();
+
+        assertEq(
+            (basket.balanceOf(JOE) * pre_sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(pre_sharePrice, 1 ether);
+        assertEq(basket.totalNftValue(), pre_usdValue);
+        assertEq(basket.valueTracker(address(realEstateTnft), tokenId), pre_usdValue);
+        assertEq(basket.valueTracker(address(realEstateTnft), tokenId), pre_totalBasketVal);
+
+        // ~ Update Token Price -> notify ~
+        
+        chainlinkRWAOracle.updateItem(fingerprint, newNftValue, 0);
+
+        // ~ Execute a deposit ~
+
+        uint256 post_usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        uint256 post_sharePrice = basket.getSharePrice();
+        uint256 post_totalBasketVal = basket.getTotalValueOfBasket();
+
+        assertGt(post_usdValue, pre_usdValue);
+        assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenId), address(basket));
+
+        assertEq(
+            (basket.balanceOf(JOE) * post_sharePrice) / 1 ether,
+            basket.getTotalValueOfBasket()
+        );
+
+        assertEq(post_sharePrice, 1.25 ether);
+        assertEq(basket.totalNftValue(), post_usdValue);
+        assertEq(basket.valueTracker(address(realEstateTnft), tokenId), post_usdValue);
+
+        // ~ logs ~
+
+        console2.log("PRE USD VALUE", pre_usdValue);
+        console2.log("POST USD VALUE", post_usdValue);
+
+        console2.log("PRE SHARE PRICE", pre_sharePrice);
+        console2.log("POST SHARE PRICE", post_sharePrice);
+
+        console2.log("PRE TOTAL VALUE", pre_totalBasketVal);
+        console2.log("POST TOTAL VALUE", post_totalBasketVal);
     }
 }

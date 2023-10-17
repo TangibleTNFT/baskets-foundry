@@ -16,6 +16,7 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketsManager.sol";
+import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
@@ -36,6 +37,10 @@ import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManage
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
+import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhitelister.sol";
+import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
+import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -66,6 +71,7 @@ contract StressTests is Utility {
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
     IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
@@ -103,7 +109,7 @@ contract StressTests is Utility {
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
-        proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin(address(this));
 
         // basket stuff
         basket = new Basket();
@@ -121,6 +127,9 @@ contract StressTests is Utility {
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
+
+        vm.prank(TANGIBLE_LABS); // category owner
+        notificationDispatcher.addWhitelister(address(basketManager));
 
         // updateDepositor for rent manager
         vm.prank(TANGIBLE_LABS);
@@ -216,9 +225,11 @@ contract StressTests is Utility {
     function _createItemAndMint(address tnft, uint256 _sellAt, uint256 _stock, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
         require(_mintCount >= _stock, "mint count must be gt stock");
 
-        vm.startPrank(ORACLE_OWNER);
+        IPriceOracle oracle = priceManager.oracleForCategory(ITangibleNFT(tnft));
+        IChainlinkRWAOracle chainlinkOracle = IPriceOracleExt(address(oracle)).chainlinkRWAOracle();
+
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        IPriceOracleExt(address(chainlinkOracle)).createItem(
             _fingerprint, // fingerprint
             _sellAt,      // weSellAt
             0,            // lockedAmount
@@ -226,7 +237,6 @@ contract StressTests is Utility {
             uint16(826),  // currency -> GBP ISO NUMERIC CODE
             uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
         );
-        vm.stopPrank();
 
         vm.prank(TANGIBLE_LABS);
         ITangibleNFTExt(tnft).addFingerprints(_asSingletonArrayUint(_fingerprint));
@@ -266,36 +276,76 @@ contract StressTests is Utility {
 
     /// @notice helper function for adding new categories and deploying new TNFT addresses.
     function _deployNewTnftContract(string memory name) internal returns (address) {
+        // TODO: Deploy new mockMatrix, realtyOracle, and ND
 
-        // Deploy TangibleNFTV2 -> for real estate
-        vm.prank(TANGIBLE_LABS);
+        //a. deploy mockMatrix
+        MockMatrixOracle mockMatrixOracle = new MockMatrixOracle();
+
+        //b. deploy oracle
+        RealtyOracleTangibleV2 realtyOracle = new RealtyOracleTangibleV2();
+        TransparentUpgradeableProxy realtyOracleProxy = new TransparentUpgradeableProxy(
+            address(realtyOracle),
+            address(proxyAdmin),
+            abi.encodeWithSelector(RealtyOracleTangibleV2.initialize.selector,
+                address(factoryV2),
+                address(currencyFeed),
+                address(mockMatrixOracle)
+            )
+        );
+        realtyOracle = RealtyOracleTangibleV2(address(realtyOracleProxy));
+
+        // set oracle on mockMatrix
+        mockMatrixOracle.setTangibleWrapperAddress(address(realtyOracle));
+
+        //c.  Deploy TangibleNFTV2 -> for real estate
+        vm.prank(TANGIBLE_LABS); // category owner
         ITangibleNFT tnft = IFactoryExt(address(factoryV2)).newCategory(
             name,  // Name
             "RLTY",     // Symbol
             "",         // Metadata base uri
             false,      // storage price fixed
             false,      // storage required
-            address(realEstateOracle), // oracle address
+            address(realtyOracle), // oracle address
             false,      // symbol in uri
             RE_TNFTTYPE    // tnft type
         );
+
+        //d. deploy ND
+        RWAPriceNotificationDispatcher notifications = new RWAPriceNotificationDispatcher();
+        TransparentUpgradeableProxy notificationsProxy = new TransparentUpgradeableProxy(
+            address(notifications),
+            address(proxyAdmin),
+            abi.encodeWithSelector(RWAPriceNotificationDispatcher.initialize.selector,
+                address(factoryV2),
+                address(tnft)
+            )
+        );
+        notifications = RWAPriceNotificationDispatcher(address(notificationsProxy));
+
+        vm.startPrank(TANGIBLE_LABS);
+        realtyOracle.setNotificationDispatcher(address(notifications));
+        notifications.addWhitelister(address(basketManager));
+        notifications.whitelistAddressAndReceiver(address(basket));
+        vm.stopPrank();
 
         return address(tnft);
     }
 
     /// @notice This method runs through the same USDValue logic as the Basket::depositTNFT
     function _getUsdValueOfNft(address _tnft, uint256 _tokenId) internal view returns (uint256 usdValue) {
+
+        IPriceOracle oracle = priceManager.oracleForCategory(ITangibleNFT(_tnft));
         
         // ~ get Tnft Native Value ~
         
         // fetch fingerprint of product/property
         uint256 fingerprint = ITangibleNFT(_tnft).tokensFingerprint(_tokenId);
         // using fingerprint, fetch the value of the property in it's respective currency
-        (uint256 value, uint256 currencyNum) = realEstateOracle.marketPriceNativeCurrency(fingerprint);
+        (uint256 value, uint256 currencyNum) = oracle.marketPriceNativeCurrency(fingerprint);
         // Fetch the string ISO code for currency
         string memory currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
         // get decimal representation of property value
-        uint256 oracleDecimals = realEstateOracle.decimals();
+        uint256 oracleDecimals = oracle.decimals();
         
         // ~ get USD Exchange rate ~
 
@@ -310,6 +360,12 @@ contract StressTests is Utility {
 
         // calculate total USD value of property
         usdValue = (uint(price) * value * 10 ** 18) / 10 ** priceDecimals / 10 ** oracleDecimals;
+    }
+
+    /// @notice Helper function for fetching notificationDispatcher contract given specific tnft contract.
+    function _getNotificationDispatcher(address _tnft) internal returns (RWAPriceNotificationDispatcher) {
+        IPriceOracle oracle = priceManager.oracleForCategory(ITangibleNFT(_tnft));
+        return RWAPriceNotificationDispatcher(address(IGetNotificationDispatcher(address(oracle)).notificationDispatcher()));
     }
 
 
@@ -427,6 +483,12 @@ contract StressTests is Utility {
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
                 assertEq(basket.balanceOf(JOE), basketPreBal + usdValue);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
+
+                // verify notificationDispatcher state
+                assertEq(
+                    _getNotificationDispatcher(address(tnft)).registeredForNotification(address(tnft), tokenId),
+                    address(basket)
+                );
             }
         }
 
@@ -554,6 +616,12 @@ contract StressTests is Utility {
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
                 assertEq(basket.balanceOf(JOE), basketPreBal + usdValue);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
+
+                // verify notificationDispatcher state
+                assertEq(
+                    _getNotificationDispatcher(address(tnft)).registeredForNotification(address(tnft), tokenId),
+                    address(basket)
+                );
             }
         }
 
@@ -690,6 +758,12 @@ contract StressTests is Utility {
         for (uint256 i; i < totalTokens; ++i) {
             assertEq(ITangibleNFT(batchTnftArr[i]).ownerOf(batchTokenIdArr[i]), address(basket));
             assertEq(basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i]), true);
+
+            // verify notificationDispatcher state
+            assertEq(
+                _getNotificationDispatcher(batchTnftArr[i]).registeredForNotification(batchTnftArr[i], batchTokenIdArr[i]),
+                address(basket)
+            );
         }
 
         // verify Joe balances
@@ -827,6 +901,12 @@ contract StressTests is Utility {
         for (uint256 i; i < totalTokens; ++i) {
             assertEq(ITangibleNFT(batchTnftArr[i]).ownerOf(batchTokenIdArr[i]), address(basket));
             assertEq(basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i]), true);
+
+            // verify notificationDispatcher state
+            assertEq(
+                _getNotificationDispatcher(batchTnftArr[i]).registeredForNotification(batchTnftArr[i], batchTokenIdArr[i]),
+                address(basket)
+            );
         }
 
         // verify Joe balances
@@ -987,6 +1067,12 @@ contract StressTests is Utility {
         for (uint256 i; i < totalTokens; ++i) {
             assertEq(ITangibleNFT(batchTnftArr[i]).ownerOf(batchTokenIdArr[i]), address(basket));
             assertEq(basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i]), true);
+
+            // verify notificationDispatcher state
+            assertEq(
+                _getNotificationDispatcher(batchTnftArr[i]).registeredForNotification(batchTnftArr[i], batchTokenIdArr[i]),
+                address(basket)
+            );
         }
 
         // verify rentBal
@@ -1161,7 +1247,7 @@ contract StressTests is Utility {
             assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
         }
 
-        uint256 usdValue = _getUsdValueOfNft(config.tnfts[0], tokenIdMap[config.tnfts[0]][0]);
+        //uint256 usdValue = _getUsdValueOfNft(config.tnfts[0], tokenIdMap[config.tnfts[0]][0]);
 
         // deposit tokens via batch
         vm.startPrank(JOE);
@@ -1180,7 +1266,7 @@ contract StressTests is Utility {
         vm.prank(JOE);
         basket.fulfillRandomRedeem(sharesReceived[0]);
 
-        // ~ Post-state check 2 ~
+        // ~ Post-state check ~
 
         // find token that was redeemed
         address tnft;
@@ -1192,14 +1278,17 @@ contract StressTests is Utility {
                 emit log_named_address("Tnft address", batchTnftArr[i]);
                 emit log_named_uint("tokenId", batchTokenIdArr[i]);
                 break; 
-                // ce7, 5
-                // 3EB, 1
-                // 981, 3
             }
         }
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
+
+        // verify notificationDispatcher state
+        assertEq(
+            _getNotificationDispatcher(tnft).registeredForNotification(tnft, tokenId),
+            address(0)
+        );
 
         assertEq(basket.tokenDeposited(tnft, tokenId), false);
 
