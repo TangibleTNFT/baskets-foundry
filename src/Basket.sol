@@ -156,7 +156,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This method allows a user to deposit a batch of TNFTs into the basket.
-     * @dev Gas block limit is reached at 90 ~ 100 tokens.
+     * @dev Gas block limit is reached at 90 ~ 100 tokens. TODO: Not the case anymore, re-test
      */
     function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
         uint256 length = _tangibleNFTs.length;
@@ -180,76 +180,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
-     *         The deposit will be minted a sufficient amount of basket tokens in return.
-     */
-    function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
-        require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
-        // if contract supports features, make sure tokenId has a supported feature
-        require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
-
-        // get token fingerprint
-        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
-
-        // calculate usd value of TNFT with 18 decimals
-        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
-        require(usdValue > 0, "Unsupported TNFT");
-
-        // update contract
-        tokenDeposited[_tangibleNFT][_tokenId] = true;
-        valueTracker[_tangibleNFT][_tokenId] = usdValue;
-
-        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
-        tokenIdLibrary[_tangibleNFT].push(_tokenId);
-
-        (, bool exists) = _isSupportedTnft(_tangibleNFT);
-        if (!exists) {
-            tnftsSupported.push(_tangibleNFT);
-        }
-
-        // take token from depositor
-        IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
-        
-        // register for price notifications
-        IPriceOracle oracle = _getOracle(_tangibleNFT);
-        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
-
-        require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
-        INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
-
-        // Claim rent from tnft::rentManager and keep it in this contract TODO TEST
-        uint256 preBal = primaryRentToken.balanceOf(address(this));
-
-        // claim rent for TNFT being redeemed.
-        uint256 receivedRent;
-        IRentManager rentManager = _getRentManager(_tangibleNFT);
-
-        if (rentManager.claimableRentForToken(_tokenId) > 0) {
-            receivedRent += rentManager.claimRentForToken(_tokenId);
-        }
-
-        // verify claimed balance
-        require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
-
-        // calculate shares for depositor
-        basketShare = _quoteShares(usdValue, receivedRent);
-
-        // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
-        if (msg.sender == IFactory(factory()).basketsManager()) {
-            _depositor = deployer;
-        }
-
-        // mint basket tokens to user
-        _mint(_depositor, basketShare);
-
-        // Update total nft value in this contract
-        totalNftValue += usdValue;
-
-        emit TNFTDeposited(_depositor, _tangibleNFT, _tokenId);
-    }
-
-    /**
-     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // NOTE: For testing only?
+     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // TODO: Remove
      */
     function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
 
@@ -278,99 +209,60 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
         // a. Create an array of TNFTs within budget
-        (RedeemData[] memory tokensInBudget,, bool valid) = checkBudget(_budget);
+        (RedeemData[] memory tokensInBudget, uint256 len, bool valid) = checkBudget(_budget);
         require(valid, "Insufficient budget");
+        
+        uint256 index;
+        if (len > 1) {
+            // b. find lowest yielding NFT -> redeem it
+            uint256 value = type(uint256).max;
+            for (uint256 i; i < len;) {
 
-        uint256 len = tokensInBudget.length;
-        require(len > 0, "0");
+                // TODO:
+                // ba. get usd value
+                // bb. get rent per block
+                // bc. calculate worth with value/rentPerBlock
+                // bd. if lower than `value`, save index, assign to `value`
 
-        // b. use randomWord to shuffle array TODO: REWORK -> choose lowest yielding nft
-        // for (uint256 i; i < len;) {
-        //     uint256 key = i + (randomWord % (len - i));
-
-        //     if (i != key) {
-        //         RedeemData memory temp = tokensInBudget[key];
-        //         tokensInBudget[key] = tokensInBudget[i];
-        //         tokensInBudget[i] = temp;
-        //     }
-
-        //     unchecked {
-        //         ++i;
-        //     }
-        // }
+                unchecked {
+                    ++i;
+                }
+            }
+        }
 
         // c. redeem NFT in index 0
         _redeemTNFT(
             redeemer,
-            tokensInBudget[0].tnft,
-            tokensInBudget[0].tokenId,
-            tokensInBudget[0].usdValue,
-            //tokensInBudget[0].amountRent,
-            tokensInBudget[0].sharesRequired
+            tokensInBudget[index].tnft,
+            tokensInBudget[index].tokenId,
+            tokensInBudget[index].usdValue,
+            tokensInBudget[index].sharesRequired
         );
     }
 
     /**
-     * @notice Internal method for redeeming a specified TNFT in the basket TODO: Add re-entrancy guard
+     * @notice ALlows this contract to get notified of a price change
+     * @dev Defined on interface IRWAPriceNotificationReceiver::notify
      */
-    function _redeemTNFT(
-        address _redeemer,
-        address _tangibleNFT,
-        uint256 _tokenId,
-        uint256 _usdValue,
-        //uint256 _amountRent,
-        uint256 _amountBasketTokens
-    ) internal {
-        require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
-        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+    function notify(
+        address tnft,
+        uint256 tokenId,
+        uint256, // fingerprint
+        uint256, // oldNativePrice
+        uint256, // newNativePrice
+        uint16   // currency
+    ) external {
+        require(msg.sender == address(_getNotificationDispatcher(tnft)),
+            "msg.sender != ND"
+        );
 
-        // update contract
-        tokenDeposited[_tangibleNFT][_tokenId] = false;
+        uint256 oldPriceUsd = valueTracker[tnft][tokenId];
+        uint256 newPriceUsd = _getUSDValue(tnft, tokenId);
 
-        uint256 index;
-        (index,) = _isDepositedTnft(_tangibleNFT, _tokenId);
-        depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
-        depositedTnfts.pop();
+        valueTracker[tnft][tokenId] = newPriceUsd;
+        totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
 
-        (index,) = _isTokenIdLibrary(_tangibleNFT, _tokenId);
-        tokenIdLibrary[_tangibleNFT][index] = tokenIdLibrary[_tangibleNFT][tokenIdLibrary[_tangibleNFT].length - 1];
-        tokenIdLibrary[_tangibleNFT].pop();
-
-        if (tokenIdLibrary[_tangibleNFT].length == 0) {
-            (index,) = _isSupportedTnft(_tangibleNFT); 
-            tnftsSupported[index] = tnftsSupported[tnftsSupported.length - 1];
-            tnftsSupported.pop();
-        }
-
-        // if (_amountRent > 0) {
-
-        //     // If there's sufficient rent sitting in the basket, no need to claim, otherwise claim rent from manager first.
-        //     primaryRentToken.balanceOf(address(this)) >= _amountRent ?
-        //         assert(primaryRentToken.transfer(_redeemer, _amountRent)) :
-        //         _redeemRent(_tangibleNFT, _tokenId, _amountRent, _redeemer);
-        // }
-
-        IRentManager rentManager = _getRentManager(_tangibleNFT);
-
-        // redeem rent from redeemed TNFT to this contract.
-        if (rentManager.claimableRentForToken(_tokenId) > 0) {
-            uint256 preBal = primaryRentToken.balanceOf(address(this));
-            uint256 received = rentManager.claimRentForToken(_tokenId);
-            require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
-        }
-
-        // unregister from price notifications
-        IPriceOracle oracle = _getOracle(_tangibleNFT);
-        IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
-        INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
-
-        // Transfer tokenId to user
-        IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);
-
-        totalNftValue -= _usdValue;
-        _burn(_redeemer, _amountBasketTokens);
-
-        emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
+        emit PriceNotificationReceived(tnft, tokenId, oldPriceUsd, newPriceUsd);
     }
 
     /**
@@ -418,38 +310,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         return _getRentBal();
     }
 
-    /**
-     * @notice ALlows this contract to get notified of a price change
-     * @dev Defined on interface IRWAPriceNotificationReceiver::notify
-     */
-    function notify(
-        address tnft,
-        uint256 tokenId,
-        uint256, // fingerprint
-        uint256, // oldNativePrice
-        uint256, // newNativePrice
-        uint16   // currency
-    ) external {
-        require(msg.sender == address(IGetNotificationDispatcher(address(_getOracle(tnft))).notificationDispatcher()),
-            "msg.sender != oracle"
-        );
-
-        uint256 oldPriceUsd = valueTracker[tnft][tokenId];
-        uint256 newPriceUsd = _getUSDValue(tnft, tokenId); // TODO: TEST
-
-        valueTracker[tnft][tokenId] = newPriceUsd;
-        totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
-
-        emit PriceNotificationReceived(tnft, tokenId, oldPriceUsd, newPriceUsd);
-    }
-
-    /**
-     * @notice Allows address(this) to receive ERC721 tokens.
-     */
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
-    }
-
     function getDepositedTnfts() external view returns (TokenData[] memory) {
         return depositedTnfts;
     }
@@ -466,8 +326,25 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         return supportedFeatures;
     }
 
+    /**
+     * @notice Allows address(this) to receive ERC721 tokens.
+     */
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+
     
     // ~ Public Functions ~
+
+    function rebase() public {
+        // a. update rent
+        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
+        // c. skim pools
+        // d. wrap extra skimmed tokens from pool
+        // e. use wrapped tokens for auto-bribe
+
+        // rebase - 
+    }
 
     /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
@@ -557,24 +434,143 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         return true;
     }
 
-    function rebase() public {
-        // a. update rent
-        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
-        // c. skim pools
-        // d. wrap extra skimmed tokens from pool
-        // e. use wrapped tokens for auto-bribe
-
-        // rebase - 
-    }
-
     
     // ~ Internal Functions ~
+
+    /**
+     * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
+     *         The deposit will be minted a sufficient amount of basket tokens in return.
+     */
+    function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
+        require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
+        // if contract supports features, make sure tokenId has a supported feature
+        require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
+
+        // get token fingerprint
+        uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
+
+        // calculate usd value of TNFT with 18 decimals
+        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
+        require(usdValue > 0, "Unsupported TNFT");
+
+        // update contract
+        tokenDeposited[_tangibleNFT][_tokenId] = true;
+        valueTracker[_tangibleNFT][_tokenId] = usdValue;
+
+        depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
+        tokenIdLibrary[_tangibleNFT].push(_tokenId);
+
+        (, bool exists) = _isSupportedTnft(_tangibleNFT);
+        if (!exists) {
+            tnftsSupported.push(_tangibleNFT);
+        }
+
+        // take token from depositor
+        IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
+        
+        // register for price notifications
+        IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
+
+        require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
+        INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
+
+        // Claim rent from tnft::rentManager and keep it in this contract TODO TEST
+        uint256 preBal = primaryRentToken.balanceOf(address(this));
+
+        // claim rent for TNFT being redeemed.
+        uint256 receivedRent;
+        IRentManager rentManager = _getRentManager(_tangibleNFT);
+
+        if (rentManager.claimableRentForToken(_tokenId) > 0) {
+            receivedRent += rentManager.claimRentForToken(_tokenId);
+        }
+
+        // verify claimed balance
+        require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
+
+        // calculate shares for depositor
+        basketShare = _quoteShares(usdValue, receivedRent);
+
+        // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
+        if (msg.sender == IFactory(factory()).basketsManager()) {
+            _depositor = deployer;
+        }
+
+        // mint basket tokens to user
+        _mint(_depositor, basketShare);
+
+        // Update total nft value in this contract
+        totalNftValue += usdValue;
+
+        emit TNFTDeposited(_depositor, _tangibleNFT, _tokenId);
+    }
+
+    /**
+     * @notice Internal method for redeeming a specified TNFT in the basket TODO: Add re-entrancy guard
+     */
+    function _redeemTNFT(
+        address _redeemer,
+        address _tangibleNFT,
+        uint256 _tokenId,
+        uint256 _usdValue,
+        uint256 _amountBasketTokens
+    ) internal {
+        require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
+        require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+
+        // update contract
+        tokenDeposited[_tangibleNFT][_tokenId] = false;
+
+        uint256 index;
+        (index,) = _isDepositedTnft(_tangibleNFT, _tokenId);
+        depositedTnfts[index] = depositedTnfts[depositedTnfts.length - 1];
+        depositedTnfts.pop();
+
+        (index,) = _isTokenIdLibrary(_tangibleNFT, _tokenId);
+        tokenIdLibrary[_tangibleNFT][index] = tokenIdLibrary[_tangibleNFT][tokenIdLibrary[_tangibleNFT].length - 1];
+        tokenIdLibrary[_tangibleNFT].pop();
+
+        if (tokenIdLibrary[_tangibleNFT].length == 0) {
+            (index,) = _isSupportedTnft(_tangibleNFT); 
+            tnftsSupported[index] = tnftsSupported[tnftsSupported.length - 1];
+            tnftsSupported.pop();
+        }
+
+        // if (_amountRent > 0) {
+
+        //     // If there's sufficient rent sitting in the basket, no need to claim, otherwise claim rent from manager first.
+        //     primaryRentToken.balanceOf(address(this)) >= _amountRent ?
+        //         assert(primaryRentToken.transfer(_redeemer, _amountRent)) :
+        //         _redeemRent(_tangibleNFT, _tokenId, _amountRent, _redeemer);
+        // }
+
+        IRentManager rentManager = _getRentManager(_tangibleNFT);
+
+        // redeem rent from redeemed TNFT to this contract.
+        if (rentManager.claimableRentForToken(_tokenId) > 0) {
+            uint256 preBal = primaryRentToken.balanceOf(address(this));
+            uint256 received = rentManager.claimRentForToken(_tokenId);
+            require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "claiming error");
+        }
+
+        // unregister from price notifications
+        IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
+        INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
+
+        // Transfer tokenId to user
+        IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);
+
+        totalNftValue -= _usdValue;
+        _burn(_redeemer, _amountBasketTokens);
+
+        emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
+    }
 
     /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
      */
-    function _getRentBal() internal view returns (uint256 totalRent) { // TODO: Optimize
+    function _getRentBal() internal view returns (uint256 totalRent) {
         uint256 decimals = decimals() - IERC20Metadata(primaryRentToken).decimals();
 
         // iterate through all supported tnfts and tokenIds deposited for each tnft.
@@ -614,7 +610,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @dev Get value of TNFT in native currency TODO: Maybe put this code into a separate contract?
+     * @dev Get value of TNFT in native currency
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
         IPriceOracle oracle = _getOracle(_tangibleNFT);
@@ -652,13 +648,32 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         return (uint256(price), priceFeed.decimals());
     }
 
+    /**
+     * @notice This method is an internal view method that fetches the RentManager contract for a specified TNFT contract.
+     * @param _tangibleNFT TNFT contract address we want the RentManager for.
+     * @return RentManager contract reference.
+     */
     function _getRentManager(address _tangibleNFT) internal view returns (IRentManager) {
         return IFactory(factory()).rentManager(ITangibleNFT(_tangibleNFT));
     }
 
+    /**
+     * @notice This method is an internal view method that fetches the PriceOracle contract for a specified TNFT contract.
+     * @param _tangibleNFT TNFT contract address we want the PriceOracle for.
+     * @return PriceOracle contract reference.
+     */
     function _getOracle(address _tangibleNFT) internal view returns (IPriceOracle) {
         ITangiblePriceManager priceManager = IFactory(factory()).priceManager();
         return ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFT));
+    }
+
+    /**
+     * @notice This method is an internal view method that fetches the RWAPriceNotificationDispatcher contract for a specified TNFT contract.
+     * @param _tangibleNFT TNFT contract address we want the RWAPriceNotificationDispatcher for.
+     * @return RWAPriceNotificationDispatcher contract reference.
+     */
+    function _getNotificationDispatcher(address _tangibleNFT) internal returns (IRWAPriceNotificationDispatcher) {
+        return IGetNotificationDispatcher(address(_getOracle(_tangibleNFT))).notificationDispatcher();
     }
 
     /**
