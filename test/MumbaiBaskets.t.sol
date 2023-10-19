@@ -1333,7 +1333,7 @@ contract MumbaiBasketsTest is Utility {
         for (uint256 i; i < totalTokens; ++i) {
             realEstateTnft.approve(address(basket), batchTokenIdArr[i]);
         }
-        uint256[] memory shares = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+        basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
         vm.stopPrank();
 
         // ~ Pre-state check ~

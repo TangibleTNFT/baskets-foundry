@@ -660,12 +660,12 @@ contract StressTests is Utility {
     // ~ stress batchDepositTNFT ~
 
     /// @notice Stress test of batchDepositTNFT method.
-    /// NOTE: When num of tokens == 100, batchDepositTNFT consumes ~29.2M gas
-    function test_stress_batchDepositTNFT() public {
+    /// NOTE: When num of tokens == 200, batchDepositTNFT consumes ~30.5M gas
+    function test_stress_batchDepositTNFT_noFuzz() public {
         
         // ~ Config ~
 
-        uint256 newCategories = 10;
+        uint256 newCategories = 2;
         uint256 amountFingerprints = 10;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints

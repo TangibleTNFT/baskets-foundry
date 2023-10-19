@@ -7,6 +7,8 @@ import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Rec
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
 
 // chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -33,43 +35,51 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
 
 // TODO: Add method for owner to remove rent. Do we rebase when removed??
 
-
 /**
  * @title Basket
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, FactoryModifiers {
+contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, ReentrancyGuardUpgradeable, FactoryModifiers {
 
     // ~ State Variables ~
 
+    /// @notice Ledger of all TNFT tokens stored in this basket.
     TokenData[] public depositedTnfts;
 
-    //RedeemData[] internal tokensInBudget; // Note: Only used during runtime. Otherwise empty
-
+    /// @notice Array of TNFT contract addresses supported by this contract.
     address[] public tnftsSupported;
 
+    /// @notice Mapping of TNFT contract address => array of tokenIds in this basket from each TNFT contract.
     mapping(address => uint256[]) public tokenIdLibrary;
 
-    mapping(address => mapping(uint256 => uint256)) public valueTracker; // tracks USD value of TNFT
+    /// @notice Mapping used to track the usdValue of each TNFT token in this contract.
+    mapping(address => mapping(uint256 => uint256)) public valueTracker;
 
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
     mapping(address => mapping(uint256 => bool)) public tokenDeposited;
 
+    /// @notice Mapping used to check whether a specified feature (key) is supported. If true, feature is required.
     mapping(uint256 => bool) public featureSupported;
 
+    /// @notice Array of all features required by a TNFT token to be deposited into this basket.
+    /// @dev These features (aka "subcategories") are OPTIONAL.
     uint256[] public supportedFeatures;
 
-    //string[] public supportedCurrency; // TODO: Revisit -> https://github.com/TangibleTNFT/usdr/blob/master/contracts/TreasuryTracker.sol
-
+    /// @notice TnftType that this basket supports exclusively.
+    /// @dev This TnftType (aka "category") is REQUIRED upon basket creation.
     uint256 public tnftType;
 
-    uint256 public totalNftValue; // NOTE: For testing. Will be replaced
+    /// @notice This value is used to track the total USD value of all TNFT tokens inside this contract.
+    uint256 public totalNftValue;
 
-    IERC20Metadata public primaryRentToken; // USDC by default
+    /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
+    IERC20Metadata public primaryRentToken;
 
+    /// @notice Address of basket creator.
     address public deployer;
 
+    /// @notice Used to save slots for potential extra state variables later on.
     uint256[20] private __gap;
 
 
@@ -91,15 +101,17 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      */
     event TNFTRedeemed(address newOwner, address indexed tnft, uint256 indexed tokenId);
 
-    event PriceNotificationReceived(address tnft, uint256 tokenId, uint256 oldPrice, uint256 newPrice);
+    /**
+     * @notice This event is emitted when the price of a TNFT token is updated by the oracle.
+     * @param tnft TNFT contract address of token being updated.
+     * @param tokenId TokenId identifier of token being updated.
+     * @param oldPrice Old USD price of TNFT token.
+     * @param newPrice New USD price of TNFT token.
+     */
+    event PriceNotificationReceived(address indexed tnft, uint256 indexed tokenId, uint256 oldPrice, uint256 newPrice);
 
     // TODO: FOR TESTING ONLY
     event Debug(string, uint256);
-
-    
-    // ~ Modifiers ~
-
-    //
 
 
     // ~ Constructor ~
@@ -158,7 +170,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This method allows a user to deposit a batch of TNFTs into the basket.
-     * @dev Gas block limit is reached at 90 ~ 100 tokens. TODO: Not the case anymore, re-test
+     * @dev Gas block limit is reached at ~200 tokens.
+     * @param _tangibleNFTs Array of TNFT contract addresses corresponding with each token being deposited.
+     * @param _tokenIds Array of token Ids being deposited.
+     * @return basketShares -> Array of basket tokens minted to msg.sender for each token deposited.
      */
     function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
         uint256 length = _tangibleNFTs.length;
@@ -176,15 +191,21 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This method allows a user to deposit their TNFT in exchange for Basket tokens.
+     * @param _tangibleNFT TNFT contract address of token being deposited.
+     * @param _tokenId TNFT tokenId of token being deposited.
+     * @return basketShare -> Amount of basket tokens minted to msg.sender.
      */
     function depositTNFT(address _tangibleNFT, uint256 _tokenId) external returns (uint256 basketShare) {
         basketShare = _depositTNFT(_tangibleNFT, _tokenId, msg.sender);
     }
 
     /**
-     * @notice This method is the vrf callback method. Will use the random seed to choose a random TNFT for redeemer.
+     * @notice This method is used to redeem a TNFT token. This method will take a budget of basket tokens and chooses
+     *         the lowest rent yielding TNFT token in that specified budget range to transfer to redeemer.
+     * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
+     * @param _budget Amount of basket tokens being submitted to redeem method.
      */
-    function redeemTNFT(uint256 _budget) external { // TODO: Change name
+    function redeemTNFT(uint256 _budget) external {
         address redeemer = msg.sender;
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
@@ -200,7 +221,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
                 // ba. get usd value
                 uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
-                emit Debug("usd val", usdValue);
+                //emit Debug("usd val", usdValue);
 
                 // bb. get rent per block
                 IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
@@ -252,6 +273,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice ALlows this contract to get notified of a price change
      * @dev Defined on interface IRWAPriceNotificationReceiver::notify
+     * @param tnft TNFT contract address of token being updated.
+     * @param tokenId TNFT tokenId of token being updated.
      */
     function notify(
         address tnft,
@@ -280,14 +303,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @param _tokenId TokenId of NFT being quoted.
      * @return shares -> Amount of Erc20 basket tokens quoted for NFT.
      */
-    function getQuoteIn(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 shares) { // TODO: move off chain if contract size becomes issue.
+    function getQuoteIn(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 shares) {
         // calculate usd value of TNFT with 18 decimals
         uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue > 0, "Unsupported TNFT");
-        
-        // get rent amount claimable
-        //IRentManager rentManager = _getRentManager(_tangibleNFT);
-        //uint256 claimableRent = rentManager.claimableRentForToken(_tokenId);
 
         // calculate shares for depositor
         shares = _quoteShares(usdValue, 0);
@@ -299,13 +318,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @param _tokenId TokenId of NFT being quoted.
      * @return sharesRequired -> Amount of Erc20 basket tokens required to redeem NFT.
      */
-    function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) { // TODO: move off chain if contract size becomes issue.
+    function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) {
         // fetch usd value of tnft
         uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
         require(usdValue > 0, "Unsupported TNFT");
-        
-        // get get rent amount
-        //uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
 
         // Get shares required
         sharesRequired = _quoteShares(usdValue, 0);
@@ -314,23 +330,37 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
+     * @param totalRent Total claimable rent balance of TNFTs inside basket.
      */
     function getRentBal() external view returns (uint256 totalRent) {
         return _getRentBal();
     }
 
+    /**
+     * @notice This method returns the `depositedTnfts` state array in it's entirety.
+     */
     function getDepositedTnfts() external view returns (TokenData[] memory) {
         return depositedTnfts;
     }
 
+    /**
+     * @notice This method returns the `tnftsSupported` state array in it's entirety.
+     */
     function getTnftsSupported() external view returns (address[] memory) {
         return tnftsSupported;
     }
 
+    /**
+     * @notice This method returns the `tokenIdLibrary` mapped array in it's entirety.
+     * @param _tnft TNFT contract address specifying the array desired from the mapping.
+     */
     function getTokenIdLibrary(address _tnft) external view returns (uint256[] memory) {
         return tokenIdLibrary[_tnft];
     }
 
+    /**
+     * @notice This method returns the `supportedFeatures` state array in it's entirety.
+     */
     function getSupportedFeatures() external view returns (uint256[] memory) {
         return supportedFeatures;
     }
@@ -357,22 +387,19 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
-     * @dev This should be called by the front end prior to allowing any user from executing redeemRandomTNFT to ensure
-     *      when a callback occurs from vrf, it wasn't wasted fees to find the budget is not eligible for any redeemable TNFTs.
+     * @param _budget Amount of basket tokens willing to burn for a redeemable TNFT token from within the basket.
+     * @return inBudget -> Array of type RedeemData of all TNFT tokens that can be redeemed for the specified budget of basket tokens.
+     * @return quantity -> Amount of tokens that can be redeemed for `_budget`. note: quantity == inBudget.length
+     * @return valid -> If there are tokens that can be redeemed for `_budget`, valid will be true. Otherwise, false.
      */
-    function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) { // TODO: Optimize
+    function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) {
         uint256 len = depositedTnfts.length;
         inBudget = new RedeemData[](len);
-
-        //uint256 rentBal = _getRentBal() / 10**12;
-        //uint256 totalNftVal = totalNftValue;
 
         for (uint256 i; i < len;) {
 
             // get usd value of TNFT token
             uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
-            // Calculate amount of rent that would be received
-            //uint256 amountRent = (usdValue * rentBal) / totalNftVal;
             // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
             uint256 sharesRequired = _quoteShares(usdValue, 0);
 
@@ -382,7 +409,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
                         depositedTnfts[i].tnft,
                         depositedTnfts[i].tokenId,
                         usdValue,
-                        //amountRent,
                         sharesRequired
                     );
                 unchecked {
@@ -449,6 +475,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
      *         The deposit will be minted a sufficient amount of basket tokens in return.
+     * @param _tangibleNFT TNFT contract address of token being deposited.
+     * @param _tokenId TokenId of token being deposited.
+     * @param _depositor Address depositing the token.
+     * @return basketShare -> Amount of basket tokens being minted to redeemer.
      */
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
@@ -515,7 +545,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @notice Internal method for redeeming a specified TNFT in the basket TODO: Add re-entrancy guard
+     * @notice Internal method for redeeming a specified TNFT from this basket contract.
+     * @param _redeemer EOA address of redeemer. note: msg.sender
+     * @param _tangibleNFT TNFT contract address of token being redeemed.
+     * @param _tokenId Token identifier of token being redeemed.
+     * @param _usdValue $USD value of token being redeemed.
+     * @param _amountBasketTokens Amount of basket tokens needed for redemption. @dev tokens will be burned.
      */
     function _redeemTNFT(
         address _redeemer,
@@ -523,7 +558,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         uint256 _tokenId,
         uint256 _usdValue,
         uint256 _amountBasketTokens
-    ) internal {
+    ) internal nonReentrant {
         require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
         require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
 
@@ -544,14 +579,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
             tnftsSupported[index] = tnftsSupported[tnftsSupported.length - 1];
             tnftsSupported.pop();
         }
-
-        // if (_amountRent > 0) {
-
-        //     // If there's sufficient rent sitting in the basket, no need to claim, otherwise claim rent from manager first.
-        //     primaryRentToken.balanceOf(address(this)) >= _amountRent ?
-        //         assert(primaryRentToken.transfer(_redeemer, _amountRent)) :
-        //         _redeemRent(_tangibleNFT, _tokenId, _amountRent, _redeemer);
-        // }
 
         IRentManager rentManager = _getRentManager(_tangibleNFT);
 
@@ -578,6 +605,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
+     * @return totalRent -> Amount of claimable rent by from all TNFTs in this basket + rent in basket balance.
      */
     function _getRentBal() internal view returns (uint256 totalRent) {
         uint256 decimals = decimals() - IERC20Metadata(primaryRentToken).decimals();
@@ -607,6 +635,8 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
      * @dev If primaryRentToken.decimals != 6, this func will fail.
+     * @param usdValue $USD value of token being quoted.
+     * @param amountRent If rent is being counted in minting, count rent towards quote. note: only used during deposit.
      */
     function _quoteShares(uint256 usdValue, uint256 amountRent) internal view returns (uint256 shares) {
         uint256 combinedValue = (usdValue + (amountRent * 10**12));
@@ -619,7 +649,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @dev Get value of TNFT in native currency
+     * @dev Get value of TNFT in native currency.
+     * @param _tangibleNFT TNFT contract address of token.
+     * @param _fingerprint fingerprint of token.
+     * @return currency -> ISO code of native currency. (i.e. "GBP")
+     * @return value -> Value of token in native currency.
+     * @return decimals -> Amount of decimals used for precision.
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
         IPriceOracle oracle = _getOracle(_tangibleNFT);
@@ -634,7 +669,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @dev Get USD Value of given currency and amount, base 1e18
+     * @dev Get $USD Value of specified token.
+     * @param _tangibleNFT TNFT contract address.
+     * @param _tokenId TokenId of token.
+     * @return $USD value of token, note: base 1e18
      */
     function _getUSDValue(address _tangibleNFT, uint256 _tokenId) internal view returns (uint256) {
         (string memory currency, uint256 amount, uint8 nativeDecimals) = _getTnftNativeValue(
@@ -645,7 +683,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @dev Get USD Price of given currency from ChainLink
+     * @dev Get USD Price of given currency from ChainLink.
+     * @param _currency Currency ISO code.
+     * @return exchange rate.
+     * @return decimals used for precision on priceFeed.
      */
     function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
         ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
@@ -686,7 +727,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @notice This method returns whether a provided TNFT token exists in the depositedTnfts array and if so, where in the array.
+     * @notice This helper method returns whether a provided TNFT token exists in the depositedTnfts array and if so, where in the array.
+     * @param _tnft contract address.
+     * @param _tokenId TokenId of token being fetched.
+     * @return index -> Where in the `depositedTnfts` array the specified token resides.
+     * @return exists -> If token exists in `depositedTnfts`, will be true. Otherwise false.
      */
     function _isDepositedTnft(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < depositedTnfts.length;) {
@@ -700,6 +745,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This method returns whether a provided TNFT (category) address exists in the tnftsSupported array and if so, where in the array.
+     * @param _tnft contract address.
+     * @return index -> Where in the `tnftsSupported` array the specified contract address resides.
+     * @return exists -> If address exists in `tnftsSupported`, will be true. Otherwise false.
      */
     function _isSupportedTnft(address _tnft) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < tnftsSupported.length;) {
@@ -713,6 +761,10 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /**
      * @notice This method returns whether a provided tokenId exists in the tokenIdLibrary mapped array and if so, where in the array.
+     * @param _tnft contract address.
+     * @param _tokenId TokenId of token being fetched.
+     * @return index -> Where in the `tokenIdLibrary` mapped array the specified token resides.
+     * @return exists -> If token exists in `tokenIdLibrary`, will be true. Otherwise false.
      */
     function _isTokenIdLibrary(address _tnft, uint256 _tokenId) internal view returns (uint256 index, bool exists) {
         for(uint256 i; i < tokenIdLibrary[_tnft].length;) {
