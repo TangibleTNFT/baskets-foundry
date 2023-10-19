@@ -124,7 +124,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         fulfilled[requestId] = true;
         address basket = requestTracker[requestId];
         // respond to the basket contract requesting entropy with it's random number.
-        IBasket(basket).fulfillRandomRedeem(requestId, randomWords[0]);
+        IBasket(basket).redeemTNFT(requestId, randomWords[0]);
 
         delete requestTracker[requestId];
         emit RequestFulfilled(requestId, basket);

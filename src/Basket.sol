@@ -31,6 +31,8 @@ import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
+// TODO: Add method for owner to remove rent. Do we rebase when removed??
+
 
 /**
  * @title Basket
@@ -180,31 +182,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     /**
-     * @notice This method allows a user to redeem a TNFT in exchange for their Basket tokens. // TODO: Remove
-     */
-    function redeemTNFT(address _tangibleNFT, uint256 _tokenId, uint256 _amountBasketTokens) external {
-
-        // get usd value of TNFT token being redeemed.
-        uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
-        require(usdValue > 0, "Unsupported TNFT");
-
-        // Calculate amount of rent to send to redeemer.
-        //uint256 amountRent = (usdValue * (_getRentBal() / 10**12)) / totalNftValue;
-
-        // Get shares required
-        uint256 sharesRequired = _quoteShares(usdValue, 0);
-
-        // Verify the user has sufficient amount of tokens.
-        require(_amountBasketTokens >= sharesRequired, "Insufficient offer");
-        if (_amountBasketTokens > sharesRequired) _amountBasketTokens = sharesRequired;
-
-        _redeemTNFT(msg.sender, _tangibleNFT, _tokenId, usdValue, _amountBasketTokens);
-    }
-
-    /**
      * @notice This method is the vrf callback method. Will use the random seed to choose a random TNFT for redeemer.
      */
-    function fulfillRandomRedeem(uint256 _budget) external { // TODO: Change name
+    function redeemTNFT(uint256 _budget) external { // TODO: Change name
         address redeemer = msg.sender;
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
@@ -215,14 +195,43 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         uint256 index;
         if (len > 1) {
             // b. find lowest yielding NFT -> redeem it
-            uint256 value = type(uint256).max;
+            uint256 value;
             for (uint256 i; i < len;) {
 
-                // TODO:
                 // ba. get usd value
+                uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
+                emit Debug("usd val", usdValue);
+
                 // bb. get rent per block
-                // bc. calculate worth with value/rentPerBlock
-                // bd. if lower than `value`, save index, assign to `value`
+                IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
+                IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
+
+                uint256 rent = rentInfo.depositAmount;
+                //emit Debug("total rent", rent);
+
+                // If rent is currently being vested
+                if (rentInfo.distributionRunning && rent != 0) {
+
+                    uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
+                    //emit Debug("rent per second", perSecond);
+
+                    // bc. calculate worth with value/rentPerBlock
+                    uint256 tValue = usdValue / perSecond;
+                    //emit Debug("value (usdValue / perSecond)", tValue);
+
+                    // bd. if higher than `value`, save index, assign to `value`
+                    if (tValue > value) {
+                        value = tValue;
+                        index = i;
+                    } 
+                }
+                // If no rent currently being vested -> No yield token
+                else {
+                    if (usdValue > value) {
+                        value = usdValue;
+                        index = i;
+                    }
+                }
 
                 unchecked {
                     ++i;

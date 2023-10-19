@@ -137,8 +137,8 @@ DA:287,518
 DA:289,518
 DA:290,518
 DA:292,518
-FN:298,Basket.fulfillRandomRedeem
-FNDA:517,Basket.fulfillRandomRedeem
+FN:298,Basket.redeemTNFT
+FNDA:517,Basket.redeemTNFT
 DA:299,517
 DA:300,517
 DA:302,517

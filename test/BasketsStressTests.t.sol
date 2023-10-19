@@ -195,7 +195,8 @@ contract StressTests is Utility {
 
         // creator redeems token to isolate tests.
         vm.startPrank(CREATOR);
-        basket.redeemTNFT(address(realEstateTnft), tokenIds[0], basket.balanceOf(CREATOR));
+        //basket.redeemTNFT(address(realEstateTnft), tokenIds[0], basket.balanceOf(CREATOR));
+        basket.redeemTNFT(basket.balanceOf(CREATOR));
         vm.stopPrank();
 
         // labels
@@ -380,7 +381,7 @@ contract StressTests is Utility {
     //    - again, but with rent accruing -> changing share price - DONE
     //    - test deposit with rent vs deposit with no rent claimable TODO
     //    - test what would happen if deployer immediately deposits 1-100 TNFTs at once
-    // b. stress test fulfillRandomRedeem
+    // b. stress test redeemTNFT
     //    - 1000+ depositedTnfts
     // c. stress test _redeemRent
     //    - 10-100+ tnftsSupported DONE
@@ -1182,7 +1183,7 @@ contract StressTests is Utility {
     }
 
 
-    // ~ stress fulfillRandomRedeem ~
+    // ~ stress redeemTNFT ~
 
     /// @notice Stress test of Basket::fullfillRandomRedeem with numerous tokens -> NO RENT
     /// @dev basis: 100 tokens to iterate through.
@@ -1190,7 +1191,7 @@ contract StressTests is Utility {
     /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 11_018_250 gas
     /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 12_666_981 gas
     /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 16_032_690 gas
-    function test_stress_fulfillRandomRedeem_fuzzing(uint256 randomWord) public { // TODO: Rewrite
+    function test_stress_redeemTNFT_fuzzing(uint256 randomWord) public { // TODO: Rewrite
         
         // ~ Config ~
 
@@ -1264,7 +1265,7 @@ contract StressTests is Utility {
         // ~ Execute redeem ~
 
         vm.prank(JOE);
-        basket.fulfillRandomRedeem(sharesReceived[0]);
+        basket.redeemTNFT(sharesReceived[0]);
 
         // ~ Post-state check ~
 
@@ -1299,18 +1300,19 @@ contract StressTests is Utility {
         for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
     }
 
-    /// @notice Stress test of Basket::fullfillRandomRedeem with numerous tokens and random rent claimable for each token.
+    /// @notice Stress test of Basket::redeemTNFT with numerous tokens and random rent claimable for each token.
     /// @dev basis: 100 tokens to iterate through.
 
-    /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 23_802_084 gas
-    /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 25_241_626 gas
-    /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 28_793_880 gas
-    function test_stress_fulfillRandomRedeem_rent_fuzzing(uint256 randomWord) public {
+    /// NOTE: 1x100 (100 tokens) -> redeemTNFT costs 8_797_469 gas
+    /// NOTE: 4x25  (100 tokens) -> redeemTNFT costs 9_570_639 gas
+    /// NOTE: 10x10 (100 tokens) -> redeemTNFT costs 11_122_232 gas
+    /// NOTE: 10x20 (200 tokens) -> redeemTNFT costs 34_663_268 gas -> Extreme case
+    function test_stress_redeemTNFT_rent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
 
-        config.newCategories = 10;
-        config.amountFingerprints = 10;
+        config.newCategories = 4;
+        config.amountFingerprints = 25;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1344,7 +1346,7 @@ contract StressTests is Utility {
 
                 uint256[] memory tokenIds = _createItemAndMint(
                     tnft,
-                    100_000, // 100 GBP
+                    100_000_000, // 100 GBP
                     1,       // stock
                     1,       // mint
                     config.fingerprints[j],
@@ -1415,10 +1417,10 @@ contract StressTests is Utility {
         skip(1); // skip to end of vesting
 
 
-        // ~ Execute fulfillRandomRedeem ~
+        // ~ Execute redeemTNFT ~
 
         vm.prank(JOE);
-        basket.fulfillRandomRedeem(sharesReceived[0]);
+        basket.redeemTNFT(sharesReceived[0]);
 
         // ~ Post-state check 2 ~
 

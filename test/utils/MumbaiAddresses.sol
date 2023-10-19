@@ -30,7 +30,7 @@ pragma solidity ^0.8.19;
 // address constant Mumbai_RentNotificationDispatcher     = 0xE89084f1caF8Ac03B67dfa0a4b032234E049EACF;
 
 address constant Mumbai_BalanceBatchReader             = 0xc4b351F7e9597Ba82B3Ad726A573a0e9492413ff;
-address constant Mumbai_MockMatrix                     = 0x58f44400e9B05582c2fA954a5d2622e3EDf918dD;
+address constant Mumbai_MockMatrix                     = 0xf4f41647554c43927ae2C3806D03aD864D19A1d9;
 address constant Mumbai_USDUSDOracle                   = 0x9e92B33DbF3416Ce2eF8b8d9036A8F84cC30c9b7;
 address constant Mumbai_ChainLinkOracle                = 0x077306ED1b3a206C1f226Ad5fa3234ce0A4Fb8CC;
 address constant Mumbai_ChainLinkOracleGBP             = 0xb24Ce57c96d27690Ae68aa77656a821d5A53b5eB;
