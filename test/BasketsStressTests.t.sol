@@ -1185,18 +1185,18 @@ contract StressTests is Utility {
 
     // ~ stress redeemTNFT ~
 
-    /// @notice Stress test of Basket::fullfillRandomRedeem with numerous tokens -> NO RENT
+    /// @notice Stress test of Basket::redeemTNFT with numerous tokens -> NO RENT
     /// @dev basis: 100 tokens to iterate through.
 
-    /// NOTE: 1x100 (100 tokens) -> rawFulfillRandomWords costs 11_018_250 gas
-    /// NOTE: 4x25  (100 tokens) -> rawFulfillRandomWords costs 12_666_981 gas
-    /// NOTE: 10x10 (100 tokens) -> rawFulfillRandomWords costs 16_032_690 gas
-    function test_stress_redeemTNFT_fuzzing(uint256 randomWord) public { // TODO: Rewrite
+    /// NOTE: 1x100 (100 tokens) -> redeemTNFT costs 5_610_962 gas
+    /// NOTE: 4x25  (100 tokens) -> redeemTNFT costs 6_303_840 gas
+    /// NOTE: 10x10 (100 tokens) -> redeemTNFT costs 7_693_104 gas
+    function test_stress_redeemTNFT_noFuzz() public {
         
         // ~ Config ~
 
-        config.newCategories = 4;
-        config.amountFingerprints = 25;
+        config.newCategories = 10;
+        config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
