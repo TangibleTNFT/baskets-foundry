@@ -166,7 +166,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     
-    // ~ External Functions ~
+    // ~ External Methods ~
 
     /**
      * @notice This method allows a user to deposit a batch of TNFTs into the basket.
@@ -273,28 +273,32 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     /**
      * @notice ALlows this contract to get notified of a price change
      * @dev Defined on interface IRWAPriceNotificationReceiver::notify
-     * @param tnft TNFT contract address of token being updated.
-     * @param tokenId TNFT tokenId of token being updated.
+     * @param _tnft TNFT contract address of token being updated.
+     * @param _tokenId TNFT tokenId of token being updated.
      */
     function notify(
-        address tnft,
-        uint256 tokenId,
+        address _tnft,
+        uint256 _tokenId,
         uint256, // fingerprint
         uint256, // oldNativePrice
         uint256, // newNativePrice
         uint16   // currency
     ) external {
-        require(msg.sender == address(_getNotificationDispatcher(tnft)),
+        require(msg.sender == address(_getNotificationDispatcher(_tnft)),
             "msg.sender != ND"
         );
 
-        uint256 oldPriceUsd = valueTracker[tnft][tokenId];
-        uint256 newPriceUsd = _getUSDValue(tnft, tokenId);
+        uint256 oldPriceUsd = valueTracker[_tnft][_tokenId];
+        uint256 newPriceUsd = _getUSDValue(_tnft, _tokenId);
 
-        valueTracker[tnft][tokenId] = newPriceUsd;
+        valueTracker[_tnft][_tokenId] = newPriceUsd;
         totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
 
-        emit PriceNotificationReceived(tnft, tokenId, oldPriceUsd, newPriceUsd);
+        emit PriceNotificationReceived(_tnft, _tokenId, oldPriceUsd, newPriceUsd);
+    }
+
+    function withdrawRent(uint256 _amount) external onlyFactoryOwner() { // TODO
+
     }
 
     /**
@@ -373,7 +377,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     
-    // ~ Public Functions ~
+    // ~ Public Methods ~
 
     function rebase() public {
         // a. update rent
@@ -470,7 +474,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     
-    // ~ Internal Functions ~
+    // ~ Internal Methods ~
 
     /**
      * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
