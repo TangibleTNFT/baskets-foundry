@@ -297,8 +297,72 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         emit PriceNotificationReceived(_tnft, _tokenId, oldPriceUsd, newPriceUsd);
     }
 
-    function withdrawRent(uint256 _amount) external onlyFactoryOwner() { // TODO
+    /**
+     * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
+     * @param _withdrawAmount Amount of rent to withdraw. note: Should input decimals from `primaryRentToken.decimals()`. Default is 6.
+     */
+    function withdrawRent(uint256 _withdrawAmount) external onlyFactoryOwner { // TODO TEST
+        require((_getRentBal() / 10**12) >= _withdrawAmount, "Amount exceeds withdrawable rent");
 
+        // if we still need more rent, start claiming rent from TNFTs in basket.
+        if (_withdrawAmount > primaryRentToken.balanceOf(address(this))) {
+
+            // declare master array to store all claimable rent data.
+            RentData[] memory claimableRent = new RentData[](depositedTnfts.length);
+            uint256 counter;
+
+            // iterate through all TNFT contracts supported by this basket.
+            for (uint256 i; i < tnftsSupported.length;) {
+                address tnft = tnftsSupported[i];
+
+                // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
+                uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
+
+                // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
+                for (uint256 j; j < claimables.length;) {
+                    uint256 amountClaimable = claimables[j];
+
+                    if (amountClaimable > 0) {
+                        claimableRent[counter] = RentData(tnft, tokenIdLibrary[tnft][j], amountClaimable);
+                        unchecked {
+                            ++counter;
+                        }
+                    }
+                    unchecked {
+                        ++j;
+                    }
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+
+            // start iterating through the master claimable rent array claiming rent for each token.
+            uint256 index;
+            while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
+
+                IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
+                uint256 tokenId = claimableRent[index].tokenId;
+
+                if (rentManager.claimableRentForToken(tokenId) > 0) {
+
+                    uint256 preBal = primaryRentToken.balanceOf(address(this));
+                    uint256 claimedRent = rentManager.claimRentForToken(tokenId);
+
+                    require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "claiming error");
+                }
+
+                unchecked {
+                    ++index;
+                }
+            }
+        }
+
+        // transfer rent to msg.sender (factory owner)
+        assert(primaryRentToken.transfer(msg.sender, _withdrawAmount));
+
+        // TODO: Rebase
+        // _rentalIncome -= withdrawalAmount;
     }
 
     /**
@@ -379,15 +443,30 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     
     // ~ Public Methods ~
 
-    function rebase() public {
-        // a. update rent
-        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
-        // c. skim pools
-        // d. wrap extra skimmed tokens from pool
-        // e. use wrapped tokens for auto-bribe
+    // function rebase() public {
+    //     // a. update rent
+    //     // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
+    //     // c. skim pools
+    //     // d. wrap extra skimmed tokens from pool
+    //     // e. use wrapped tokens for auto-bribe
 
-        // rebase - 
-    }
+    //     // rebase - 
+    //     uint256 previousRentalIncome = _rentalIncome;
+    //     uint256 totalRentalIncome = _getRentBal();
+    //     uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
+    //     uint256 currentTotalSupply = totalSupply();
+    //     uint256 newTotalSupply = currentTotalSupply + generatedRentalIncome;
+
+    //     uint256 rebaseIndex = newTotalSupply.mulDiv(1 ether, currentTotalSupply);
+
+    //     emit Rebase(rebaseIndex);
+
+    //     _rentalIncome = totalRentalIncome;
+    // }
+
+    // function totalSupply() override public returns (uint256 _totalSupply) {
+    //     return _totalSupplyShares.toTokens(rebaseIndex);
+    // }
 
     /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.

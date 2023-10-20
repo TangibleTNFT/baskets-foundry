@@ -69,6 +69,11 @@ contract BasketsManagerTest is Utility {
 
     uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];
 
+    uint256[] internal mintedToken;
+
+    uint256 internal JOE_TOKEN_1;
+    uint256 internal JOE_TOKEN_2;
+
 
     function setUp() public {
 
@@ -179,10 +184,19 @@ contract BasketsManagerTest is Utility {
 
         // Tangible Labs mints token and sends it to Joe
         vm.startPrank(TANGIBLE_LABS);
-        factoryV2.mint(voucher1);
-        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 1);
-        factoryV2.mint(voucher2);
-        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 2);
+
+        mintedToken = factoryV2.mint(voucher1);
+        JOE_TOKEN_1 = mintedToken[0];
+        assertEq(realEstateTnft.ownerOf(JOE_TOKEN_1), TANGIBLE_LABS);
+
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, JOE_TOKEN_1);
+
+        mintedToken = factoryV2.mint(voucher2);
+        JOE_TOKEN_2 = mintedToken[0];
+        assertEq(realEstateTnft.ownerOf(JOE_TOKEN_2), TANGIBLE_LABS);
+
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, JOE_TOKEN_2);
+
         vm.stopPrank();
 
         assertEq(realEstateTnft.balanceOf(JOE), 2);
@@ -234,7 +248,7 @@ contract BasketsManagerTest is Utility {
     // ~ deployBasket testing ~
 
     /// @notice Verifies proper state changes when a basket is deployed with features
-    function test_basketManager_deployBasket() public {
+    function test_basketManager_deployBasket_single() public {
 
         // create features array
         uint256[] memory features = new uint256[](2);
@@ -242,7 +256,7 @@ contract BasketsManagerTest is Utility {
         features[1] = RE_FEATURE_1;
 
         // add features to initial deposit token
-        _addFeatureToCategory(address(realEstateTnft), 1, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
 
         // Pre-state check.
         address[] memory basketsArray = basketManager.getBasketsArray();
@@ -252,7 +266,7 @@ contract BasketsManagerTest is Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
@@ -260,7 +274,7 @@ contract BasketsManagerTest is Utility {
             address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_1)
         );
         vm.stopPrank();
 
@@ -294,12 +308,12 @@ contract BasketsManagerTest is Utility {
 
         assertEq(_basket.balanceOf(JOE), basketShares[0]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
 
         Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 1);
         assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
 
@@ -310,7 +324,7 @@ contract BasketsManagerTest is Utility {
 
         // deploy another basket with same name -> revert
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 2);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
         vm.expectRevert("Name not available");
         basketManager.deployBasket(
             "Tangible Basket Token",
@@ -319,13 +333,13 @@ contract BasketsManagerTest is Utility {
             address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_2)
         );
         vm.stopPrank();
 
         // deploy another basket with same symbol -> revert
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 2);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
         vm.expectRevert("Symbol not available");
         basketManager.deployBasket(
             "Tangible Basket Token1",
@@ -334,13 +348,13 @@ contract BasketsManagerTest is Utility {
             address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_2)
         );
         vm.stopPrank();
 
         // deploy another basket with same features -> revert
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 2);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
         vm.expectRevert("Basket already exists");
         basketManager.deployBasket(
             "Tangible Basket Token1",
@@ -349,7 +363,7 @@ contract BasketsManagerTest is Utility {
             address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_2)
         );
         vm.stopPrank();
     }
@@ -363,8 +377,8 @@ contract BasketsManagerTest is Utility {
         tnfts[1] = address(realEstateTnft);
 
         uint256[] memory tokenIds = new uint256[](2);
-        tokenIds[0] = 1;
-        tokenIds[1] = 2;
+        tokenIds[0] = JOE_TOKEN_1;
+        tokenIds[1] = JOE_TOKEN_2;
 
         // create features array
         uint256[] memory features = new uint256[](2);
@@ -372,8 +386,8 @@ contract BasketsManagerTest is Utility {
         features[1] = RE_FEATURE_1;
 
         // add features to initial deposit token
-        _addFeatureToCategory(address(realEstateTnft), 1, features);
-        _addFeatureToCategory(address(realEstateTnft), 2, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_2, features);
 
         // Pre-state check.
         address[] memory basketsArray = basketManager.getBasketsArray();
@@ -383,8 +397,8 @@ contract BasketsManagerTest is Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
-        realEstateTnft.approve(address(basketManager), 2);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
@@ -422,16 +436,16 @@ contract BasketsManagerTest is Utility {
 
         assertEq(_basket.balanceOf(JOE), basketShares[0] + basketShares[1]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_2), true);
 
         Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 2);
         assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
-        assertEq(deposited[1].tokenId, 2);
+        assertEq(deposited[1].tokenId, JOE_TOKEN_2);
         assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
     }
 
@@ -447,7 +461,7 @@ contract BasketsManagerTest is Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
         (IBasket _basket,) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
@@ -455,7 +469,7 @@ contract BasketsManagerTest is Utility {
             address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_1)
         );
         vm.stopPrank();
 

@@ -1454,4 +1454,138 @@ contract StressTests is Utility {
         for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
     }
 
+    // ~ stress withdrawRent ~
+
+    /// @notice This method stress tests Basket::withdrawRent
+    function test_stress_withdrawRent_fuzzing(uint256 randomWord) public {
+
+        // ~ Config ~
+
+        config.newCategories = 4;
+        config.amountFingerprints = 10;
+        config.totalTokens = config.newCategories * config.amountFingerprints;
+
+        // declare arrays that will be used for args for batchDepositTNFT
+        address[] memory batchTnftArr = new address[](config.totalTokens);
+        uint256[] memory batchTokenIdArr = new uint256[](config.totalTokens);
+
+        // store all new fingerprints in array.
+        uint256 i;
+        for (; i < config.amountFingerprints; ++i) {
+            config.fingerprints.push(i);
+        }
+
+        // create multiple tnfts.
+        uint256 count;
+        for (i = 0; i < config.newCategories; ++i) {
+            config.tnfts.push(_deployNewTnftContract(Strings.toString(i)));
+            
+            // initialize batchTnftArr
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                batchTnftArr[count] = config.tnfts[i];
+                ++count;
+            }
+        }
+
+        // mint multiple tokens for each contract
+        count = 0;
+        for (i = 0; i < config.newCategories; ++i) {
+            address tnft = config.tnfts[i];
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+
+                uint256[] memory tokenIds = _createItemAndMint(
+                    tnft,
+                    100_000_000, // 100 GBP
+                    1,       // stock
+                    1,       // mint
+                    config.fingerprints[j],
+                    JOE
+                );
+                tokenIdMap[config.tnfts[i]].push(tokenIds[0]);
+
+                // initialize batchTokenIdArr
+                batchTokenIdArr[count] = tokenIds[0];
+                ++count;
+
+                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+            }
+            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
+        }
+
+        // create rent array
+        uint256 totalRent;
+        for (i = 0; i < config.totalTokens; ++i) {
+            config.rentArr.push((i + 1)*10**8); // $100 -> $10,000
+            totalRent += config.rentArr[i];
+        }
+
+        // shuffle rent array
+        for (i = 0; i < config.rentArr.length; ++i) {
+            uint256 key = i + (randomWord % (config.rentArr.length - i));
+
+            if (i != key) {
+                uint256 temp = config.rentArr[key];
+                config.rentArr[key] = config.rentArr[i];
+                config.rentArr[i] = temp;
+            }
+        }
+
+        // deal category owner USDC to deposit into rentManager
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, totalRent);
+
+        for (i = 0; i < config.totalTokens; ++i) {
+            IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(batchTnftArr[i]));
+
+            // deposit rent for each tnft (no vesting)
+            vm.startPrank(TANGIBLE_LABS);
+            MUMBAI_USDC.approve(address(tempRentManager), config.rentArr[i]);
+            tempRentManager.deposit(
+                batchTokenIdArr[i],
+                address(MUMBAI_USDC),
+                config.rentArr[i],
+                0,
+                block.timestamp + 1,
+                true
+            );
+            vm.stopPrank();
+        }
+
+        // deposit tokens via batch
+        vm.startPrank(JOE);
+        for (i = 0; i < config.totalTokens; ++i) {
+            ITangibleNFT(batchTnftArr[i]).approve(
+                address(basket),
+                batchTokenIdArr[i]
+            );
+        }
+        uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+
+        vm.stopPrank();
+
+        // skip to end of vesting
+        skip(1);
+
+        // ~ Post-state check 2 ~
+
+        uint256 preRentBal = basket.getRentBal() / 10**12;
+
+        assertGt(basket.getRentBal(), 0);
+        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), 0);
+
+        // ~ Execute withdrawRent ~
+
+        vm.prank(factoryOwner);
+        basket.withdrawRent(preRentBal);
+
+        // ~ Post-state check 2 ~
+
+        assertEq(basket.getRentBal(), 0);
+        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), preRentBal);
+
+        // reset tokenIdMap
+        for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
+    }
+
 }
