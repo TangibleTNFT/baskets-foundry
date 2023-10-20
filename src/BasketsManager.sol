@@ -35,7 +35,6 @@ contract BasketManager is Initializable, FactoryModifiers {
     using ArrayUtils for uint256[];
 
     // ~ State Variables ~
-    // TODO: pack?
 
     /// @notice Mapping that stores the unique `featureHash` for each basket.
     mapping(address => bytes32) public hashedFeaturesForBasket;
@@ -58,12 +57,17 @@ contract BasketManager is Initializable, FactoryModifiers {
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
+    /// @notice Used to save slots for potential extra state variables later on.
     uint256[20] private __gap;
 
 
     // ~ Events ~
 
-    /// @notice Emitted when a new basket instance is created // beaconProxy deployed.
+    /**
+     * @notice This event is emitted when a new basket instance is created // beaconProxy deployed.
+     * @param creator Address of deployer.
+     * @param basket Address of basket deployed.
+     */
     event BasketCreated(address creator, address basket);
 
 
@@ -97,7 +101,7 @@ contract BasketManager is Initializable, FactoryModifiers {
             address(this) // TODO: Test to see implications of new owner
         );
 
-        featureLimit = 10; // TODO: Add setter
+        featureLimit = 10;
     }
 
 
@@ -114,7 +118,7 @@ contract BasketManager is Initializable, FactoryModifiers {
      * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
      * @param _tokenIdDeposit Array of tokenIds being deposited into basket initally. Note: Corresponds with _tangibleNFTDeposit.
      */
-    function deployBasket( // TODO: Add name/symbol protection
+    function deployBasket(
         string memory _name,
         string memory _symbol,
         uint256 _tnftType,
@@ -286,19 +290,6 @@ contract BasketManager is Initializable, FactoryModifiers {
      */
     function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
         hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
-    }
-
-    // NOTE for testing only
-    function addBasket(address _basket) external onlyFactoryOwner {
-        require(!isBasket[_basket], "Basket already exists");
-        
-        baskets.push(_basket);
-        isBasket[address(_basket)] = true;
-    }
-
-    // TODO: remove (only kept it to not break existing tests)
-    function sort(uint256[] memory arr) public pure returns (uint256[] memory) {
-        return arr.sort();
     }
 
 }

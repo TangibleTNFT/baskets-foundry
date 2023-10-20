@@ -33,7 +33,6 @@ import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
-// TODO: Add method for owner to remove rent. Do we rebase when removed??
 
 /**
  * @title Basket
@@ -211,7 +210,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
         RedeemData memory redeemable = findLowestYielding(_budget);
 
-        require(redeemable.tnft != address(0), "Insufficient budget"); // TODO: Test
+        require(redeemable.tnft != address(0), "Insufficient budget");
 
         // c. redeem NFT in index 0
         _redeemTNFT(
@@ -254,7 +253,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
      * @param _withdrawAmount Amount of rent to withdraw. note: Should input decimals from `primaryRentToken.decimals()`. Default is 6.
      */
-    function withdrawRent(uint256 _withdrawAmount) external onlyFactoryOwner { // TODO TEST
+    function withdrawRent(uint256 _withdrawAmount) external onlyFactoryOwner {
         require((_getRentBal() / 10**12) >= _withdrawAmount, "Amount exceeds withdrawable rent");
 
         // if we still need more rent, start claiming rent from TNFTs in basket.
@@ -441,32 +440,29 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
                 // ba. get usd value
                 uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
-                //emit Debug("usd val", usdValue);
 
                 // bb. get rent per block
                 IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
                 IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
 
                 uint256 rent = rentInfo.depositAmount;
-                //emit Debug("total rent", rent);
 
                 // If rent is currently being vested
                 if (rentInfo.distributionRunning && rent != 0) {
 
+                    // bc. find rent per second
                     uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
-                    //emit Debug("rent per second", perSecond);
 
-                    // bc. calculate worth with value/rentPerBlock
+                    // bd. calculate worth with value/rentPerSecond
                     uint256 tValue = usdValue / perSecond;
-                    //emit Debug("value (usdValue / perSecond)", tValue);
 
-                    // bd. if higher than `value`, save index, assign to `value`
+                    // be. if higher than `value`, save index, assign to `value`
                     if (tValue > value) {
                         value = tValue;
                         index = i;
                     } 
                 }
-                // If no rent currently being vested -> No yield token
+                // If no rent currently being vested -> No yield -> take usdValue
                 else {
                     if (usdValue > value) {
                         value = usdValue;
@@ -479,7 +475,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
                 }
             }
         }
-        
+
         redeemable = tokensInBudget[index];
     }
 
