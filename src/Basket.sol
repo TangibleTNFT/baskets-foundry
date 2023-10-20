@@ -209,64 +209,17 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         address redeemer = msg.sender;
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
-        // a. Create an array of TNFTs within budget
-        (RedeemData[] memory tokensInBudget, uint256 len, bool valid) = checkBudget(_budget);
-        require(valid, "Insufficient budget");
-        
-        uint256 index;
-        if (len > 1) {
-            // b. find lowest yielding NFT -> redeem it
-            uint256 value;
-            for (uint256 i; i < len;) {
+        RedeemData memory redeemable = findLowestYielding(_budget);
 
-                // ba. get usd value
-                uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
-                //emit Debug("usd val", usdValue);
-
-                // bb. get rent per block
-                IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
-                IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
-
-                uint256 rent = rentInfo.depositAmount;
-                //emit Debug("total rent", rent);
-
-                // If rent is currently being vested
-                if (rentInfo.distributionRunning && rent != 0) {
-
-                    uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
-                    //emit Debug("rent per second", perSecond);
-
-                    // bc. calculate worth with value/rentPerBlock
-                    uint256 tValue = usdValue / perSecond;
-                    //emit Debug("value (usdValue / perSecond)", tValue);
-
-                    // bd. if higher than `value`, save index, assign to `value`
-                    if (tValue > value) {
-                        value = tValue;
-                        index = i;
-                    } 
-                }
-                // If no rent currently being vested -> No yield token
-                else {
-                    if (usdValue > value) {
-                        value = usdValue;
-                        index = i;
-                    }
-                }
-
-                unchecked {
-                    ++i;
-                }
-            }
-        }
+        require(redeemable.tnft != address(0), "Insufficient budget"); // TODO: Test
 
         // c. redeem NFT in index 0
         _redeemTNFT(
             redeemer,
-            tokensInBudget[index].tnft,
-            tokensInBudget[index].tokenId,
-            tokensInBudget[index].usdValue,
-            tokensInBudget[index].sharesRequired
+            redeemable.tnft,
+            redeemable.tokenId,
+            redeemable.usdValue,
+            redeemable.sharesRequired
         );
     }
 
@@ -467,6 +420,68 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     // function totalSupply() override public returns (uint256 _totalSupply) {
     //     return _totalSupplyShares.toTokens(rebaseIndex);
     // }
+
+    /**
+     * @notice This method will take a budget of basket tokens and chooses the lowest rent yielding TNFT token
+     *         in that specified budget range.
+     * @param _budget Amount of basket tokens being submitted for redeemable tokens.
+     * @return redeemable -> RedeemData object containing all the data for the lowest yielding token in the range.
+     */
+    function findLowestYielding(uint256 _budget) public view returns (RedeemData memory redeemable) {
+        // a. Create an array of TNFTs within budget
+        (RedeemData[] memory tokensInBudget, uint256 len, bool valid) = checkBudget(_budget);
+
+        if (!valid || len == 0) return RedeemData(address(0),0,0,0);
+        
+        uint256 index;
+        if (len > 1) {
+            // b. find lowest yielding NFT -> redeem it
+            uint256 value;
+            for (uint256 i; i < len;) {
+
+                // ba. get usd value
+                uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
+                //emit Debug("usd val", usdValue);
+
+                // bb. get rent per block
+                IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
+                IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
+
+                uint256 rent = rentInfo.depositAmount;
+                //emit Debug("total rent", rent);
+
+                // If rent is currently being vested
+                if (rentInfo.distributionRunning && rent != 0) {
+
+                    uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
+                    //emit Debug("rent per second", perSecond);
+
+                    // bc. calculate worth with value/rentPerBlock
+                    uint256 tValue = usdValue / perSecond;
+                    //emit Debug("value (usdValue / perSecond)", tValue);
+
+                    // bd. if higher than `value`, save index, assign to `value`
+                    if (tValue > value) {
+                        value = tValue;
+                        index = i;
+                    } 
+                }
+                // If no rent currently being vested -> No yield token
+                else {
+                    if (usdValue > value) {
+                        value = usdValue;
+                        index = i;
+                    }
+                }
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+        
+        redeemable = tokensInBudget[index];
+    }
 
     /**
      * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.

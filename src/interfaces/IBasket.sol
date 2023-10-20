@@ -23,7 +23,6 @@ interface IBasket is IERC20, IERC20Metadata {
         address tnft;
         uint256 tokenId;
         uint256 usdValue;
-        //uint256 amountRent;
         uint256 sharesRequired;
     }
     

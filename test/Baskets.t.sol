@@ -947,11 +947,19 @@ contract BasketsIntegrationTest is Utility {
         uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
         assertEq(quote, basket.balanceOf(JOE));
 
-        // Joe performs a redeem
-        vm.startPrank(JOE);
-        //basket.redeemTNFT(address(realEstateTnft), JOE_TOKEN_ID, basket.balanceOf(JOE));
-        basket.redeemTNFT(basket.balanceOf(JOE));
-        vm.stopPrank();
+        // Joe performs a redeem with 0 budget -> revert
+        vm.prank(JOE);
+        vm.expectRevert("Insufficient budget");
+        basket.redeemTNFT(0);
+
+        // Joe performs a redeem with over balance -> revert
+        vm.prank(JOE);
+        vm.expectRevert("Insufficient balance");
+        basket.redeemTNFT(quote + 1);
+
+        // Joe performs a redeem -> success
+        vm.prank(JOE);
+        basket.redeemTNFT(quote);
 
         // Post-state check
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
@@ -1329,6 +1337,10 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.ownerOf(highLow_TokenId),  address(basket));
         assertEq(realEstateTnft.ownerOf(highHigh_TokenId), address(basket));
 
+        IBasket.RedeemData memory redeemable;
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, highNone_TokenId);
+
         // ~ Execute redeem ~
 
         vm.startPrank(ALICE);
@@ -1338,6 +1350,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 1 ~
 
         assertEq(realEstateTnft.ownerOf(highNone_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, lowNone_TokenId);
 
         // ~ Execute redeem ~
 
@@ -1348,6 +1362,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 2 ~
 
         assertEq(realEstateTnft.ownerOf(lowNone_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, highLow_TokenId);
 
         // ~ Execute redeem ~
 
@@ -1358,6 +1374,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 3 ~
 
         assertEq(realEstateTnft.ownerOf(highLow_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, lowLow_TokenId);
 
         // ~ Execute redeem ~
 
@@ -1368,6 +1386,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 4 ~
 
         assertEq(realEstateTnft.ownerOf(lowLow_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, highHigh_TokenId);
 
         // ~ Execute redeem ~
 
@@ -1378,6 +1398,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 5 ~
 
         assertEq(realEstateTnft.ownerOf(highHigh_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, lowHigh_TokenId);
 
         // ~ Execute redeem ~
 
@@ -1388,6 +1410,8 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check 6 ~
 
         assertEq(realEstateTnft.ownerOf(lowHigh_TokenId), ALICE);
+        redeemable = basket.findLowestYielding(basket.balanceOf(ALICE));
+        assertEq(redeemable.tokenId, 0);
 
         // ~ sanity check ~
 
