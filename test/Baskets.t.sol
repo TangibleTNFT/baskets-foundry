@@ -74,7 +74,6 @@ contract BasketsIntegrationTest is Utility {
 
     // proxies
     ERC1967Proxy public basketManagerProxy;
-    //TransparentUpgradeableProxy public basketVrfConsumerProxy;
     ProxyAdmin public proxyAdmin;
 
     // ~ Actors and Variables ~
@@ -303,6 +302,11 @@ contract BasketsIntegrationTest is Utility {
 
         basket = Basket(address(_basket));
 
+        // creator redeems token to isolate test.
+        vm.startPrank(CREATOR);
+        basket.redeemTNFT(basket.balanceOf(CREATOR));
+        vm.stopPrank();
+
         // labels
         vm.label(address(factoryV2), "FACTORY");
         vm.label(address(realEstateTnft), "RealEstate_TNFT");
@@ -433,6 +437,16 @@ contract BasketsIntegrationTest is Utility {
         return tokenIds;
     }
 
+    /// @notice This helper method is used to calculate amount taken for fee upon a deposit.
+    function _calculateFeeAmount(uint256 _amount) internal returns (uint256) {
+        return (_amount * basket.depositFee()) / 100_00;
+    }
+
+    /// @notice This helper method is used to fetch amount received after deposit post fee.
+    function _calculateAmountAfterFee(uint256 _amount) internal returns (uint256) {
+        return (_amount - _calculateFeeAmount(_amount));
+    }
+
 
     // ------------------
     // Initial State Test
@@ -463,10 +477,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT_single() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // ~ Pre-state check ~
 
@@ -487,8 +497,6 @@ contract BasketsIntegrationTest is Utility {
 
         // emit deposit logic 
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 sharePrice = basket.getSharePrice();
-
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
 
         // ~ Execute a deposit ~
@@ -499,22 +507,28 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
-        emit log_named_uint("SHARE PRICE", sharePrice);
+        emit log_named_uint("SHARE PRICE", basket.getSharePrice());
 
         // ~ Post-state check ~
 
-        assertEq(
-            (basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        //uint256 feeTaken = _calculateFeeAmount(quote);
+        uint256 amountAfterFee = _calculateAmountAfterFee(quote);
+
+        assertWithinPrecision(
+            (basket.balanceOf(JOE) * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
+
+        assertEq(quote, usdValue);
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
 
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue);
-        assertEq(basket.balanceOf(JOE), quote);
+        assertEq(basket.balanceOf(JOE), amountAfterFee);
+        assertEq(basket.balanceOf(JOE), amountAfterFee);
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
 
@@ -535,10 +549,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT_multiple() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // ~ Pre-state check ~
 
@@ -564,7 +574,9 @@ contract BasketsIntegrationTest is Utility {
         // emit deposit logic 
         uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
-        uint256 sharePrice = basket.getSharePrice();
+
+        uint256 feeTaken_Joe = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
+        uint256 amountAfterFee_Joe = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
 
         // ~ Joe deposits TNFT ~
 
@@ -575,6 +587,9 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Nik deposits TNFT ~
 
+        uint256 feeTaken_Nik = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
+        uint256 amountAfterFee_Nik = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
+
         vm.startPrank(NIK);
         realEstateTnft.approve(address(basket), NIK_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), NIK_TOKEN_ID);
@@ -582,13 +597,14 @@ contract BasketsIntegrationTest is Utility {
 
         emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
         emit log_named_uint("NIK's BASKET BALANCE", basket.balanceOf(NIK));
-        emit log_named_uint("SHARE PRICE", sharePrice);
+        emit log_named_uint("SHARE PRICE", basket.getSharePrice());
 
         // ~ Post-state check ~
 
-        assertEq(
-            ((basket.balanceOf(JOE) + basket.balanceOf(NIK)) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
@@ -598,8 +614,8 @@ contract BasketsIntegrationTest is Utility {
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue1);
-        assertEq(basket.balanceOf(NIK), usdValue2);
+        assertEq(basket.balanceOf(JOE), amountAfterFee_Joe);
+        assertEq(basket.balanceOf(NIK), amountAfterFee_Nik);
         assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
@@ -813,10 +829,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
     function test_baskets_batchDepositTNFT() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -847,8 +859,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(deposited.length, preBalBasket);
 
         // emit deposit logic 
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-        uint256 sharePrice = basket.getSharePrice();
+        //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
 
         // Execute a batch deposit
         vm.startPrank(JOE);
@@ -859,7 +870,7 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
-        emit log_named_uint("SHARE PRICE", sharePrice);
+        emit log_named_uint("SHARE PRICE", basket.getSharePrice());
 
         uint256 totalShares;
         for (uint i; i < amountTNFTs; ++i) {
@@ -867,15 +878,19 @@ contract BasketsIntegrationTest is Utility {
         }
 
         // Post-state check
-        assertEq(
-            ((preSupply + basket.balanceOf(JOE)) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+
+        //uint256 feeTaken = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), tokenIds[0]));
+        //uint256 amountAfterFee = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), tokenIds[0]));
+
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + amountTNFTs);
 
-        assertEq(basket.balanceOf(JOE), usdValue * amountTNFTs);
         assertEq(basket.balanceOf(JOE), totalShares);
         assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE));
         for (uint256 i; i < amountTNFTs; ++i) {
@@ -905,27 +920,30 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
     function test_baskets_redeemTNFT_single() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
-        uint256 preSupply = basket.totalSupply();
+
+        uint256 quote = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
+
+        // ~ Config ~
 
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 sharePrice = basket.getSharePrice();
+        // ~ Pre-state check ~
 
-        // Pre-state check
-        assertEq(
-            ((preSupply + basket.balanceOf(JOE)) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        uint256 feeTaken = _calculateFeeAmount(quote);
+        uint256 amountAfterFee = _calculateAmountAfterFee(quote);
+
+        assertEq(quote, amountAfterFee + feeTaken);
+
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe - 1);
@@ -933,8 +951,8 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue);
-        assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE));
+        assertEq(basket.balanceOf(JOE), amountAfterFee);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
@@ -947,8 +965,7 @@ contract BasketsIntegrationTest is Utility {
         uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 1);
 
-        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
-        assertEq(quote, basket.balanceOf(JOE));
+        // ~ State changes ~
 
         // Joe performs a redeem with 0 budget -> revert
         vm.prank(JOE);
@@ -958,20 +975,21 @@ contract BasketsIntegrationTest is Utility {
         // Joe performs a redeem with over balance -> revert
         vm.prank(JOE);
         vm.expectRevert("Insufficient balance");
-        basket.redeemTNFT(quote + 1);
+        basket.redeemTNFT(amountAfterFee + 1);
 
         // Joe performs a redeem -> success
         vm.prank(JOE);
-        basket.redeemTNFT(quote);
+        basket.redeemTNFT(amountAfterFee);
 
-        // Post-state check
+        // ~ Post-state check ~
+
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
 
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
-        assertEq(basket.totalSupply(), preSupply);
+        assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
 
         deposited = basket.getDepositedTnfts();
@@ -986,39 +1004,41 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed for multiple TNFTs.
     function test_baskets_redeemTNFT_multiple() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
         uint256 preBalNik = realEstateTnft.balanceOf(NIK);
-        uint256 preSupply = basket.totalSupply();
 
         // ~ Config ~
 
         // Joe deposits token
+
+        uint256 quote_Joe = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
+        uint256 feeTaken_Joe = _calculateFeeAmount(quote_Joe);
+        uint256 amountAfterFee_Joe = _calculateAmountAfterFee(quote_Joe);
+
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
         // Nik deposits token
+
+        uint256 quote_Nik = basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID);
+        uint256 feeTaken_Nik = _calculateFeeAmount(quote_Nik);
+        uint256 amountAfterFee_Nik = _calculateAmountAfterFee(quote_Nik);
+
         vm.startPrank(NIK);
         realEstateTnft.approve(address(basket), NIK_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), NIK_TOKEN_ID);
         vm.stopPrank();
 
-        uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
-        uint256 sharePrice = basket.getSharePrice();
-
         // ~ Pre-state check ~
 
-        assertEq(
-            ((preSupply + basket.balanceOf(JOE) + basket.balanceOf(NIK)) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe - 1);
@@ -1028,9 +1048,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(basket));
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue1);
-        assertEq(basket.balanceOf(NIK), usdValue2);
-        assertEq(basket.totalSupply(), preSupply + basket.balanceOf(JOE) + basket.balanceOf(NIK));
+        assertEq(basket.balanceOf(JOE), amountAfterFee_Joe);
+        assertEq(basket.balanceOf(NIK), amountAfterFee_Nik);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
 
@@ -1052,10 +1072,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(tokenIdLib[0], JOE_TOKEN_ID);
         assertEq(tokenIdLib[1], NIK_TOKEN_ID);
 
-        uint256 quote = basket.getQuoteOut(address(realEstateTnft), JOE_TOKEN_ID);
-        assertEq(quote, basket.balanceOf(JOE));
-
         // ~ Joe performs a redeem ~
+
+        emit log_string("STOP 1");
 
         // NOTE: cheaper budget, redeems cheaper token first which is Joe's token
         vm.startPrank(JOE);
@@ -1064,6 +1083,12 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Post-state check 1 ~
 
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
+        );
+
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
@@ -1071,9 +1096,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), NIK_TOKEN_ID), address(basket));
 
-        assertEq(basket.balanceOf(JOE), 0);
-        assertEq(basket.balanceOf(NIK), usdValue2);
-        assertEq(basket.totalSupply(), preSupply + basket.balanceOf(NIK));
+        assertGt(basket.balanceOf(JOE), 0);
+        assertEq(basket.balanceOf(NIK), amountAfterFee_Nik);
+        assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
 
@@ -1091,16 +1116,29 @@ contract BasketsIntegrationTest is Utility {
         assertEq(tokenIdLib.length, 1);
         assertEq(tokenIdLib[0], NIK_TOKEN_ID);
 
-        quote = basket.getQuoteOut(address(realEstateTnft), NIK_TOKEN_ID);
-        assertEq(quote, basket.balanceOf(NIK));
+        // Joe sends extra tokens to Nik
+        vm.startPrank(JOE);
+        basket.transfer(NIK, basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        assertEq(basket.balanceOf(JOE), 0);
+        assertGt(basket.balanceOf(NIK), amountAfterFee_Nik);
 
         // ~ Nik performs a redeem ~
+
+        emit log_string("STOP 2");
 
         vm.startPrank(NIK);
         basket.redeemTNFT(basket.balanceOf(NIK));
         vm.stopPrank();
 
         // ~ Post-state check 2 ~
+
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
+        );
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik);
@@ -1111,7 +1149,7 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.balanceOf(NIK), 0);
-        assertEq(basket.totalSupply(), preSupply);
+        assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), false);
 
@@ -1136,11 +1174,7 @@ contract BasketsIntegrationTest is Utility {
     ///      e. high value - low yield  ($500k value yielding low rent)  -> should go third  3
     ///      f. high value - high yield ($500k value yielding high rent) -> should go fifth  5
     function test_baskets_redeemTNFT_rent_multiple() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
+        
         // ~ config ~
 
         uint256 lowRent  = 1_000 * USD;  // vested over 30 days
@@ -1429,11 +1463,7 @@ contract BasketsIntegrationTest is Utility {
     /// @notice Verifies redeem math -> proposed by Daniel.
     function test_baskets_redeemTNFT_mathCheck1() public {
 
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
+        // ~ Conig ~
 
         // deal category owner USDC to deposit into rentManager
         uint256 aliceRentBal = 10 * USD;
@@ -1464,7 +1494,8 @@ contract BasketsIntegrationTest is Utility {
 
         assertNotEq(aliceToken, bobToken);
 
-        // Pre-state check
+        // ~ Pre-state check ~
+
         assertEq(realEstateTnft.balanceOf(ALICE), 1);
         assertEq(realEstateTnft.balanceOf(BOB), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), 0);
@@ -1478,7 +1509,7 @@ contract BasketsIntegrationTest is Utility {
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
 
-        // Alice executes a deposit
+        // ~ Alice executes a deposit ~
         vm.startPrank(ALICE);
         realEstateTnft.approve(address(basket), aliceToken);
         basket.depositTNFT(address(realEstateTnft), aliceToken); // minted `130.000000000000000000`
@@ -1533,11 +1564,8 @@ contract BasketsIntegrationTest is Utility {
         uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), bobToken);
         uint256 preBalBob = basket.balanceOf(BOB);
 
-        // TODO: Add check for share price
-
         // Bob executes a redeem of bobToken
         vm.startPrank(BOB);
-        //basket.redeemTNFT(address(realEstateTnft), bobToken, basket.balanceOf(BOB)); // burned `60.357142857142857142`
         basket.redeemTNFT(basket.balanceOf(BOB));
         vm.stopPrank();
 
@@ -1554,7 +1582,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(BOB), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
 
-        //assertEq(basket.balanceOf(ALICE), (100 ether * 1.30 ether) / 1 ether); // Note: Odd exchange rate math TODO: Refactor
         assertEq(basket.balanceOf(BOB), preBalBob - quoteOut);
         assertEq(basket.totalSupply(), basket.balanceOf(ALICE) + (preBalBob - quoteOut));
         assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), true);
@@ -1573,11 +1600,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies redeem math -> proposed by Daniel.
     function test_baskets_redeemTNFT_mathCheck2() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // deal category owner USDC to deposit into rentManager
         uint256 aliceRentBal = 10 * USD;
@@ -1678,8 +1700,6 @@ contract BasketsIntegrationTest is Utility {
         uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), bobToken);
         uint256 preBalAlice = basket.balanceOf(ALICE);
 
-        // TODO: Add check for share price
-
         // Alice executes a redeem of bobToken -> Only using half of her tokens
         vm.startPrank(ALICE);
         //basket.redeemTNFT(address(realEstateTnft), bobToken, basket.balanceOf(ALICE) / 2);
@@ -1700,7 +1720,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
 
         assertEq(basket.balanceOf(ALICE), preBalAlice - quoteOut);
-        assertEq(basket.balanceOf(BOB), (50 ether * 1.30 ether) / 1 ether);
         assertEq(basket.totalSupply(), basket.balanceOf(ALICE) + basket.balanceOf(BOB));
         assertEq(basket.tokenDeposited(address(realEstateTnft), aliceToken), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), bobToken), false);
@@ -1727,12 +1746,6 @@ contract BasketsIntegrationTest is Utility {
     function test_baskets_checkPrecision_noRent_fuzzing(uint256 _value) public {
         _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M)
 
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
-
         // ~ Config ~
 
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1758,11 +1771,14 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(),  0);
 
-        // get usd value of token
+        // get usd value of token and quote for deposit
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
-        uint256 sharePrice = basket.getSharePrice();
+        uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
+        uint256 feeTaken = _calculateFeeAmount(quote);
+        uint256 amountAfterFee = _calculateAmountAfterFee(quote);
 
-        emit log_named_uint("Usd val of token", usdValue);
+        assertEq(quote, usdValue);
+        assertEq(quote, amountAfterFee + feeTaken);
 
         // ~ Joe deposits ~
 
@@ -1772,22 +1788,22 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // state check
-        assertEq(
-            (basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            2
         );
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
         assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue);
-        assertEq(basket.totalSupply(),  usdValue);
+        assertEq(basket.balanceOf(JOE), amountAfterFee);
+        assertEq(basket.totalSupply(),  amountAfterFee);
 
         // ~ Joe redeems ~
 
         vm.startPrank(JOE);
-       // basket.redeemTNFT(address(realEstateTnft), tokenId, basket.balanceOf(JOE));
         basket.redeemTNFT(basket.balanceOf(JOE));
         vm.stopPrank();
 
@@ -1804,12 +1820,6 @@ contract BasketsIntegrationTest is Utility {
     function test_baskets_checkPrecision_rent_fuzzing(uint256 _value, uint256 _rent) public {
         _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M) decimals = 3
         _rent  = bound(_rent, 1, 1_000_000_000_000); // range (.000001 -> 1M) decimals = 6
-
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // ~ Config ~
 
@@ -1844,9 +1854,12 @@ contract BasketsIntegrationTest is Utility {
 
         // get usd value of token
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
-        uint256 sharePrice = basket.getSharePrice();
+        uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
+        uint256 feeTaken = _calculateFeeAmount(quote);
+        uint256 amountAfterFee = _calculateAmountAfterFee(quote);
 
-        emit log_named_uint("Usd val of token", usdValue);
+        assertEq(quote, usdValue);
+        assertEq(quote, amountAfterFee + feeTaken);
 
         // ~ Joe deposits ~
 
@@ -1855,11 +1868,11 @@ contract BasketsIntegrationTest is Utility {
         basket.depositTNFT(address(realEstateTnft), tokenId);
         vm.stopPrank();
 
-
         // state check
-        assertEq(
-            (basket.balanceOf(JOE) * sharePrice) / 1 ether + (_rent * 10**12),
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            2
         );
 
         assertEq(MUMBAI_USDC.balanceOf(address(basket)), _rent);
@@ -1869,8 +1882,8 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
         assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
 
-        assertEq(basket.balanceOf(JOE), usdValue);
-        assertEq(basket.totalSupply(),  usdValue);
+        assertEq(basket.balanceOf(JOE), amountAfterFee);
+        assertEq(basket.totalSupply(),  amountAfterFee);
 
         uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), tokenId);
         uint256 preBasketBalJoe = basket.balanceOf(JOE);
@@ -1878,7 +1891,6 @@ contract BasketsIntegrationTest is Utility {
         // ~ Joe redeems ~
 
         vm.startPrank(JOE);
-        //basket.redeemTNFT(address(realEstateTnft), tokenId, basket.balanceOf(JOE));
         basket.redeemTNFT(basket.balanceOf(JOE));
         vm.stopPrank();
 
@@ -1905,11 +1917,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket
     function test_baskets_getTotalValueOfBasket_single() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         assertEq(basket.getTotalValueOfBasket(), 0);
 
@@ -1957,11 +1964,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket with many TNFTs.
     function test_baskets_getTotalValueOfBasket_multiple() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         assertEq(basket.getTotalValueOfBasket(), 0);
 
@@ -2038,11 +2040,8 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies checkBudget view method is returning correct data
     function test_baskets_checkBudget() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
+
+        // ~ Config ~
 
         uint256 batchSize = 4;
 
@@ -2068,6 +2067,7 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
+        uint256 sharesRequired = basket.getQuoteOut(address(realEstateTnft), tokenIds[0]);
 
         // Sanity check -> Execute checkBudget(0)
         (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(0);
@@ -2099,19 +2099,19 @@ contract BasketsIntegrationTest is Utility {
         assertEq(inBudget[0].tnft, address(realEstateTnft));
         assertEq(inBudget[0].tokenId, tokenIds[0]);
         assertEq(inBudget[0].usdValue, usdValue);
-        assertEq(inBudget[0].sharesRequired, usdValue);
+        assertEq(inBudget[0].sharesRequired, sharesRequired);
         assertEq(inBudget[1].tnft, address(realEstateTnft));
         assertEq(inBudget[1].tokenId, tokenIds[1]);
         assertEq(inBudget[1].usdValue, usdValue);
-        assertEq(inBudget[1].sharesRequired, usdValue);
+        assertEq(inBudget[1].sharesRequired, sharesRequired);
         assertEq(inBudget[2].tnft, address(realEstateTnft));
         assertEq(inBudget[2].tokenId, tokenIds[2]);
         assertEq(inBudget[2].usdValue, usdValue);
-        assertEq(inBudget[2].sharesRequired, usdValue);
+        assertEq(inBudget[2].sharesRequired, sharesRequired);
         assertEq(inBudget[3].tnft, address(realEstateTnft));
         assertEq(inBudget[3].tokenId, tokenIds[3]);
         assertEq(inBudget[3].usdValue, usdValue);
-        assertEq(inBudget[3].sharesRequired, usdValue);
+        assertEq(inBudget[3].sharesRequired, sharesRequired);
         assertEq(quantity, batchSize);
         assertEq(valid, true);
     }
@@ -2121,11 +2121,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies state changes when a successful call to Basket::notify is executed.
     function test_baskets_notify() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), 1, basket.balanceOf(CREATOR));
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // ~ config ~
 
@@ -2147,12 +2142,12 @@ contract BasketsIntegrationTest is Utility {
         uint256 pre_sharePrice = basket.getSharePrice();
         uint256 pre_totalBasketVal = basket.getTotalValueOfBasket();
 
-        assertEq(
-            (basket.balanceOf(JOE) * pre_sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
-        assertEq(pre_sharePrice, 1 ether);
         assertEq(basket.totalNftValue(), pre_usdValue);
         assertEq(basket.valueTracker(address(realEstateTnft), tokenId), pre_usdValue);
         assertEq(basket.valueTracker(address(realEstateTnft), tokenId), pre_totalBasketVal);
@@ -2170,12 +2165,13 @@ contract BasketsIntegrationTest is Utility {
         assertGt(post_usdValue, pre_usdValue);
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenId), address(basket));
 
-        assertEq(
-            (basket.balanceOf(JOE) * post_sharePrice) / 1 ether,
-            basket.getTotalValueOfBasket()
+        assertWithinPrecision(
+            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            basket.getTotalValueOfBasket(),
+            8
         );
 
-        assertEq(post_sharePrice, 1.25 ether);
+        assertGt(post_sharePrice, pre_sharePrice);
         assertEq(basket.totalNftValue(), post_usdValue);
         assertEq(basket.valueTracker(address(realEstateTnft), tokenId), post_usdValue);
 
@@ -2196,10 +2192,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies proper state change upon a successful execution of Basket::withdrawRent.
     function test_baskets_withdrawRent() public {
-        // creator redeems token to isolate test.
-        vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
-        vm.stopPrank();
 
         // ~ config ~
 

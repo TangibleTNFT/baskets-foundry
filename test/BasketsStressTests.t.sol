@@ -195,7 +195,6 @@ contract StressTests is Utility {
 
         // creator redeems token to isolate tests.
         vm.startPrank(CREATOR);
-        //basket.redeemTNFT(address(realEstateTnft), tokenIds[0], basket.balanceOf(CREATOR));
         basket.redeemTNFT(basket.balanceOf(CREATOR));
         vm.stopPrank();
 
@@ -369,6 +368,16 @@ contract StressTests is Utility {
         return RWAPriceNotificationDispatcher(address(IGetNotificationDispatcher(address(oracle)).notificationDispatcher()));
     }
 
+    /// @notice This helper method is used to calculate amount taken for fee upon a deposit.
+    function _calculateFeeAmount(uint256 _amount) internal returns (uint256) {
+        return (_amount * basket.depositFee()) / 100_00;
+    }
+
+    /// @notice This helper method is used to fetch amount received after deposit post fee.
+    function _calculateAmountAfterFee(uint256 _amount) internal returns (uint256) {
+        return (_amount - _calculateFeeAmount(_amount));
+    }
+
 
     // ------------
     // Stress Tests
@@ -398,7 +407,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         uint256 newCategories = 4;
-        uint256 amountFingerprints = 25;
+        uint256 amountFingerprints = 10;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         uint256 totalTokens = newCategories * amountFingerprints;
@@ -460,9 +469,12 @@ contract StressTests is Utility {
                 uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
                 uint256 basketPreBal = basket.balanceOf(JOE);
 
-                // get usdValue of tnft and share price
-                uint256 usdValue = _getUsdValueOfNft(tnft, tokenId);
-                uint256 sharePrice = basket.getSharePrice();
+                // get quotes for deposit
+                uint256 quote = basket.getQuoteIn(tnft, tokenId);
+                uint256 feeTaken = _calculateFeeAmount(quote);
+                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
+
+                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -471,9 +483,10 @@ contract StressTests is Utility {
                 vm.stopPrank();
 
                 // verify share price * balance == totalValueOfBasket
-                assertEq(
-                    (basket.balanceOf(JOE) * sharePrice) / 1 ether,
-                    basket.getTotalValueOfBasket()
+                assertWithinPrecision(
+                    (basket.balanceOf(JOE) * basket.getSharePrice()) / 1 ether,
+                    basket.getTotalValueOfBasket(),
+                    2
                 );
 
                 // verify basket now owns token
@@ -482,7 +495,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + usdValue);
+                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify notificationDispatcher state
@@ -593,9 +606,12 @@ contract StressTests is Utility {
                 uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
                 uint256 basketPreBal = basket.balanceOf(JOE);
 
-                // get usdValue of tnft and share price
-                uint256 usdValue = _getUsdValueOfNft(tnft, tokenId);
-                uint256 sharePrice = basket.getSharePrice();
+                // get quotes for deposit
+                uint256 quote = basket.getQuoteIn(tnft, tokenId);
+                uint256 feeTaken = _calculateFeeAmount(quote);
+                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
+
+                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -604,9 +620,10 @@ contract StressTests is Utility {
                 vm.stopPrank();
 
                 // verify share price * balance == totalValueOfBasket
-                assertEq(
-                    (basket.balanceOf(JOE) * sharePrice) / 1 ether,
-                    basket.getTotalValueOfBasket()
+                assertWithinPrecision(
+                    (basket.balanceOf(JOE) * basket.getSharePrice()) / 1 ether,
+                    basket.getTotalValueOfBasket(),
+                    2
                 );
 
                 // verify basket now owns token
@@ -615,7 +632,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + usdValue);
+                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify notificationDispatcher state

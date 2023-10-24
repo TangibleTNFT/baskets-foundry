@@ -78,6 +78,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint256 public depositFee; // 0.5% by default
 
+    uint256 public inCounter;
+
+    uint256 public outCounter;
+
+    /// @notice TangibleNFT contract => tokenId => InCounterId.
+    mapping(address => mapping(uint256 => uint256)) public fifoTracker;
+
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     IERC20Metadata public primaryRentToken;
 
@@ -214,7 +221,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
      * @param _budget Amount of basket tokens being submitted to redeem method.
      */
-    function redeemTNFT(uint256 _budget) external {
+    function redeemTNFT(uint256 _budget) external { // TODO: Replace with FIFO method
         address redeemer = msg.sender;
         require(balanceOf(redeemer) >= _budget, "Insufficient balance");
 
@@ -326,6 +333,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice This method is used to quote an amount of basket tokens transferred to depositor if a specfiied token is deposted.
+     * @dev Does NOT include the amount of basket tokens subtracted for deposit fee.
      * @param _tangibleNFT TangibleNFT contract address of NFT being quoted.
      * @param _tokenId TokenId of NFT being quoted.
      * @return shares -> Amount of Erc20 basket tokens quoted for NFT.
@@ -558,7 +566,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         unchecked {
             totalValue += totalNftValue;
             // get value of rent accrued by this contract
-            totalValue += _getRentBal();
+            totalValue += _getRentBal(); // TODO: Repalace with `totalValue += totalRentValue`
         }
     }
 
@@ -595,7 +603,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _depositor Address depositing the token.
      * @return basketShare -> Amount of basket tokens being minted to redeemer.
      */
-    function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal returns (uint256 basketShare) {
+    function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal nonReentrant returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
         // if contract supports features, make sure tokenId has a supported feature
         require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
@@ -618,6 +626,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (!exists) {
             tnftsSupported.push(_tangibleNFT);
         }
+
+        fifoTracker[_tangibleNFT][_tokenId] = ++inCounter; // TODO: Test
 
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
@@ -644,6 +654,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // verify claimed balance
         require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
 
+        // TODO: REBASE HERE
+
         // calculate shares for depositor
         basketShare = _quoteShares(usdValue, receivedRent);
 
@@ -654,7 +666,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         else {
             // if deposit isn't initial deposit from deployer (which will be most cases), charge a deposit fee.
             uint256 feeShare = (basketShare * depositFee) / 100_00; // TODO: Verify implementation & test
-            _mint(address(this), feeShare); // TODO: Do we want the tokens minted or not at all?
             basketShare -= feeShare;
         }
 
@@ -720,6 +731,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // Transfer tokenId to user
         IERC721(_tangibleNFT).safeTransferFrom(address(this), _redeemer, _tokenId);
+
+        // TODO: REBASE HERE (change order)
 
         totalNftValue -= _usdValue;
         _burn(_redeemer, _amountBasketTokens);

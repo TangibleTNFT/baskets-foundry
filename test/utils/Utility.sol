@@ -47,6 +47,9 @@ contract Utility is Test{
     // ~ Precision ~
 
     uint256 constant USD = 10 ** 6;  // USDC precision decimals
+    uint256 constant BTC = 10 ** 8;  // WBTC precision decimals
+    uint256 constant WAD = 10 ** 18;
+    uint256 constant RAY = 10 ** 27;
 
 
     // ~ Types and Features ~
@@ -95,6 +98,35 @@ contract Utility is Test{
         array[0] = element;
 
         return array;
+    }
+
+    /// @notice Verify equality within accuracy decimals.
+    function assertWithinPrecision(uint256 val0, uint256 val1, uint256 accuracy) internal {
+        uint256 diff  = val0 > val1 ? val0 - val1 : val1 - val0;
+        if (diff == 0) return;
+
+        uint256 denominator = val0 == 0 ? val1 : val0;
+        bool check = ((diff * RAY) / denominator) < (RAY / 10 ** accuracy);
+
+        if (!check){
+            emit log_named_uint("Error: approx a == b not satisfied, accuracy digits ", accuracy);
+            emit log_named_uint("  Expected", val0);
+            emit log_named_uint("    Actual", val1);
+            fail();
+        }
+    }
+
+    /// @notice Verify equality within difference.
+    function assertWithinDiff(uint256 val0, uint256 val1, uint256 expectedDiff) internal {
+        uint256 actualDiff = val0 > val1 ? val0 - val1 : val1 - val0;
+        bool check = actualDiff <= expectedDiff;
+
+        if (!check) {
+            emit log_named_uint("Error: approx a == b not satisfied, accuracy difference ", expectedDiff);
+            emit log_named_uint("  Expected", val0);
+            emit log_named_uint("    Actual", val1);
+            fail();
+        }
     }
 
 }

@@ -6,7 +6,7 @@ import { RebaseTokenMath } from "../libraries/RebaseTokenMath.sol";
 
 /**
  * @title RebaseTokenUpgradeable
- * @author Caesar LaVey
+ * @author Caesar LaVey - slight variation configured by Chase Brown
  * @notice This is an upgradeable ERC20 token contract that introduces a rebase mechanism and allows accounts to opt out
  * of rebasing. The contract uses an index-based approach to implement rebasing, allowing for more gas-efficient
  * calculations.
@@ -25,7 +25,7 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     /// @custom:storage-location erc7201:tangible.storage.RebaseToken
     struct RebaseTokenStorage {
         uint256 rebaseIndex;
-        uint256 totalShares;
+        uint256 totalShares; // Note: shares refers to tokens + rebase tokens
         mapping(address => uint256) shares;
     }
 
