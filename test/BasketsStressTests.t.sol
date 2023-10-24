@@ -276,8 +276,6 @@ contract StressTests is Utility {
 
     /// @notice helper function for adding new categories and deploying new TNFT addresses.
     function _deployNewTnftContract(string memory name) internal returns (address) {
-        // TODO: Deploy new mockMatrix, realtyOracle, and ND
-
         //a. deploy mockMatrix
         MockMatrixOracle mockMatrixOracle = new MockMatrixOracle();
 
@@ -386,16 +384,16 @@ contract StressTests is Utility {
 
     // TODO:
     // a. deposit testing with multiple TNFT addresses and multiple tokens for each TNFT contract
-    //    - test deposit and batch deposits with fuzzing - DONE
-    //    - again, but with rent accruing -> changing share price - DONE
-    //    - test deposit with rent vs deposit with no rent claimable TODO
+    //    - test deposit and batch deposits with fuzzing
+    //    - again, but with rent accruing -> changing share price
+    //    - test deposit with rent vs deposit with no rent claimable
     //    - test what would happen if deployer immediately deposits 1-100 TNFTs at once
     // b. stress test redeemTNFT
     //    - 1000+ depositedTnfts
     // c. stress test _redeemRent
     //    - 10-100+ tnftsSupported DONE
-    //    - refactor iterating thru claimable rent array and test multiple iterations with 100-1000+ TNFTs DONE
-    //    - test multiple redeems in succession. TODO
+    //    - refactor iterating thru claimable rent array and test multiple iterations with 100-1000+ TNFTs
+    //    - test multiple redeems in succession.
     // d. multiple baskets
 
 
@@ -406,29 +404,32 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        uint256 newCategories = 4;
-        uint256 amountFingerprints = 10;
+        config.newCategories = 4;
+        config.amountFingerprints = 10;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
-        uint256 totalTokens = newCategories * amountFingerprints;
+        config.totalTokens = config.newCategories * config.amountFingerprints;
 
-        uint256[] memory fingerprints = new uint256[](amountFingerprints);
-        address[] memory tnfts = new address[](newCategories);
+        uint256[] memory fingerprints = new uint256[](config.amountFingerprints);
+        address[] memory tnfts = new address[](config.newCategories);
+
+        uint256 preInCounter = basket.inCounter();
 
         // store all new fingerprints in array.
-        for (uint256 i; i < amountFingerprints; ++i) {
+        uint256 i;
+        for (i; i < config.amountFingerprints; ++i) {
             fingerprints[i] = i;
         }
 
         // create multiple tnfts.
-        for (uint256 i; i < newCategories; ++i) {
+        for (i = 0; i < config.newCategories; ++i) {
             tnfts[i] = _deployNewTnftContract(Strings.toString(i));
         }
 
         // mint multiple tokens for each contract
-        for (uint256 i; i < newCategories; ++i) {
+        for (i = 0; i < config.newCategories; ++i) {
             address tnft = tnfts[i];
-            for (uint256 j; j < amountFingerprints; ++j) {
+            for (uint256 j; j < config.amountFingerprints; ++j) {
                 uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
 
                 uint256[] memory tokenIds = _createItemAndMint(
@@ -444,13 +445,15 @@ contract StressTests is Utility {
                 assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
             }
-            assertEq(ITangibleNFT(tnft).balanceOf(JOE), amountFingerprints);
+            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
         }
 
         // ~ Pre-state check ~
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), 0);
+
+        assertEq(basket.inCounter(), preInCounter);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -461,7 +464,8 @@ contract StressTests is Utility {
         // ~ Execute depositTNFT and Assert ~
 
         // deposit all tokens
-        for (uint256 i; i < newCategories; ++i) {
+        uint256 count;
+        for (i = 0; i < config.newCategories; ++i) {
             address tnft = tnfts[i];
             for (uint256 j; j < tokenIdMap[tnft].length; ++j) {
 
@@ -489,6 +493,8 @@ contract StressTests is Utility {
                     2
                 );
 
+                assertEq(basket.inCounter(), preInCounter + (++count));
+
                 // verify basket now owns token
                 assertEq(ITangibleNFT(tnft).ownerOf(tokenId), address(basket));
                 assertEq(basket.tokenDeposited(tnft, tokenId), true);
@@ -509,17 +515,17 @@ contract StressTests is Utility {
         // ~ Post-state check ~
 
         deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, totalTokens);
+        assertEq(deposited.length, config.totalTokens);
 
         tnftsSupported = basket.getTnftsSupported();
-        assertEq(tnftsSupported.length, newCategories);
+        assertEq(tnftsSupported.length, config.newCategories);
 
-        uint256 count;
-        for (uint256 i; i < tnftsSupported.length; ++i) {
+        count = 0;
+        for (i = 0; i < tnftsSupported.length; ++i) {
             assertEq(tnftsSupported[i], tnfts[i]);
 
             uint256[] memory tokenIdLib = basket.getTokenIdLibrary(tnftsSupported[i]);
-            assertEq(tokenIdLib.length, amountFingerprints);
+            assertEq(tokenIdLib.length, config.amountFingerprints);
 
             for (uint256 j; j < tokenIdLib.length; ++j) {
                 uint256 tokenId = tokenIdMap[tnftsSupported[i]][j];
@@ -533,7 +539,7 @@ contract StressTests is Utility {
         }
 
         // reset tokenIdMap
-        for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
+        for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[tnfts[i]];
     }
 
     /// @notice Stress test of depositTNFT method using fuzzing.
@@ -1104,115 +1110,18 @@ contract StressTests is Utility {
     }
 
 
-    // ~ stress checkBudget ~
-
-    /// @notice Stress test of checkBudget method with max tokensInBudget.
-    /// NOTE: 1x100 (100 tokens) -> checkBudget costs 7_278_280 gas
-    /// NOTE: 4x25  (100 tokens) -> checkBudget costs 8_678_789 gas
-    /// NOTE: 10x10 (100 tokens) -> checkBudget costs 11_486_824 gas
-    function test_stress_checkBudget() public {
-
-        // ~ Config ~
-
-        uint256 newCategories = 10;
-        uint256 amountFingerprints = 10;
-
-        // NOTE: Amount of TNFTs == newCategories * amountFingerprints
-        uint256 totalTokens = newCategories * amountFingerprints;
-
-        uint256[] memory fingerprints = new uint256[](amountFingerprints);
-        address[] memory tnfts = new address[](newCategories);
-
-        // declare arrays that will be used for args for batchDepositTNFT
-        address[] memory batchTnftArr = new address[](totalTokens);
-        uint256[] memory batchTokenIdArr = new uint256[](totalTokens);
-
-        // store all new fingerprints in array.
-        for (uint256 i; i < amountFingerprints; ++i) {
-            fingerprints[i] = i;
-        }
-
-        // create multiple tnfts.
-        uint256 count;
-        for (uint256 i; i < newCategories; ++i) {
-            tnfts[i] = _deployNewTnftContract(Strings.toString(i));
-            
-            // initialize batchTnftArr
-            for (uint256 j; j < amountFingerprints; ++j) {
-                batchTnftArr[count] = tnfts[i];
-                ++count;
-            }
-        }
-
-        // mint multiple tokens for each contract
-        count = 0;
-        for (uint256 i; i < newCategories; ++i) {
-            address tnft = tnfts[i];
-            for (uint256 j; j < amountFingerprints; ++j) {
-                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
-
-                uint256[] memory tokenIds = _createItemAndMint(
-                    tnft,
-                    100_000, // 100 GBP
-                    1,       // stock
-                    1,       // mint
-                    fingerprints[j],
-                    JOE
-                );
-                tokenIdMap[tnfts[i]].push(tokenIds[0]);
-
-                // initialize batchTokenIdArr
-                batchTokenIdArr[count] = tokenIds[0];
-                ++count;
-
-                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
-                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
-            }
-            assertEq(ITangibleNFT(tnft).balanceOf(JOE), amountFingerprints);
-        }
-
-        uint256 usdValue = _getUsdValueOfNft(tnfts[0], tokenIdMap[tnfts[0]][0]);
-
-        // deposit tokens via batch
-        vm.startPrank(JOE);
-        for (uint256 i; i < totalTokens; ++i) {
-            ITangibleNFT(batchTnftArr[i]).approve(
-                address(basket),
-                batchTokenIdArr[i]
-            );
-        }
-        basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
-
-        vm.stopPrank();
-
-        // ~ Execute checkBudget ~
-
-        (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(usdValue);
-
-        // ~ Post-state check ~
-
-        assertEq(quantity, totalTokens);
-        assertEq(inBudget.length, totalTokens);
-        assertEq(valid, true);
-
-        // reset tokenIdMap
-        for (uint256 i; i < newCategories; ++i) delete tokenIdMap[tnfts[i]];
-    }
-
-
     // ~ stress redeemTNFT ~
 
     /// @notice Stress test of Basket::redeemTNFT with numerous tokens -> NO RENT
-    /// @dev basis: 100 tokens to iterate through.
 
-    /// NOTE: 1x100 (100 tokens) -> redeemTNFT costs 5_610_962 gas
-    /// NOTE: 4x25  (100 tokens) -> redeemTNFT costs 6_303_840 gas
-    /// NOTE: 10x10 (100 tokens) -> redeemTNFT costs 7_693_104 gas
+    /// NOTE: 1*100   (100 tokens)   -> redeemTNFT costs 117_342 gas
+    /// NOTE: 10*100  (1000 tokens)  -> redeemTNFT costs 353_157 gas
+    /// NOTE: 50*100  (5000 tokens)  -> redeemTNFT costs 1_659_006 gas
     function test_stress_redeemTNFT_noFuzz() public {
         
         // ~ Config ~
 
-        config.newCategories = 10;
+        config.newCategories = 5;
         config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1264,8 +1173,6 @@ contract StressTests is Utility {
             }
             assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
         }
-
-        //uint256 usdValue = _getUsdValueOfNft(config.tnfts[0], tokenIdMap[config.tnfts[0]][0]);
 
         // deposit tokens via batch
         vm.startPrank(JOE);

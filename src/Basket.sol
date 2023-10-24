@@ -83,7 +83,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     uint256 public outCounter;
 
     /// @notice TangibleNFT contract => tokenId => InCounterId.
-    mapping(address => mapping(uint256 => uint256)) public fifoTracker;
+    //mapping(address => mapping(uint256 => uint256)) public fifoTracker;
+
+    mapping(uint256 => TokenData) public fifoTracker;
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     IERC20Metadata public primaryRentToken;
@@ -222,21 +224,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _budget Amount of basket tokens being submitted to redeem method.
      */
     function redeemTNFT(uint256 _budget) external { // TODO: Replace with FIFO method
-        address redeemer = msg.sender;
-        require(balanceOf(redeemer) >= _budget, "Insufficient balance");
-
-        RedeemData memory redeemable = findLowestYielding(_budget);
-
-        require(redeemable.tnft != address(0), "Insufficient budget");
-
-        // c. redeem NFT in index 0
-        _redeemTNFT(
-            redeemer,
-            redeemable.tnft,
-            redeemable.tokenId,
-            redeemable.usdValue,
-            redeemable.sharesRequired
-        );
+        _redeemTNFT(msg.sender, _budget);
     }
 
     /**
@@ -444,106 +432,60 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _setRebaseIndex(rebaseIndex);
     }
 
-    // function totalSupply() override public returns (uint256 _totalSupply) {
-    //     return _totalSupplyShares.toTokens(rebaseIndex);
+    /**
+     * @notice TODO UPDATE
+     * @return redeemable -> RedeemData object containing all the data for token to be redeemed
+     */
+    function calculateFifo() public view returns (RedeemData memory redeemable) {
+        // a. Locate tnft in array with correct fifo counter var
+        uint256 fifoNum = outCounter + 1;
+        TokenData memory token = fifoTracker[fifoNum];
+
+        // b. if budget suffices, return token
+        uint256 usdValue = valueTracker[token.tnft][token.tokenId];
+        uint256 sharesRequired = _quoteShares(usdValue, 0);
+
+        return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
+    }
+
+    // /**
+    //  * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
+    //  * @param _budget Amount of basket tokens willing to burn for a redeemable TNFT token from within the basket.
+    //  * @return inBudget -> Array of type RedeemData of all TNFT tokens that can be redeemed for the specified budget of basket tokens.
+    //  * @return quantity -> Amount of tokens that can be redeemed for `_budget`. note: quantity == inBudget.length
+    //  * @return valid -> If there are tokens that can be redeemed for `_budget`, valid will be true. Otherwise, false.
+    //  */
+    // function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) {
+    //     uint256 len = depositedTnfts.length;
+    //     inBudget = new RedeemData[](len);
+
+    //     for (uint256 i; i < len;) {
+
+    //         // get usd value of TNFT token
+    //         uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
+    //         // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
+    //         uint256 sharesRequired = _quoteShares(usdValue, 0);
+
+    //         if (_budget >= sharesRequired) {
+    //             inBudget[quantity] = 
+    //                 RedeemData(
+    //                     depositedTnfts[i].tnft,
+    //                     depositedTnfts[i].tokenId,
+    //                     usdValue,
+    //                     sharesRequired
+    //                 );
+    //             unchecked {
+    //                 ++quantity;
+    //             }
+    //         }
+
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
+
+    //     quantity > 0 ? valid = true : valid = false;
     // }
-
-    /**
-     * @notice This method will take a budget of basket tokens and chooses the lowest rent yielding TNFT token
-     *         in that specified budget range.
-     * @param _budget Amount of basket tokens being submitted for redeemable tokens.
-     * @return redeemable -> RedeemData object containing all the data for the lowest yielding token in the range.
-     */
-    function findLowestYielding(uint256 _budget) public view returns (RedeemData memory redeemable) {
-        // a. Create an array of TNFTs within budget
-        (RedeemData[] memory tokensInBudget, uint256 len, bool valid) = checkBudget(_budget);
-
-        if (!valid || len == 0) return RedeemData(address(0),0,0,0);
-        
-        uint256 index;
-        if (len > 1) {
-            // b. find lowest yielding NFT -> redeem it
-            uint256 value;
-            for (uint256 i; i < len;) {
-
-                // ba. get usd value
-                uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
-
-                IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
-                IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
-
-                uint256 rent = rentInfo.depositAmount;
-
-                // If rent is currently being vested
-                if (rentInfo.distributionRunning && rent != 0) {
-
-                    // bb. find rent per second
-                    uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
-
-                    // bc. calculate worth with value/rentPerSecond
-                    uint256 tValue = usdValue / perSecond;
-
-                    // bd. if higher than `value`, save index, assign to `value`
-                    if (tValue > value) {
-                        value = tValue;
-                        index = i;
-                    } 
-                }
-                // If no rent currently being vested -> No yield -> take usdValue
-                else {
-                    if (usdValue > value) {
-                        value = usdValue;
-                        index = i;
-                    }
-                }
-
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        redeemable = tokensInBudget[index];
-    }
-
-    /**
-     * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
-     * @param _budget Amount of basket tokens willing to burn for a redeemable TNFT token from within the basket.
-     * @return inBudget -> Array of type RedeemData of all TNFT tokens that can be redeemed for the specified budget of basket tokens.
-     * @return quantity -> Amount of tokens that can be redeemed for `_budget`. note: quantity == inBudget.length
-     * @return valid -> If there are tokens that can be redeemed for `_budget`, valid will be true. Otherwise, false.
-     */
-    function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) {
-        uint256 len = depositedTnfts.length;
-        inBudget = new RedeemData[](len);
-
-        for (uint256 i; i < len;) {
-
-            // get usd value of TNFT token
-            uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
-            // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-            uint256 sharesRequired = _quoteShares(usdValue, 0);
-
-            if (_budget >= sharesRequired) {
-                inBudget[quantity] = 
-                    RedeemData(
-                        depositedTnfts[i].tnft,
-                        depositedTnfts[i].tokenId,
-                        usdValue,
-                        sharesRequired
-                    );
-                unchecked {
-                    ++quantity;
-                }
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        quantity > 0 ? valid = true : valid = false;
-    }
 
     /**
      * @notice Return the USD value of share token for underlying assets, 18 decimals
@@ -627,7 +569,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             tnftsSupported.push(_tangibleNFT);
         }
 
-        fifoTracker[_tangibleNFT][_tokenId] = ++inCounter; // TODO: Test
+        //fifoTracker[_tangibleNFT][_tokenId] = ++inCounter; // TODO: Test
+
+        fifoTracker[++inCounter] = TokenData(_tangibleNFT, _tokenId, fingerprint);
 
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
@@ -683,19 +627,22 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /**
      * @notice Internal method for redeeming a specified TNFT from this basket contract.
      * @param _redeemer EOA address of redeemer. note: msg.sender
-     * @param _tangibleNFT TNFT contract address of token being redeemed.
-     * @param _tokenId Token identifier of token being redeemed.
-     * @param _usdValue $USD value of token being redeemed.
-     * @param _amountBasketTokens Amount of basket tokens needed for redemption. @dev tokens will be burned.
+     * @param _budget Budget of basket tokens willing to redeem
      */
     function _redeemTNFT(
         address _redeemer,
-        address _tangibleNFT,
-        uint256 _tokenId,
-        uint256 _usdValue,
-        uint256 _amountBasketTokens
+        uint256 _budget
     ) internal nonReentrant {
-        require(balanceOf(_redeemer) >= _amountBasketTokens, "Insufficient balance");
+        RedeemData memory redeemable = calculateFifo();
+
+        address _tangibleNFT = redeemable.tnft;
+        uint256 _tokenId = redeemable.tokenId;
+        uint256 _usdValue = redeemable.usdValue;
+        uint256 _sharesRequired = redeemable.sharesRequired;
+
+        require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
+        require(_budget >= _sharesRequired, "Insufficient budget");
+
         require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
 
         // update contract
@@ -735,7 +682,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // TODO: REBASE HERE (change order)
 
         totalNftValue -= _usdValue;
-        _burn(_redeemer, _amountBasketTokens);
+        _burn(_redeemer, _sharesRequired);
+        
+        ++outCounter; // TODO: Test
 
         emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
     }
