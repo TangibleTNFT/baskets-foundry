@@ -6,6 +6,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // tangible imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -21,8 +22,8 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
-import { UpgradeableBeacon } from "./proxy/UpgradeableBeacon.sol";
-import { BasketBeaconProxy } from "./proxy/BasketBeaconProxy.sol";
+import { UpgradeableBeacon } from "./proxy/beacon/UpgradeableBeacon.sol";
+import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
 
@@ -31,7 +32,7 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
  * @author Chase Brown
  * @notice This contract manages all Basket contracts.
  */
-contract BasketManager is Initializable, FactoryModifiers {
+contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     using ArrayUtils for uint256[];
 
     // ~ State Variables ~
@@ -98,14 +99,14 @@ contract BasketManager is Initializable, FactoryModifiers {
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
-            address(this) // TODO: Test to see implications of new owner
+            address(this)
         );
 
         featureLimit = 10;
     }
 
 
-    // ~ External Functions ~
+    // ~ External Methods ~
 
     /**
      * @notice This method deploys a new Basket contract.
@@ -161,7 +162,7 @@ contract BasketManager is Initializable, FactoryModifiers {
         // create new basket beacon proxy
         BasketBeaconProxy newBasketBeacon = new BasketBeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(Basket.initialize.selector,  // TODO: Verify all this data is indeed being stored in proxy
+            abi.encodeWithSelector(Basket.initialize.selector,
                 _name,
                 _symbol,
                 factory(),
@@ -232,7 +233,7 @@ contract BasketManager is Initializable, FactoryModifiers {
     }
 
 
-    // ~ Public Functions ~
+    // ~ Public Methods ~
 
     /**
      * @notice This method checks whether a basket with featuresHash can be created or is taken.
@@ -291,5 +292,10 @@ contract BasketManager is Initializable, FactoryModifiers {
     function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
         hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
     }
+
+
+    // ~ Internal Methods ~
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyFactoryOwner {}
 
 }

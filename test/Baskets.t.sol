@@ -8,8 +8,12 @@ import { StdInvariant } from "../lib/forge-std/src/StdInvariant.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// proxy solution 1 -> depricated
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+// proxy solution 2
+import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
@@ -69,8 +73,8 @@ contract BasketsIntegrationTest is Utility {
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
-    TransparentUpgradeableProxy public basketManagerProxy;
-    TransparentUpgradeableProxy public basketVrfConsumerProxy;
+    ERC1967Proxy public basketManagerProxy;
+    //TransparentUpgradeableProxy public basketVrfConsumerProxy;
     ProxyAdmin public proxyAdmin;
 
     // ~ Actors and Variables ~
@@ -108,9 +112,8 @@ contract BasketsIntegrationTest is Utility {
         basketManager = new BasketManager();
 
         // Deploy proxy for basketManager -> initialize
-        basketManagerProxy = new TransparentUpgradeableProxy(
+        basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
-            address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2)
@@ -2257,5 +2260,12 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.getRentBal(), 0);
         assertEq(basket.primaryRentToken().balanceOf(factoryOwner), amount * 2);
+    }
+
+    
+    // ~ rebasing ~
+
+    function test_baskets_rebase() public {
+
     }
 }

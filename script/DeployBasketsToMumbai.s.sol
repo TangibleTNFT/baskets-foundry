@@ -4,8 +4,10 @@ pragma solidity ^0.8.13;
 import {Script, console2} from "../lib/forge-std/src/Script.sol";
 
 // oz imports
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+//import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+//import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
@@ -30,9 +32,9 @@ contract DeployBasketsToMumbai is Script {
     BasketManager public basketManager;
 
     // proxies
-    TransparentUpgradeableProxy public basketManagerProxy;
-    TransparentUpgradeableProxy public basketVrfConsumerProxy;
-    ProxyAdmin public proxyAdmin;
+    ERC1967Proxy public basketManagerProxy;
+    //TransparentUpgradeableProxy public basketVrfConsumerProxy;
+    //ProxyAdmin public proxyAdmin;
 
     // wallets
     address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
@@ -57,38 +59,33 @@ contract DeployBasketsToMumbai is Script {
 
         vm.startBroadcast(deployerPrivKey);
 
-        // 1. Deploy proxy admin -> TODO verify owner == deployerAddress
-        proxyAdmin = new ProxyAdmin(address(this));
-
-        // 2. deploy basket
+        // 1. deploy basket
         basket = new Basket();
 
-        // 3. Deploy basketManager
+        // 2. Deploy basketManager
         basketManager = new BasketManager();
 
-        // 4. Deploy proxy for basketManager & initialize
-        basketManagerProxy = new TransparentUpgradeableProxy(
+        // 3. Deploy proxy for basketManager & initialize
+        basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
-            address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 Mumbai_FactoryV2
             )
         );
 
-        // 5. deploy new basket -> NEED TOKENS TODO
+        // 4. deploy new basket -> NEED TOKENS TODO
         
 
         // log addresses
-        console2.log("1. ProxyAdmin: %s", address(proxyAdmin));
-        console2.log("2. Basket Implementation: %s", address(basket));
-        console2.log("3. BasketManager Implementation: %s", address(basketManager));
-        console2.log("4. BasketManager Proxy: %s", address(basketManagerProxy));
+        console2.log("1. Basket Implementation: %s", address(basket));
+        console2.log("2. BasketManager Implementation: %s", address(basketManager));
+        console2.log("3. BasketManager Proxy: %s", address(basketManagerProxy));
 
         vm.stopBroadcast();
     }
 
-    // Deployment 1: TODO: Put into confluence
+    // Deployment 1:
     //   == Logs ==
     //   1. ProxyAdmin: 0x7c501F5f0A23Dc39Ac43d4927ff9f7887A01869B
     //   2. Mock Vrf Coordinator: 0x6a2EA328DE836222BFC7bEA20C348856d2770a99

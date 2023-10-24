@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {RebaseTokenMath} from "../libraries/RebaseTokenMath.sol";
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { RebaseTokenMath } from "../libraries/RebaseTokenMath.sol";
 
 /**
  * @title RebaseTokenUpgradeable
@@ -27,7 +27,6 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
         uint256 rebaseIndex;
         uint256 totalShares;
         mapping(address => uint256) shares;
-        mapping(address => bool) optOut;
     }
 
     // keccak256(abi.encode(uint256(keccak256("tangible.storage.RebaseToken")) - 1)) & ~bytes32(uint256(0xff))
@@ -42,8 +41,6 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     }
 
     event RebaseIndexUpdated(address updatedBy, uint256 index);
-    event RebaseEnabled(address indexed account);
-    event RebaseDisabled(address indexed account);
 
     error AmountExceedsBalance(address account, uint256 balance, uint256 amount);
 
@@ -62,46 +59,6 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     }
 
     function __RebaseToken_init_unchained() internal onlyInitializing {}
-
-    /**
-     * @notice Enables or disables rebasing for a specific account.
-     * @dev This function updates the `optOut` mapping for the `account` based on the `disable` flag. It also adjusts
-     * the shares and token balances accordingly if the account has a non-zero balance. This function emits either a
-     * `RebaseEnabled` or `RebaseDisabled` event.
-     *
-     * @param account The address of the account for which rebasing is to be enabled or disabled.
-     * @param disable A boolean flag indicating whether to disable (true) or enable (false) rebasing for the account.
-     */
-    function _disableRebase(address account, bool disable) internal {
-        RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        if ($.optOut[account] != disable) {
-            uint256 balance = balanceOf(account);
-            $.optOut[account] = disable;
-            if (balance != 0) {
-                if (disable) {
-                    RebaseTokenUpgradeable._update(account, address(0), balance);
-                    ERC20Upgradeable._update(address(0), account, balance);
-                } else {
-                    ERC20Upgradeable._update(account, address(0), balance);
-                    RebaseTokenUpgradeable._update(address(0), account, balance);
-                }
-            }
-            if (disable) emit RebaseDisabled(account);
-            else emit RebaseEnabled(account);
-        }
-    }
-
-    /**
-     * @notice Checks if rebasing is disabled for a specific account.
-     * @dev This function fetches the `optOut` status from the contract's storage for the specified `account`.
-     *
-     * @param account The address of the account to check.
-     * @return disabled A boolean indicating whether rebasing is disabled (true) or enabled (false) for the account.
-     */
-    function _isRebaseDisabled(address account) internal view returns (bool disabled) {
-        RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        disabled = $.optOut[account];
-    }
 
     /**
      * @notice Returns the current rebase index of the token.
@@ -126,11 +83,7 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
      */
     function balanceOf(address account) public view virtual override returns (uint256 balance) {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        if ($.optOut[account]) {
-            balance = ERC20Upgradeable.balanceOf(account);
-        } else {
-            balance = $.shares[account].toTokens($.rebaseIndex);
-        }
+        balance = $.shares[account].toTokens($.rebaseIndex);
     }
 
     /**
@@ -189,8 +142,8 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
 
     /**
      * @notice Updates the state of the contract during token transfers, mints, or burns.
-     * @dev This function adjusts the `totalShares` and individual `shares` of `from` and `to` addresses based on the
-     * rebasing status (`optOut`). It performs overflow and underflow checks where necessary.
+     * @dev This function adjusts the `totalShares` and individual `shares` of `from` and `to` addresses.
+     * It performs overflow and underflow checks where necessary.
      *
      * @param from The address from which tokens are transferred or burned. Address(0) implies minting.
      * @param to The address to which tokens are transferred or minted. Address(0) implies burning.

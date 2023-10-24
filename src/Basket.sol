@@ -9,7 +9,6 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-
 // chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
@@ -32,6 +31,7 @@ import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketsManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
+import { RebaseTokenUpgradeable } from "./abstract/RebaseTokenUpgradeable.sol";
 
 
 /**
@@ -39,7 +39,7 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
  * @author Chase Brown
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
-contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificationReceiver, ReentrancyGuardUpgradeable, FactoryModifiers {
+contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNotificationReceiver, ReentrancyGuardUpgradeable, FactoryModifiers {
 
     // ~ State Variables ~
 
@@ -71,6 +71,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
     /// @notice This value is used to track the total USD value of all TNFT tokens inside this contract.
     uint256 public totalNftValue;
+
+    /// @notice This value stores the amount of rent claimable by this contract. Updated upon rebase.
+    uint256 public totalRentValue;
+
+    /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
+    uint256 public depositFee; // 0.5% by default
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     IERC20Metadata public primaryRentToken;
@@ -109,7 +115,7 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
      */
     event PriceNotificationReceived(address indexed tnft, uint256 indexed tokenId, uint256 oldPrice, uint256 newPrice);
 
-    // TODO: FOR TESTING ONLY
+    // NOTE: FOR TESTING ONLY
     event Debug(string, uint256);
 
 
@@ -155,8 +161,12 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
             }
         }
 
-        __ERC20_init(_name, _symbol);
+        depositFee = 50; // 0.5%
+
+        __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
+
+        _setRebaseIndex(1 ether);
 
         tnftType = _tnftType;
         deployer = _deployer;
@@ -312,9 +322,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
 
         // transfer rent to msg.sender (factory owner)
         assert(primaryRentToken.transfer(msg.sender, _withdrawAmount));
-
-        // TODO: Rebase
-        // _rentalIncome -= withdrawalAmount;
     }
 
     /**
@@ -395,26 +402,39 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     
     // ~ Public Methods ~
 
-    // function rebase() public {
-    //     // a. update rent
-    //     // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
-    //     // c. skim pools
-    //     // d. wrap extra skimmed tokens from pool
-    //     // e. use wrapped tokens for auto-bribe
+    function rebase() public {
+        // a. update rent
+        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
+        // c. skim pools
+        // d. wrap extra skimmed tokens from pool
+        // e. use wrapped tokens for auto-bribe
 
-    //     // rebase - 
-    //     uint256 previousRentalIncome = _rentalIncome;
-    //     uint256 totalRentalIncome = _getRentBal();
-    //     uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
-    //     uint256 currentTotalSupply = totalSupply();
-    //     uint256 newTotalSupply = currentTotalSupply + generatedRentalIncome;
+        // rebase - v1
+        //uint256 previousRentalIncome = totalRentValue;
+        //uint256 totalRentalIncome = _getRentBal();
+        //uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
+        //uint256 currentTotalSupply = totalSupply();
+        //uint256 newTotalSupply = currentTotalSupply + generatedRentalIncome;
 
-    //     uint256 rebaseIndex = newTotalSupply.mulDiv(1 ether, currentTotalSupply);
+        // rebase - v2
+        //uint256 basketValue = getBasketValue() // total value in usd (including RE and collected rent, excluding vested rent)
 
-    //     emit Rebase(rebaseIndex);
+        uint256 previousRentalIncome = totalRentValue;
+        uint256 totalRentalIncome = _getRentBal();
+        uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
 
-    //     _rentalIncome = totalRentalIncome;
-    // }
+        uint256 collectedRent = totalRentalIncome - previousRentalIncome;
+        uint256 rebaseIndexDelta = collectedRent * 1e18 / getTotalValueOfBasket();
+
+        uint256 rebaseIndex = rebaseIndex();
+
+        rebaseIndex += rebaseIndexDelta;
+
+        //uint256 rebaseIndex = newTotalSupply.mulDiv(1 ether, currentTotalSupply);
+
+        totalRentValue = totalRentalIncome;
+        _setRebaseIndex(rebaseIndex);
+    }
 
     // function totalSupply() override public returns (uint256 _totalSupply) {
     //     return _totalSupplyShares.toTokens(rebaseIndex);
@@ -441,7 +461,6 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
                 // ba. get usd value
                 uint256 usdValue = _getUSDValue(tokensInBudget[i].tnft, tokensInBudget[i].tokenId);
 
-                // bb. get rent per block
                 IRentManager rentManager = _getRentManager(tokensInBudget[i].tnft);
                 IRentManager.RentInfo memory rentInfo = IRentManagerExt(address(rentManager)).rentInfo(tokensInBudget[i].tokenId);
 
@@ -450,13 +469,13 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
                 // If rent is currently being vested
                 if (rentInfo.distributionRunning && rent != 0) {
 
-                    // bc. find rent per second
+                    // bb. find rent per second
                     uint256 perSecond = rent / (rentInfo.endTime - rentInfo.depositTime);
 
-                    // bd. calculate worth with value/rentPerSecond
+                    // bc. calculate worth with value/rentPerSecond
                     uint256 tValue = usdValue / perSecond;
 
-                    // be. if higher than `value`, save index, assign to `value`
+                    // bd. if higher than `value`, save index, assign to `value`
                     if (tValue > value) {
                         value = tValue;
                         index = i;
@@ -536,9 +555,11 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
     }
 
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
-        totalValue += totalNftValue;
-        // get value of rent accrued by this contract
-        totalValue += _getRentBal();
+        unchecked {
+            totalValue += totalNftValue;
+            // get value of rent accrued by this contract
+            totalValue += _getRentBal();
+        }
     }
 
     /**
@@ -615,7 +636,9 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         IRentManager rentManager = _getRentManager(_tangibleNFT);
 
         if (rentManager.claimableRentForToken(_tokenId) > 0) {
-            receivedRent += rentManager.claimRentForToken(_tokenId);
+            unchecked {
+                receivedRent += rentManager.claimRentForToken(_tokenId);
+            }
         }
 
         // verify claimed balance
@@ -628,12 +651,20 @@ contract Basket is Initializable, ERC20Upgradeable, IBasket, IRWAPriceNotificati
         if (msg.sender == IFactory(factory()).basketsManager()) {
             _depositor = deployer;
         }
+        else {
+            // if deposit isn't initial deposit from deployer (which will be most cases), charge a deposit fee.
+            uint256 feeShare = (basketShare * depositFee) / 100_00; // TODO: Verify implementation & test
+            _mint(address(this), feeShare); // TODO: Do we want the tokens minted or not at all?
+            basketShare -= feeShare;
+        }
 
         // mint basket tokens to user
         _mint(_depositor, basketShare);
 
         // Update total nft value in this contract
-        totalNftValue += usdValue;
+        unchecked {
+            totalNftValue += usdValue;
+        }
 
         emit TNFTDeposited(_depositor, _tangibleNFT, _tokenId);
     }

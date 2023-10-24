@@ -292,9 +292,9 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
     /// @notice IRWAPriceNotificationReceiver::notify -> ALlows this contract to get notified of a price change
     function notify(
-        address tnft,
-        uint256 tokenId,
-        uint256 fingerprint,
+        address, // tnft,
+        uint256, // tokenId,
+        uint256, // fingeprint
         uint256 oldNativePrice,
         uint256 newNativePrice,
         uint16 currency
@@ -307,9 +307,9 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
     }
 
     /// @notice Helper method for converting an amount in one currency to USD.
-    function _convertToUsd(uint256 value, uint16 currency) internal returns (uint256 usdValue) {
+    function _convertToUsd(uint256 value, uint16 currency) internal view returns (uint256 usdValue) {
         uint256 oracleDecimals = realEstateOracle.decimals();
-        uint256 targetDecimals = decimals - oracleDecimals;
+        //uint256 targetDecimals = decimals - oracleDecimals;
 
         string memory currencyStr = currencyFeed.ISOcurrencyNumToCode(currency);
         AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(currencyStr);
