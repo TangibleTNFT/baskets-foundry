@@ -78,13 +78,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint256 public depositFee; // 0.5% by default
 
+    /// @notice Increments upon successful deposit.
+    /// @dev Used for FIFO redeem.
     uint256 public inCounter;
 
+    /// @notice Increments upon successful redeem.
+    /// @dev Used for FIFO redeem.
     uint256 public outCounter;
 
     /// @notice TangibleNFT contract => tokenId => InCounterId.
     //mapping(address => mapping(uint256 => uint256)) public fifoTracker;
 
+    /// @notice Maps inCounter Id => TokenData data block.
     mapping(uint256 => TokenData) public fifoTracker;
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
@@ -175,7 +180,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
 
-        _setRebaseIndex(1 ether);
+        _setMultiplier(1 ether);
 
         tnftType = _tnftType;
         deployer = _deployer;
@@ -398,38 +403,22 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     
     // ~ Public Methods ~
 
+    /**
+     * @notice Rebase function TODO
+     */
     function rebase() public {
-        // a. update rent
-        // b. calculate new basket token price based off new rent amount -> update multiplier that calculated balanceOf
-        // c. skim pools
-        // d. wrap extra skimmed tokens from pool
-        // e. use wrapped tokens for auto-bribe
-
-        // rebase - v1
-        //uint256 previousRentalIncome = totalRentValue;
-        //uint256 totalRentalIncome = _getRentBal();
-        //uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
-        //uint256 currentTotalSupply = totalSupply();
-        //uint256 newTotalSupply = currentTotalSupply + generatedRentalIncome;
-
-        // rebase - v2
-        //uint256 basketValue = getBasketValue() // total value in usd (including RE and collected rent, excluding vested rent)
-
         uint256 previousRentalIncome = totalRentValue;
         uint256 totalRentalIncome = _getRentBal();
-        uint256 generatedRentalIncome = totalRentalIncome - previousRentalIncome;
-
+    
         uint256 collectedRent = totalRentalIncome - previousRentalIncome;
-        uint256 rebaseIndexDelta = collectedRent * 1e18 / getTotalValueOfBasket();
+        uint256 multiplierDelta = collectedRent * 1e18 / getTotalValueOfBasket();
 
-        uint256 rebaseIndex = rebaseIndex();
+        uint256 multiplier = multiplier();
 
-        rebaseIndex += rebaseIndexDelta;
-
-        //uint256 rebaseIndex = newTotalSupply.mulDiv(1 ether, currentTotalSupply);
-
+        multiplier += multiplierDelta;
+        
         totalRentValue = totalRentalIncome;
-        _setRebaseIndex(rebaseIndex);
+        _setMultiplier(multiplier);
     }
 
     /**
@@ -447,45 +436,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
     }
-
-    // /**
-    //  * @notice This function returns a list of TNFTs that could be potentially redeemed for a budget of basket tokens.
-    //  * @param _budget Amount of basket tokens willing to burn for a redeemable TNFT token from within the basket.
-    //  * @return inBudget -> Array of type RedeemData of all TNFT tokens that can be redeemed for the specified budget of basket tokens.
-    //  * @return quantity -> Amount of tokens that can be redeemed for `_budget`. note: quantity == inBudget.length
-    //  * @return valid -> If there are tokens that can be redeemed for `_budget`, valid will be true. Otherwise, false.
-    //  */
-    // function checkBudget(uint256 _budget) public view returns (RedeemData[] memory inBudget, uint256 quantity, bool valid) {
-    //     uint256 len = depositedTnfts.length;
-    //     inBudget = new RedeemData[](len);
-
-    //     for (uint256 i; i < len;) {
-
-    //         // get usd value of TNFT token
-    //         uint256 usdValue = valueTracker[depositedTnfts[i].tnft][depositedTnfts[i].tokenId];
-    //         // Calculate amount of basket tokens needed. Usd value of NFT + rent amount / share price == total basket tokens.
-    //         uint256 sharesRequired = _quoteShares(usdValue, 0);
-
-    //         if (_budget >= sharesRequired) {
-    //             inBudget[quantity] = 
-    //                 RedeemData(
-    //                     depositedTnfts[i].tnft,
-    //                     depositedTnfts[i].tokenId,
-    //                     usdValue,
-    //                     sharesRequired
-    //                 );
-    //             unchecked {
-    //                 ++quantity;
-    //             }
-    //         }
-
-    //         unchecked {
-    //             ++i;
-    //         }
-    //     }
-
-    //     quantity > 0 ? valid = true : valid = false;
-    // }
 
     /**
      * @notice Return the USD value of share token for underlying assets, 18 decimals
@@ -506,9 +456,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
         unchecked {
+            // get total value of nfts in basket.
             totalValue += totalNftValue;
-            // get value of rent accrued by this contract
-            totalValue += _getRentBal(); // TODO: Repalace with `totalValue += totalRentValue`
+
+            // get value of rent accrued by this contract.
+            //totalValue += _getRentBal();
+            totalValue += totalRentValue;
         }
     }
 
@@ -569,8 +522,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             tnftsSupported.push(_tangibleNFT);
         }
 
-        //fifoTracker[_tangibleNFT][_tokenId] = ++inCounter; // TODO: Test
-
         fifoTracker[++inCounter] = TokenData(_tangibleNFT, _tokenId, fingerprint);
 
         // take token from depositor
@@ -582,7 +533,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
         INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
 
-        // Claim rent from tnft::rentManager and keep it in this contract TODO TEST
+        // Claim rent from tnft::rentManager and keep it in this contract
         uint256 preBal = primaryRentToken.balanceOf(address(this));
 
         // claim rent for TNFT being redeemed.
@@ -599,6 +550,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
 
         // TODO: REBASE HERE
+        //if (getTotalValueOfBasket() > 0) rebase();
 
         // calculate shares for depositor
         basketShare = _quoteShares(usdValue, receivedRent);
@@ -609,7 +561,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
         else {
             // if deposit isn't initial deposit from deployer (which will be most cases), charge a deposit fee.
-            uint256 feeShare = (basketShare * depositFee) / 100_00; // TODO: Verify implementation & test
+            uint256 feeShare = (basketShare * depositFee) / 100_00;
             basketShare -= feeShare;
         }
 
@@ -684,7 +636,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         totalNftValue -= _usdValue;
         _burn(_redeemer, _sharesRequired);
         
-        ++outCounter; // TODO: Test
+        ++outCounter;
 
         emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
     }
@@ -862,4 +814,5 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
         return (0, false);
     }
+
 }

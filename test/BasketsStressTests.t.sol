@@ -51,7 +51,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
  * @author Chase Brown
  * @notice This test file is for "stress" testing. Advanced testing methods and integration tests combined to identify
  *         the stability of the baskets protocol.
- * @dev This testing file takes advantage of Foundry's advanced testing tools: Fuzzing and Invariant testing.
+ * @dev This testing file takes advantage of Foundry's advanced Fuzz testing tools.
  */
 contract StressTests is Utility {
 
@@ -1227,10 +1227,10 @@ contract StressTests is Utility {
     /// @notice Stress test of Basket::redeemTNFT with numerous tokens and random rent claimable for each token.
     /// @dev basis: 100 tokens to iterate through.
 
-    /// NOTE: 1x100 (100 tokens) -> redeemTNFT costs 8_797_469 gas
-    /// NOTE: 4x25  (100 tokens) -> redeemTNFT costs 9_570_639 gas
-    /// NOTE: 10x10 (100 tokens) -> redeemTNFT costs 11_122_232 gas
-    /// NOTE: 10x20 (200 tokens) -> redeemTNFT costs 34_663_268 gas -> Extreme case
+    /// NOTE: 1x100  (100 tokens)  -> redeemTNFT costs xxx gas
+    /// NOTE: 4x25   (100 tokens)  -> redeemTNFT costs 117_950 gas
+    /// NOTE: 10x10  (100 tokens)  -> redeemTNFT costs xxx gas
+    /// NOTE: 10x100 (1000 tokens) -> redeemTNFT costs xxx gas
     function test_stress_redeemTNFT_rent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
@@ -1381,6 +1381,7 @@ contract StressTests is Utility {
     // ~ stress withdrawRent ~
 
     /// @notice This method stress tests Basket::withdrawRent
+    /// NOTE: 10x10 (100 tokens) -> redeemTNFT costs 6_928_500 gas
     function test_stress_withdrawRent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~

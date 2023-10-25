@@ -8,13 +8,13 @@ import { RebaseTokenMath } from "../libraries/RebaseTokenMath.sol";
  * @title RebaseTokenUpgradeable
  * @author Caesar LaVey - slight variation configured by Chase Brown
  * @notice This is an upgradeable ERC20 token contract that introduces a rebase mechanism and allows accounts to opt out
- * of rebasing. The contract uses an index-based approach to implement rebasing, allowing for more gas-efficient
+ * of rebasing. The contract uses an multiplier-based approach to implement rebasing, allowing for more gas-efficient
  * calculations.
  *
  * @dev The contract inherits from OpenZeppelin's ERC20Upgradeable and utilizes the RebaseTokenMath library for its
  * arithmetic operations. It introduces a new struct "RebaseTokenStorage" to manage its state. The state variables
- * include `rebaseIndex`, which is the current index value for rebasing, and `totalShares`, which is the total number of
- * index-based shares in circulation.
+ * include `multiplier`, which is the current multiplier value for rebasing, and `totalShares`, which is the total number of
+ * multiplier-based shares in circulation.
  *
  * The contract makes use of low-level Solidity features like assembly for optimized storage handling. It adheres to the
  * Checks-Effects-Interactions design pattern where applicable and emits events for significant state changes.
@@ -24,7 +24,7 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
 
     /// @custom:storage-location erc7201:tangible.storage.RebaseToken
     struct RebaseTokenStorage {
-        uint256 rebaseIndex;
+        uint256 multiplier;
         uint256 totalShares; // Note: shares refers to tokens + rebase tokens
         mapping(address => uint256) shares;
     }
@@ -40,7 +40,7 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
         }
     }
 
-    event RebaseIndexUpdated(address updatedBy, uint256 index);
+    event MultiplierUpdated(address updatedBy, uint256 multiplier);
 
     error AmountExceedsBalance(address account, uint256 balance, uint256 amount);
 
@@ -61,64 +61,64 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     function __RebaseToken_init_unchained() internal onlyInitializing {}
 
     /**
-     * @notice Returns the current rebase index of the token.
-     * @dev This function fetches the `rebaseIndex` from the contract's storage and returns it. The returned index is
+     * @notice Returns the current rebase multiplier of the token.
+     * @dev This function fetches the `multiplier` from the contract's storage and returns it. The returned multiplier is
      * used in various calculations related to token rebasing.
      *
-     * @return index The current rebase index.
+     * @return multiplier The current rebase multiplier.
      */
-    function rebaseIndex() public view returns (uint256 index) {
+    function multiplier() public view returns (uint256 multiplier) {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        index = $.rebaseIndex;
+        multiplier = $.multiplier;
     }
 
     /**
-     * @notice Returns the balance of a specific account, adjusted for the current rebase index.
-     * @dev This function fetches the `shares` and `rebaseIndex` from the contract's storage for the specified account.
+     * @notice Returns the balance of a specific account, adjusted for the current rebase multiplier.
+     * @dev This function fetches the `shares` and `multiplier` from the contract's storage for the specified account.
      * It then calculates the balance in tokens by converting these shares to their equivalent token amount using the
-     * current rebase index.
+     * current rebase multiplier.
      *
      * @param account The address of the account whose balance is to be fetched.
      * @return balance The balance of the specified account in tokens.
      */
     function balanceOf(address account) public view virtual override returns (uint256 balance) {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        balance = $.shares[account].toTokens($.rebaseIndex);
+        balance = $.shares[account].toTokens($.multiplier);
     }
 
     /**
-     * @notice Returns the total supply of the token, taking into account the current rebase index.
-     * @dev This function fetches the `totalShares` and `rebaseIndex` from the contract's storage. It then calculates
+     * @notice Returns the total supply of the token, taking into account the current rebase multiplier.
+     * @dev This function fetches the `totalShares` and `multiplier` from the contract's storage. It then calculates
      * the total supply of tokens by converting these shares to their equivalent token amount using the current rebase
-     * index.
+     * multiplier.
      *
      * @return supply The total supply of tokens.
      */
     function totalSupply() public view virtual override returns (uint256 supply) {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        supply = $.totalShares.toTokens($.rebaseIndex) + ERC20Upgradeable.totalSupply();
+        supply = $.totalShares.toTokens($.multiplier) + ERC20Upgradeable.totalSupply();
     }
 
     /**
-     * @notice Sets a new rebase index for the token.
-     * @dev This function updates the `rebaseIndex` state variable if the new index differs from the current one. It
-     * also performs a check for any potential overflow conditions that could occur with the new index. Emits a
-     * `RebaseIndexUpdated` event upon successful update.
+     * @notice Sets a new rebase multiplier for the token.
+     * @dev This function updates the `multiplier` state variable if the new multiplier differs from the current one. It
+     * also performs a check for any potential overflow conditions that could occur with the new multiplier. Emits a
+     * `MultiplierUpdated` event upon successful update.
      *
-     * @param index The new rebase index to set.
+     * @param multiplier The new rebase multiplier to set.
      */
-    function _setRebaseIndex(uint256 index) internal virtual {
+    function _setMultiplier(uint256 multiplier) internal virtual {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        if ($.rebaseIndex != index) {
-            $.rebaseIndex = index;
-            _checkRebaseOverflow($.totalShares, index);
-            emit RebaseIndexUpdated(msg.sender, index);
+        if ($.multiplier != multiplier) {
+            $.multiplier = multiplier;
+            _checkRebaseOverflow($.totalShares, multiplier);
+            emit MultiplierUpdated(msg.sender, multiplier);
         }
     }
 
     /**
      * @notice Calculates the number of transferable shares for a given amount and account.
-     * @dev This function fetches the current rebase index and the shares held by the `from` address. It then converts
+     * @dev This function fetches the current rebase multiplier and the shares held by the `from` address. It then converts
      * these shares to the equivalent token balance. If the `amount` to be transferred exceeds this balance, the
      * function reverts with an `AmountExceedsBalance` error. Otherwise, it calculates the number of shares equivalent
      * to the `amount` to be transferred.
@@ -130,13 +130,13 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     function _transferableShares(uint256 amount, address from) internal view returns (uint256 shares) {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
         shares = $.shares[from];
-        uint256 index = $.rebaseIndex;
-        uint256 balance = shares.toTokens(index);
+        uint256 multiplier = $.multiplier;
+        uint256 balance = shares.toTokens(multiplier);
         if (amount > balance) {
             revert AmountExceedsBalance(from, balance, amount);
         }
         if (amount < balance) {
-            shares = amount.toShares(index);
+            shares = amount.toShares(multiplier);
         }
     }
 
@@ -151,11 +151,11 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
      */
     function _update(address from, address to, uint256 amount) internal virtual override {
         RebaseTokenStorage storage $ = _getRebaseTokenStorage();
-        uint256 index = $.rebaseIndex;
-        uint256 shares = amount.toShares($.rebaseIndex);
+        uint256 multiplier = $.multiplier;
+        uint256 shares = amount.toShares($.multiplier);
         if (from == address(0)) {
             uint256 totalShares = $.totalShares + shares; // Overflow check required
-            _checkRebaseOverflow(totalShares, index);
+            _checkRebaseOverflow(totalShares, multiplier);
             $.totalShares = totalShares;
         } else {
             shares = _transferableShares(amount, from);
@@ -184,15 +184,15 @@ abstract contract RebaseTokenUpgradeable is ERC20Upgradeable {
     /**
      * @notice Checks for potential overflow conditions in token-to-share calculations.
      * @dev This function uses an `assert` statement to ensure that converting shares to tokens using the provided
-     * `index` will not result in an overflow. It leverages the `toTokens` function from the `RebaseTokenMath` library
+     * `multiplier` will not result in an overflow. It leverages the `toTokens` function from the `RebaseTokenMath` library
      * to perform this check.
      *
      * @param shares The number of shares involved in the operation.
-     * @param index The current rebase index.
+     * @param multiplier The current rebase multiplier.
      */
-    function _checkRebaseOverflow(uint256 shares, uint256 index) private view {
+    function _checkRebaseOverflow(uint256 shares, uint256 multiplier) private view {
         // The condition inside `assert()` can never evaluate `false`, but `toTokens()` would throw an arithmetic
         // exception in case we overflow, and that's all we need.
-        assert(shares.toTokens(index) + ERC20Upgradeable.totalSupply() <= type(uint256).max);
+        assert(shares.toTokens(multiplier) + ERC20Upgradeable.totalSupply() <= type(uint256).max);
     }
 }

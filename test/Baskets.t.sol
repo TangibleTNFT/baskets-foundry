@@ -26,21 +26,21 @@ import "./utils/Utility.sol";
 
 // tangible contract
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
+import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";
+import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
+import { TNFTMarketplaceV2 } from "@tangible/MarketplaceV2.sol";
+import { TangiblePriceManagerV2 } from "@tangible/TangiblePriceManagerV2.sol";
+import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
+import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
+import { RentManager } from "@tangible/RentManager.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
+import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
 
 // tangible interface imports
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
-import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
-import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
-import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
-import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
-import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
-import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
-import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager.sol";
-import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
-import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -61,15 +61,15 @@ contract BasketsIntegrationTest is Utility {
     BasketManager public basketManager;
 
     // tangible mumbai contracts
-    IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
-    ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
-    IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
+    FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
+    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
+    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Mumbai_RealtyOracleTangibleV2);
     MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Mumbai_MockMatrix);
-    IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
-    ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
-    ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
-    IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
+    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Mumbai_Marketplace);
+    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Mumbai_PriceManager);
+    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Mumbai_CurrencyFeedV2);
+    TNFTMetadata public metadata = TNFTMetadata(Mumbai_TNFTMetadata);
+    RentManager public rentManager = RentManager(Mumbai_RentManagerTnft);
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
@@ -124,7 +124,7 @@ contract BasketsIntegrationTest is Utility {
 
         // set basketManager
         vm.prank(factoryOwner);
-        IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
+        factoryV2.setContract(FactoryV2.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
 
         // whitelist basketManager on NotificationDispatcher
         vm.prank(TANGIBLE_LABS); // category owner
@@ -133,7 +133,7 @@ contract BasketsIntegrationTest is Utility {
 
         // set currencyFeed
         vm.prank(factoryOwner);
-        IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
+        factoryV2.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -197,12 +197,12 @@ contract BasketsIntegrationTest is Utility {
 
         vm.startPrank(factoryOwner);
         // add feature to metadata contract
-        ITNFTMetadataExt(address(metadata)).addFeatures(
+        metadata.addFeatures(
             _asSingletonArrayUint(RE_FEATURE_1),
             _asSingletonArrayString("Beach Homes")
         );
         // add feature to TNFTtype in metadata contract
-        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(
+        metadata.addFeaturesForTNFTType(
             RE_TNFTTYPE,
             _asSingletonArrayUint(RE_FEATURE_1)
         );
@@ -747,8 +747,8 @@ contract BasketsIntegrationTest is Utility {
      
         // add more features to tnftType
         vm.startPrank(factoryOwner);
-        ITNFTMetadataExt(address(metadata)).addFeatures(featuresToAdd, descriptionsToAdd);
-        ITNFTMetadataExt(address(metadata)).addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
+        metadata.addFeatures(featuresToAdd, descriptionsToAdd);
+        metadata.addFeaturesForTNFTType(RE_TNFTTYPE, featuresToAdd);
         vm.stopPrank();
 
         // features to add to basket initially
@@ -1839,87 +1839,6 @@ contract BasketsIntegrationTest is Utility {
     }
 
 
-    // ~ checkBudget ~
-
-    /// @notice Verifies checkBudget view method is returning correct data
-    // function test_baskets_checkBudget() public {
-
-    //     // ~ Config ~
-
-    //     uint256 batchSize = 4;
-
-    //     // Mint Bob 4 TNFTs to be deposited.
-    //     uint256[] memory tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000, // 100,000 GBP
-    //         batchSize,   // stock
-    //         batchSize,   // mintCount
-    //         1,           // fingerprint
-    //         BOB          // receiver
-    //     );
-
-    //     address[] memory tnfts = new address[](tokenIds.length);
-    //     for (uint i; i < tnfts.length; ++i) { tnfts[i] = address(realEstateTnft); }
-
-    //     // deposit all new TNFTs via batchDepositTNFT
-    //     vm.startPrank(BOB);
-    //     for (uint i; i < tokenIds.length; ++i) {
-    //         realEstateTnft.approve(address(basket), tokenIds[i]);
-    //     }
-    //     basket.batchDepositTNFT(tnfts, tokenIds);
-    //     vm.stopPrank();
-
-    //     uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenIds[0]);
-    //     uint256 sharesRequired = basket.getQuoteOut(address(realEstateTnft), tokenIds[0]);
-
-    //     // Sanity check -> Execute checkBudget(0)
-    //     (IBasket.RedeemData[] memory inBudget, uint256 quantity, bool valid) = basket.checkBudget(0);
-
-    //     assertEq(inBudget.length, batchSize);
-    //     assertEq(inBudget[0].tnft, address(0));
-    //     assertEq(inBudget[0].tokenId, 0);
-    //     assertEq(inBudget[0].usdValue, 0);
-    //     assertEq(inBudget[0].sharesRequired, 0);
-    //     assertEq(inBudget[1].tnft, address(0));
-    //     assertEq(inBudget[1].tokenId, 0);
-    //     assertEq(inBudget[1].usdValue, 0);
-    //     assertEq(inBudget[1].sharesRequired, 0);
-    //     assertEq(inBudget[2].tnft, address(0));
-    //     assertEq(inBudget[2].tokenId, 0);
-    //     assertEq(inBudget[2].usdValue, 0);
-    //     assertEq(inBudget[2].sharesRequired, 0);
-    //     assertEq(inBudget[3].tnft, address(0));
-    //     assertEq(inBudget[3].tokenId, 0);
-    //     assertEq(inBudget[3].usdValue, 0);
-    //     assertEq(inBudget[3].sharesRequired, 0);
-    //     assertEq(quantity, 0);
-    //     assertEq(valid, false);
-
-    //     // Execute checkBudget() with Bob's basket token balance
-    //     (inBudget, quantity, valid) = basket.checkBudget(usdValue);
-
-    //     assertEq(inBudget.length, batchSize);
-    //     assertEq(inBudget[0].tnft, address(realEstateTnft));
-    //     assertEq(inBudget[0].tokenId, tokenIds[0]);
-    //     assertEq(inBudget[0].usdValue, usdValue);
-    //     assertEq(inBudget[0].sharesRequired, sharesRequired);
-    //     assertEq(inBudget[1].tnft, address(realEstateTnft));
-    //     assertEq(inBudget[1].tokenId, tokenIds[1]);
-    //     assertEq(inBudget[1].usdValue, usdValue);
-    //     assertEq(inBudget[1].sharesRequired, sharesRequired);
-    //     assertEq(inBudget[2].tnft, address(realEstateTnft));
-    //     assertEq(inBudget[2].tokenId, tokenIds[2]);
-    //     assertEq(inBudget[2].usdValue, usdValue);
-    //     assertEq(inBudget[2].sharesRequired, sharesRequired);
-    //     assertEq(inBudget[3].tnft, address(realEstateTnft));
-    //     assertEq(inBudget[3].tokenId, tokenIds[3]);
-    //     assertEq(inBudget[3].usdValue, usdValue);
-    //     assertEq(inBudget[3].sharesRequired, sharesRequired);
-    //     assertEq(quantity, batchSize);
-    //     assertEq(valid, true);
-    // }
-
-
     // ~ notify ~
 
     /// @notice Verifies state changes when a successful call to Basket::notify is executed.
@@ -2037,7 +1956,6 @@ contract BasketsIntegrationTest is Utility {
         deal(address(MUMBAI_USDC), address(basket), amount);
 
         // ~ Pre-state check ~
-
         assertEq(basket.getRentBal(), (amount * 2) * 10**12);
         assertEq(basket.primaryRentToken().balanceOf(factoryOwner), 0);
 
@@ -2060,12 +1978,84 @@ contract BasketsIntegrationTest is Utility {
     
     // ~ rebasing ~
 
+    /// @notice Verifies proper state changes during rebase
     function test_baskets_rebase() public {
+
+        // ~ Config ~
+
+        uint256 amountRent = 10_000 * USD;
+
         // create token of certain value
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, //100k gbp
+            1,
+            1,
+            1, // fingerprint
+            ALICE
+        );
+        uint256 tokenId = tokenIds[0];
+
         // deposit into basket
-        // deposit rent for token
-        // check
-        // rebase
-        // check
+        vm.startPrank(ALICE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // deposit rent for that TNFT (no vesting)
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, amountRent);
+
+        vm.startPrank(TANGIBLE_LABS);
+        MUMBAI_USDC.approve(address(rentManager), amountRent);
+        rentManager.deposit(
+            tokenId,
+            address(MUMBAI_USDC),
+            amountRent,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+
+        // skip to end of vesting period
+        skip(1);
+
+        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        uint256 ratio = amountRent * 1e18 / usdValue;
+
+        emit log_named_uint("% increase post-rebase", ratio); // 76923 == 7.6923% 100_0000
+
+        // ~ Sanity check ~
+
+        uint256 rentClaimable = rentManager.claimableRentForToken(tokenId);
+        assertEq(rentClaimable, amountRent);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
+        assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+
+        // ~ Pre-state check ~
+
+        uint256 preTotalSupply = basket.totalSupply();
+        assertEq(preTotalSupply, basket.balanceOf(ALICE));
+
+        emit log_named_uint("total supply", basket.totalSupply());     // 129350000000000000000000
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 130000000000000000000000
+
+        // ~ rebase ~
+
+        basket.rebase();
+
+        // ~ Post-state check ~
+
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertWithinDiff(
+            basket.totalSupply(),
+            preTotalSupply + ((preTotalSupply * ratio) / 100_0000),
+            1e16
+        ); // deviation of .01 or lower is accepted
+
+        emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
+        emit log_named_uint("total supply prediction", preTotalSupply + ((preTotalSupply * ratio) / 100_0000));     // 139299990050000000000000
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
+
     }
 }
