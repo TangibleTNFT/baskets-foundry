@@ -337,7 +337,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(usdValue > 0, "Unsupported TNFT");
 
         // calculate shares for depositor
-        shares = _quoteShares(usdValue, 0);
+        shares = _quoteShares(usdValue);
     }
 
     /**
@@ -352,7 +352,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(usdValue > 0, "Unsupported TNFT");
 
         // Get shares required
-        sharesRequired = _quoteShares(usdValue, 0);
+        sharesRequired = _quoteShares(usdValue);
     }
 
     /**
@@ -432,7 +432,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // b. if budget suffices, return token
         uint256 usdValue = valueTracker[token.tnft][token.tokenId];
-        uint256 sharesRequired = _quoteShares(usdValue, 0);
+        uint256 sharesRequired = _quoteShares(usdValue);
 
         return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
     }
@@ -510,7 +510,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue > 0, "Unsupported TNFT");
 
-        // update contract
+        // ~ Update contract state ~
+
         tokenDeposited[_tangibleNFT][_tokenId] = true;
         valueTracker[_tangibleNFT][_tokenId] = usdValue;
 
@@ -533,27 +534,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "Basket not WL on ND");
         INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
 
-        // Claim rent from tnft::rentManager and keep it in this contract
-        uint256 preBal = primaryRentToken.balanceOf(address(this));
+        // ~ Calculate basket tokens to mint ~
 
-        // claim rent for TNFT being redeemed.
-        uint256 receivedRent;
-        IRentManager rentManager = _getRentManager(_tangibleNFT);
-
-        if (rentManager.claimableRentForToken(_tokenId) > 0) {
-            unchecked {
-                receivedRent += rentManager.claimRentForToken(_tokenId);
-            }
-        }
-
-        // verify claimed balance
-        require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
-
-        // TODO: REBASE HERE
-        //if (getTotalValueOfBasket() > 0) rebase();
-
-        // calculate shares for depositor
-        basketShare = _quoteShares(usdValue, receivedRent);
+        // get quoted shares
+        basketShare = _quoteShares(usdValue);
 
         // if msg.sender is basketManager, it's making an initial deposit -> receiver of basket tokens needs to be deployer.
         if (msg.sender == IFactory(factory()).basketsManager()) {
@@ -564,6 +548,28 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             uint256 feeShare = (basketShare * depositFee) / 100_00;
             basketShare -= feeShare;
         }
+
+        // ~ Handle rent ~
+
+        // Claim rent from tnft::rentManager and keep it in this contract
+        uint256 preBal = primaryRentToken.balanceOf(address(this));
+
+        // claim rent for TNFT being redeemed.
+        IRentManager rentManager = _getRentManager(_tangibleNFT);
+
+        if (rentManager.claimableRentForToken(_tokenId) > 0) {
+            uint256 receivedRent;
+            unchecked {
+                receivedRent += rentManager.claimRentForToken(_tokenId);
+            }
+
+            // verify claimed balance, send rent to depositor.
+            require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
+            assert (primaryRentToken.transfer(address(_depositor), receivedRent));
+            require(primaryRentToken.balanceOf(address(this)) == preBal, "transfer error");
+        }
+
+        // ~ Mint tokens to depositor ~
 
         // mint basket tokens to user
         _mint(_depositor, basketShare);
@@ -675,15 +681,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
      * @dev If primaryRentToken.decimals != 6, this func will fail.
      * @param usdValue $USD value of token being quoted.
-     * @param amountRent If rent is being counted in minting, count rent towards quote. note: only used during deposit.
      */
-    function _quoteShares(uint256 usdValue, uint256 amountRent) internal view returns (uint256 shares) {
-        uint256 combinedValue = (usdValue + (amountRent * 10**12));
-
+    function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
         if (totalSupply() == 0) {
-            shares = combinedValue;
+            shares = usdValue;
         } else {
-            shares = ((combinedValue * totalSupply()) / getTotalValueOfBasket());
+            shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
         }
     }
 

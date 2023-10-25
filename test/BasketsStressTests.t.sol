@@ -973,8 +973,8 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        uint256 newCategories = 9;
-        uint256 amountFingerprints = 10;
+        uint256 newCategories = 3;
+        uint256 amountFingerprints = 30;
         uint256 rent = 10_000 * USD; // per token
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
@@ -1100,7 +1100,8 @@ contract StressTests is Utility {
         }
 
         // verify rentBal
-        assertEq(basket.getRentBal(), rent * totalTokens * 10 ** 12);
+        assertEq(basket.getRentBal(), 0);
+        assertEq(MUMBAI_USDC.balanceOf(JOE), rent * totalTokens);
 
         // verify Joe balances
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));

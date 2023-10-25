@@ -1756,6 +1756,9 @@ contract BasketsIntegrationTest is Utility {
         uint256 rentClaimable = rentManager.claimableRentForToken(JOE_TOKEN_ID);
         assertEq(rentClaimable, 10_000 * USD); //1e6
 
+        // grab rent value
+        basket.rebase();
+
         // call getTotalValueOfBasket
         uint256 totalValue = basket.getTotalValueOfBasket();
         
@@ -1828,6 +1831,9 @@ contract BasketsIntegrationTest is Utility {
         // get claimable rent value for tnft 2
         uint256 rentClaimable2 = rentManager.claimableRentForToken(NIK_TOKEN_ID);
         assertEq(rentClaimable2, amount2);
+
+        // grab rent value
+        basket.rebase();
 
         // call getTotalValueOfBasket
         uint256 totalValue = basket.getTotalValueOfBasket();
