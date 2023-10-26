@@ -623,7 +623,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address _redeemer,
         uint256 _budget
     ) internal nonReentrant {
-        require(!seedRequestInFlight, "new seed is being generated");
+        //require(!seedRequestInFlight, "new seed is being generated");
 
         RedeemData memory redeemable = calculateFifo();
 
