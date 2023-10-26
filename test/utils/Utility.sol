@@ -123,6 +123,7 @@ contract Utility is Test{
 
         if (!check) {
             emit log_named_uint("Error: approx a == b not satisfied, accuracy difference ", expectedDiff);
+            emit log_named_uint("Actual difference ", actualDiff);
             emit log_named_uint("  Expected", val0);
             emit log_named_uint("    Actual", val1);
             fail();

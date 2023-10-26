@@ -436,12 +436,12 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice This helper method is used to calculate amount taken for fee upon a deposit.
-    function _calculateFeeAmount(uint256 _amount) internal returns (uint256) {
+    function _calculateFeeAmount(uint256 _amount) internal view returns (uint256) {
         return (_amount * basket.depositFee()) / 100_00;
     }
 
     /// @notice This helper method is used to fetch amount received after deposit post fee.
-    function _calculateAmountAfterFee(uint256 _amount) internal returns (uint256) {
+    function _calculateAmountAfterFee(uint256 _amount) internal view returns (uint256) {
         return (_amount - _calculateFeeAmount(_amount));
     }
 
@@ -583,10 +583,10 @@ contract BasketsIntegrationTest is Utility {
         address[] memory tnftsSupported = basket.getTnftsSupported();
         assertEq(tnftsSupported.length, 0);
 
-        uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
+        //uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
+        //uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
 
-        uint256 feeTaken_Joe = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
+        //uint256 feeTaken_Joe = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
         uint256 amountAfterFee_Joe = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
 
         // ~ Joe deposits TNFT ~
@@ -598,7 +598,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Nik deposits TNFT ~
 
-        uint256 feeTaken_Nik = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
+        //uint256 feeTaken_Nik = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
         uint256 amountAfterFee_Nik = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
 
         vm.startPrank(NIK);
@@ -1037,7 +1037,6 @@ contract BasketsIntegrationTest is Utility {
         // Joe deposits token
 
         uint256 quote_Joe = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
-        uint256 feeTaken_Joe = _calculateFeeAmount(quote_Joe);
         uint256 amountAfterFee_Joe = _calculateAmountAfterFee(quote_Joe);
 
         vm.startPrank(JOE);
@@ -1048,7 +1047,6 @@ contract BasketsIntegrationTest is Utility {
         // Nik deposits token
 
         uint256 quote_Nik = basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID);
-        uint256 feeTaken_Nik = _calculateFeeAmount(quote_Nik);
         uint256 amountAfterFee_Nik = _calculateAmountAfterFee(quote_Nik);
 
         vm.startPrank(NIK);
@@ -2026,10 +2024,7 @@ contract BasketsIntegrationTest is Utility {
         // skip to end of vesting period
         skip(1);
 
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
-        uint256 ratio = amountRent * 1e18 / usdValue;
-
-        emit log_named_uint("% increase post-rebase", ratio); // 76923 == 7.6923% 100_0000
+        //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
 
         // ~ Sanity check ~
 
@@ -2040,7 +2035,12 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Pre-state check ~
 
+        uint256 increaseRatio = (amountRent * 10**12) * 1e18 / basket.getTotalValueOfBasket();
+        emit log_named_uint("% increase post-rebase", increaseRatio); // 76923 == 7.6923%
+
+        uint256 preTotalValue = basket.getTotalValueOfBasket();
         uint256 preTotalSupply = basket.totalSupply();
+
         assertEq(preTotalSupply, basket.balanceOf(ALICE));
 
         emit log_named_uint("total supply", basket.totalSupply());     // 129350000000000000000000
@@ -2052,15 +2052,19 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Post-state check ~
 
+        uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * (amountRent * 10**12)) / preTotalValue);
+
         assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertGt(basket.totalSupply(), preTotalSupply);
+        assertGt(basket.getTotalValueOfBasket(), preTotalValue);
         assertWithinDiff(
             basket.totalSupply(),
-            preTotalSupply + ((preTotalSupply * ratio) / 100_0000),
+            postRebaseSupply,
             1e16
         ); // deviation of .01 or lower is accepted
 
         emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
-        emit log_named_uint("total supply prediction", preTotalSupply + ((preTotalSupply * ratio) / 100_0000));     // 139299990050000000000000
+        emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
 
     }

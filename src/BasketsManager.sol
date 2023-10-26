@@ -58,6 +58,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
+    /// @notice Contract address of basketsVrfConsumer contract.
+    address public basketsVrfConsumer;
+
     /// @notice Used to save slots for potential extra state variables later on.
     uint256[20] private __gap;
 
@@ -206,6 +209,15 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
         emit BasketCreated(msg.sender, address(newBasketBeacon));
         return (IBasket(address(newBasketBeacon)), basketShares);
+    }
+
+    /**
+     * @notice This method allows the factory owner to update the basketsVrfConsumer contract address.
+     * @param _basketsVrfConsumer New contract address.
+     */
+    function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
+        require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
+        basketsVrfConsumer = _basketsVrfConsumer;
     }
 
     /**

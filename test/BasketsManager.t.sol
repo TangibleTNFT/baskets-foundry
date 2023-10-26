@@ -491,6 +491,24 @@ contract BasketsManagerTest is Utility {
         emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
     }
 
+    /// @notice Verifies correct state changes when BasketManager::setBasketsVrfConsumer is executed.
+    function test_basketManager_setBasketsVrfConsumer() public {
+        // Pre-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(0));
+
+        // Execute setBasketsVrfConsumer with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("_basketsVrfConsumer == address(0)");
+        basketManager.setBasketsVrfConsumer(address(0));
+
+        // Execute setBasketsVrfConsumer -> success
+        vm.prank(factoryOwner);
+        basketManager.setBasketsVrfConsumer(address(222));
+
+        // Post-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(222));
+    }
+
 
     // ~ sort testing ~
 

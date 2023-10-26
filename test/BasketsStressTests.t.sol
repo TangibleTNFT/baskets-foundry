@@ -367,12 +367,12 @@ contract StressTests is Utility {
     }
 
     /// @notice This helper method is used to calculate amount taken for fee upon a deposit.
-    function _calculateFeeAmount(uint256 _amount) internal returns (uint256) {
+    function _calculateFeeAmount(uint256 _amount) internal view returns (uint256) {
         return (_amount * basket.depositFee()) / 100_00;
     }
 
     /// @notice This helper method is used to fetch amount received after deposit post fee.
-    function _calculateAmountAfterFee(uint256 _amount) internal returns (uint256) {
+    function _calculateAmountAfterFee(uint256 _amount) internal view returns (uint256) {
         return (_amount - _calculateFeeAmount(_amount));
     }
 
@@ -1512,6 +1512,95 @@ contract StressTests is Utility {
 
         // reset tokenIdMap
         for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
+    }
+
+    // ~ stress rebasing ~
+
+    /// @notice Verifies proper state changes during rebase
+    function test_stress_rebase() public {
+
+        // ~ Config ~
+
+        uint256 howMany = 10;
+        uint256 amountRent = 10_000 * USD;
+
+        for (uint256 i; i < howMany; ++i) {
+            // create token of certain value
+            uint256[] memory tokenIds = _createItemAndMint(
+                address(realEstateTnft),
+                100_000_000, //100k gbp
+                1,
+                1,
+                i, // fingerprint
+                ALICE
+            );
+            uint256 tokenId = tokenIds[0];
+
+            // deposit into basket
+            vm.startPrank(ALICE);
+            realEstateTnft.approve(address(basket), tokenId);
+            basket.depositTNFT(address(realEstateTnft), tokenId);
+            vm.stopPrank();
+
+            // deposit rent for that TNFT (no vesting)
+            deal(address(MUMBAI_USDC), TANGIBLE_LABS, amountRent);
+
+            vm.startPrank(TANGIBLE_LABS);
+            MUMBAI_USDC.approve(address(rentManager), amountRent);
+            rentManager.deposit(
+                tokenId,
+                address(MUMBAI_USDC),
+                amountRent,
+                0,
+                block.timestamp + 1,
+                true
+            );
+            vm.stopPrank();
+
+            // skip to end of vesting period
+            skip(1);
+
+            uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+
+            // ~ Sanity check ~
+
+            uint256 rentClaimable = rentManager.claimableRentForToken(tokenId);
+            assertEq(rentClaimable, amountRent);
+            assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
+            assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+
+            // ~ Pre-state check ~
+
+            uint256 increaseRatio = (amountRent * 10**12) * 1e18 / basket.getTotalValueOfBasket();
+            emit log_named_uint("% increase post-rebase", increaseRatio); // 76923076923076923 == 7.6923076923076923&
+
+            uint256 preTotalValue = basket.getTotalValueOfBasket();
+            uint256 preTotalSupply = basket.totalSupply();
+
+            assertEq(preTotalSupply, basket.balanceOf(ALICE));
+
+            // ~ rebase ~
+
+            basket.rebase();
+
+            // ~ Post-state check ~
+
+            uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * (amountRent * 10**12)) / (preTotalValue));
+
+            assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+            assertGt(basket.totalSupply(), preTotalSupply);
+            assertGt(basket.getTotalValueOfBasket(), preTotalValue);
+            assertWithinDiff(
+                basket.totalSupply(),
+                //preTotalSupply + ((preTotalSupply * increaseRatio) / 100_0000000000000000),
+                //preTotalSupply + ((preTotalSupply * amountRent * 1e18) / (preTotalValue * 100_00)),
+                postRebaseSupply,
+                1e22
+            );
+
+        }
+
+
     }
 
 }
