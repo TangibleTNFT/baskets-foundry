@@ -4,25 +4,30 @@ pragma solidity ^0.8.13;
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import { StdInvariant } from "../lib/forge-std/src/StdInvariant.sol";
 
+// chainlink interface imports
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
 // oz imports
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
-// local contracts
-import { Basket } from "../src/Basket.sol";
-import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
-import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
-
-import "./utils/MumbaiAddresses.sol";
-import "./utils/Utility.sol";
-
 // tangible contract imports
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
+import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";
+import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
+import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
+import { RentManager } from "@tangible/RentManager.sol";
+import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
+import { TNFTMarketplaceV2 } from "@tangible/MarketplaceV2.sol";
+import { TangiblePriceManagerV2 } from "@tangible/TangiblePriceManagerV2.sol";
+import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
+import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 
 // tangible interface imports
 import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";
@@ -32,18 +37,20 @@ import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
-import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
-import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
-import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
-import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
-import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhitelister.sol";
-import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
-import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
 
-// chainlink interface imports
-import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+// local contracts
+import { Basket } from "../src/Basket.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
+import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
+import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
+
+// local helper contracts
+import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
+import "./utils/MumbaiAddresses.sol";
+import "./utils/Utility.sol";
 
 
 /**
@@ -60,21 +67,26 @@ contract StressTests is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    BasketsVrfConsumer public basketVrfConsumer;
+
+    // helper
+    VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
     // imported mumbai tangible contracts
-    IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
-    ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
-    IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
-    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
-    IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
-    ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
-    ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
-    IRentManager public rentManager = IRentManager(Mumbai_RentManagerTnft);
+    FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
+    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
+    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Mumbai_RealtyOracleTangibleV2);
+    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Mumbai_MockMatrix);
+    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Mumbai_Marketplace);
+    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Mumbai_PriceManager);
+    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Mumbai_CurrencyFeedV2);
+    TNFTMetadata public metadata = TNFTMetadata(Mumbai_TNFTMetadata);
+    RentManager public rentManager = RentManager(Mumbai_RentManagerTnft);
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
 
     // proxies
-    TransparentUpgradeableProxy public basketManagerProxy;
+    ERC1967Proxy public basketManagerProxy;
+    ERC1967Proxy public vrfConsumerProxy;
     ProxyAdmin public proxyAdmin;
 
     // ~ Actors and Variables ~
@@ -111,6 +123,11 @@ contract StressTests is Utility {
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin(address(this));
 
+        // vrf config
+        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
+        subId = vrfCoordinatorMock.createSubscription();
+        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
+
         // basket stuff
         basket = new Basket();
         
@@ -118,15 +135,36 @@ contract StressTests is Utility {
         basketManager = new BasketManager();
 
         // Deploy proxy for basketManager -> initialize
-        basketManagerProxy = new TransparentUpgradeableProxy(
+        basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
-            address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
+
+        // Deploy BasketsVrfConsumer
+        basketVrfConsumer = new BasketsVrfConsumer();
+
+        // Deploy proxy for basketsVrfConsumer -> initialize
+        vrfConsumerProxy = new ERC1967Proxy(
+            address(basketVrfConsumer),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(factoryV2),
+                subId,
+                address(vrfCoordinatorMock),
+                MUMBAI_VRF_KEY_HASH
+            )
+        );
+        basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
+
+        // set basketVrfConsumer address on basketManager
+        vm.prank(factoryOwner);
+        basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
+
+        // add consumer on vrf coordinator 
+        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         vm.prank(TANGIBLE_LABS); // category owner
         notificationDispatcher.addWhitelister(address(basketManager));
@@ -207,6 +245,12 @@ contract StressTests is Utility {
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
+        vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
+        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
+        vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
+
+        vm.label(address(this), "TEST_FILE");
+        vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
         vm.label(JOE, "JOE");
         vm.label(NIK, "NIK");
         vm.label(ALICE, "ALICE");
@@ -374,6 +418,15 @@ contract StressTests is Utility {
     /// @notice This helper method is used to fetch amount received after deposit post fee.
     function _calculateAmountAfterFee(uint256 _amount) internal view returns (uint256) {
         return (_amount - _calculateFeeAmount(_amount));
+    }
+
+    /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
+    function _mockVrfCoordinatorResponse(uint256 _requestId, uint256 _randomWord) internal {
+        vm.prank(address(vrfCoordinatorMock));
+        basketVrfConsumer.rawFulfillRandomWords(
+            _requestId, // requestId
+            _asSingletonArrayUint(_randomWord) // random word
+        );
     }
 
 

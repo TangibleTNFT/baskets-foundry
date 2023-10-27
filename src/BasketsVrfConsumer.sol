@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 // oz imports
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // chainlink imports
 import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
@@ -25,7 +26,7 @@ import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgrad
  * @author Chase Brown
  * @notice This contract handles all vrf requests from all basket contracts.
  */
-contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBaseV2Upgradeable, FactoryModifiers {
+contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBaseV2Upgradeable, UUPSUpgradeable, FactoryModifiers {
 
     // ~ State Variables ~
 
@@ -33,6 +34,9 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     mapping(uint256 => address) public requestTracker;
     /// @notice Mapping from requestId to boolean. If true, request for randomness was fulfilled.
     mapping(uint256 => bool) public fulfilled;
+    /// @notice Stores most recent requestId for basket.
+    /// @dev If value is over-written, must mean the previous requestId didn't receive a successful callback.
+    mapping(address => uint256) public outstandingRequest;
 
     /// @notice Stores Vrf subscription Id.
     uint64 public subId;
@@ -107,6 +111,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
         // store the basket requesting entropy in requestTracker using the requestId as the key value.
         requestTracker[requestId] = basket;
+        outstandingRequest[basket] = requestId;
 
         emit RequestSubmitted(requestId, basket);
     }
@@ -124,9 +129,12 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         fulfilled[requestId] = true;
         address basket = requestTracker[requestId];
         // respond to the basket contract requesting entropy with it's random number.
-        IBasket(basket).fulfillRandomSeed(requestId, randomWords[0]);
+        IBasket(basket).fulfillRandomSeed(randomWords[0]);
 
         delete requestTracker[requestId];
+        delete outstandingRequest[basket];
         emit RequestFulfilled(requestId, basket);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyFactoryOwner {}
 }

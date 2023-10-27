@@ -98,11 +98,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Address of basket creator.
     address public deployer;
 
-    uint256 public seed;
-
     bool public seedRequestInFlight;
 
     uint256 public pendingSeedRequestId;
+
+    RedeemData public nextToRedeem;
 
     /// @notice Used to save slots for potential extra state variables later on.
     uint256[20] private __gap;
@@ -182,7 +182,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         depositFee = 50; // 0.5%
-        seed = 39485790238475902347509235032740598734; // TODO assign random seed
 
         __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
@@ -239,10 +238,19 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _redeemTNFT(msg.sender, _budget);
     }
 
-    function fulfillRandomSeed(uint256 requestId, uint256 randomWord) external {
-        seed = randomWord;
+    function fulfillRandomSeed(uint256 randomWord) external {
 
-        pendingSeedRequestId = 0;
+        // choose a nft to be next redeemable
+
+        uint256 index;
+        // Use randomWord from vrf to identify a random index in the `depositedTnfts` arr to submit for redemption next.
+        index = randomWord % depositedTnfts.length;
+
+        address tnft = depositedTnfts[index].tnft;
+        uint256 tokenId = depositedTnfts[index].tokenId;
+
+        nextToRedeem = RedeemData(tnft, tokenId, 0, 0);
+
         seedRequestInFlight = false;
     }
 
@@ -251,11 +259,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     function _sendRequestForSeed() internal returns (uint256 requestId) {
-        seedRequestInFlight = true;
+        if (depositedTnfts.length > 0) {
+            seedRequestInFlight = true;
 
-        // TODO Send request to chainlink
+            requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
 
-        // assign requestId to pendingSeedRequestId
+            pendingSeedRequestId = requestId;
+        }
     }
 
     /**
@@ -447,21 +457,21 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _setMultiplier(multiplier);
     }
 
-    /**
-     * @notice TODO UPDATE
-     * @return redeemable -> RedeemData object containing all the data for token to be redeemed
-     */
-    function calculateFifo() public view returns (RedeemData memory redeemable) {
-        // a. Locate tnft in array with correct fifo counter var
-        uint256 fifoNum = outCounter + 1;
-        TokenData memory token = fifoTracker[fifoNum];
+    // /**
+    //  * @notice TODO UPDATE
+    //  * @return redeemable -> RedeemData object containing all the data for token to be redeemed
+    //  */
+    // function calculateFifo() public view returns (RedeemData memory redeemable) {
+    //     // a. Locate tnft in array with correct fifo counter var
+    //     uint256 fifoNum = outCounter + 1;
+    //     TokenData memory token = fifoTracker[fifoNum];
 
-        // b. if budget suffices, return token
-        uint256 usdValue = valueTracker[token.tnft][token.tokenId];
-        uint256 sharesRequired = _quoteShares(usdValue);
+    //     // b. if budget suffices, return token
+    //     uint256 usdValue = valueTracker[token.tnft][token.tokenId];
+    //     uint256 sharesRequired = _quoteShares(usdValue);
 
-        return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
-    }
+    //     return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
+    // }
 
     function getRedeemableWithSeed() public view returns (RedeemData memory redeemable) {
         // use `seed` to get the nft that can be redeemed
@@ -597,8 +607,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // verify claimed balance, send rent to depositor.
             require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
-            assert (primaryRentToken.transfer(address(_depositor), receivedRent));
-            require(primaryRentToken.balanceOf(address(this)) == preBal, "transfer error");
+            assert(primaryRentToken.transfer(address(_depositor), receivedRent));
         }
 
         // ~ Mint tokens to depositor ~
@@ -609,6 +618,19 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // Update total nft value in this contract
         unchecked {
             totalNftValue += usdValue;
+        }
+
+        // if there is no seed request in flight and no nextToRedeem, make request
+        if ((nextToRedeem.tnft == address(0)) && (!seedRequestInFlight)) {
+            if (depositedTnfts.length == 1) {
+                // if first deposit, just assign first in to next redeem
+                nextToRedeem = RedeemData(_tangibleNFT, _tokenId, 0, 0);
+            }
+            else {
+                // if no request was made or fulfilled, but contract has more than 1 token in basket, send request
+                // could happen if request for entropy was made, but failed on callback
+                _sendRequestForSeed();
+            }
         }
 
         emit TNFTDeposited(_depositor, _tangibleNFT, _tokenId);
@@ -623,19 +645,20 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address _redeemer,
         uint256 _budget
     ) internal nonReentrant {
-        //require(!seedRequestInFlight, "new seed is being generated");
+        require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
+        require(!seedRequestInFlight, "new seed is being generated");
+        require(nextToRedeem.tnft != address(0), "None redeemable");
 
-        RedeemData memory redeemable = calculateFifo();
+        RedeemData memory redeemable = nextToRedeem;
+        delete nextToRedeem;
 
         address _tangibleNFT = redeemable.tnft;
         uint256 _tokenId = redeemable.tokenId;
-        uint256 _usdValue = redeemable.usdValue;
-        uint256 _sharesRequired = redeemable.sharesRequired;
-
-        require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
-        require(_budget >= _sharesRequired, "Insufficient budget");
+        uint256 _usdValue = valueTracker[_tangibleNFT][_tokenId];
+        uint256 _sharesRequired = _quoteShares(_usdValue);
 
         require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
+        require(_budget >= _sharesRequired, "Insufficient budget");
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;

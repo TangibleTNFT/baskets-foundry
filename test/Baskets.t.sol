@@ -4,25 +4,15 @@ pragma solidity ^0.8.13;
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import { StdInvariant } from "../lib/forge-std/src/StdInvariant.sol";
 
+// chainlink interface imports
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
 // oz imports
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// proxy solution 1 -> depricated
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
-// proxy solution 2
 import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
-
-// local contracts
-import { Basket } from "../src/Basket.sol";
-import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
-import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
-
-import "./utils/MumbaiAddresses.sol";
-import "./utils/Utility.sol";
 
 // tangible contract
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
@@ -42,8 +32,17 @@ import { IFactory } from "@tangible/interfaces/IFactory.sol";
 import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 
-// chainlink interface imports
-import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+// local contracts
+import { Basket } from "../src/Basket.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
+import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
+import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
+
+// local helper contracts
+import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
+import "./utils/MumbaiAddresses.sol";
+import "./utils/Utility.sol";
 
 
 /**
@@ -59,6 +58,10 @@ contract BasketsIntegrationTest is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    BasketsVrfConsumer public basketVrfConsumer;
+
+    // helper
+    VRFCoordinatorV2Mock public vrfCoordinatorMock;
 
     // tangible mumbai contracts
     FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
@@ -74,6 +77,7 @@ contract BasketsIntegrationTest is Utility {
 
     // proxies
     ERC1967Proxy public basketManagerProxy;
+    ERC1967Proxy public vrfConsumerProxy;
 
     // ~ Actors and Variables ~
 
@@ -102,10 +106,15 @@ contract BasketsIntegrationTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
 
-        // basket stuff
+        // vrf config
+        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
+        subId = vrfCoordinatorMock.createSubscription();
+        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
+
+        // Deploy Basket implementation
         basket = new Basket();
 
-        // Deploy basketManager
+        // Deploy BasketManager
         basketManager = new BasketManager();
 
         // Deploy proxy for basketManager -> initialize
@@ -117,6 +126,28 @@ contract BasketsIntegrationTest is Utility {
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
+
+        // Deploy BasketsVrfConsumer
+        basketVrfConsumer = new BasketsVrfConsumer();
+
+        // Deploy proxy for basketsVrfConsumer -> initialize
+        vrfConsumerProxy = new ERC1967Proxy(
+            address(basketVrfConsumer),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(factoryV2),
+                subId,
+                address(vrfCoordinatorMock),
+                MUMBAI_VRF_KEY_HASH
+            )
+        );
+        basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
+
+        // set basketVrfConsumer address on basketManager
+        vm.prank(factoryOwner);
+        basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
+
+        // add consumer on vrf coordinator 
+        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         // updateDepositor for rent manager
         vm.prank(TANGIBLE_LABS);
@@ -315,6 +346,8 @@ contract BasketsIntegrationTest is Utility {
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
+        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
+        vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
 
         vm.label(address(this), "TEST_FILE");
         vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
@@ -445,6 +478,15 @@ contract BasketsIntegrationTest is Utility {
         return (_amount - _calculateFeeAmount(_amount));
     }
 
+    /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
+    function _mockVrfCoordinatorResponse(uint256 _requestId, uint256 _randomWord) internal {
+        vm.prank(address(vrfCoordinatorMock));
+        basketVrfConsumer.rawFulfillRandomWords(
+            _requestId, // requestId
+            _asSingletonArrayUint(_randomWord) // random word
+        );
+    }
+
 
     // ------------------
     // Initial State Test
@@ -463,6 +505,13 @@ contract BasketsIntegrationTest is Utility {
 
         // verify notification dispatcher state
         assertEq(notificationDispatcher.whitelistedReceiver(address(basket)), true);
+
+        // verify BasketsVrfConsumer initial state
+        assertEq(basketVrfConsumer.subId(), subId);
+        assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
+        assertEq(basketVrfConsumer.requestConfirmations(), 20);
+        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
+        assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
     }
 
 
@@ -1097,12 +1146,18 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Joe performs a redeem ~
 
-        emit log_string("STOP 1");
+        emit log_string("REDEEM 1");
 
         // NOTE: cheaper budget, redeems cheaper token first which is Joe's token
         vm.startPrank(JOE);
         basket.redeemTNFT(basket.balanceOf(JOE));
         vm.stopPrank();
+
+        // This redeem generates a request to vrf. Mock response.
+        _mockVrfCoordinatorResponse(
+            basketVrfConsumer.outstandingRequest(address(basket)),
+            100
+        );
 
         // ~ Post-state check 1 ~
 
@@ -1151,7 +1206,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Nik performs a redeem ~
 
-        emit log_string("STOP 2");
+        emit log_string("REDEEM 2");
 
         vm.startPrank(NIK);
         basket.redeemTNFT(basket.balanceOf(NIK));
@@ -1191,216 +1246,216 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice This test verifies the implementation of the First-In-First-Out redeem method.
-    function test_baskets_redeemTNFT_fifo() public {
-        uint256 preInCounter = basket.inCounter();
-        uint256 preOutCounter = basket.outCounter();
+    // function test_baskets_redeemTNFT_fifo() public {
+    //     uint256 preInCounter = basket.inCounter();
+    //     uint256 preOutCounter = basket.outCounter();
      
-        // ~ config ~
+    //     // ~ config ~
 
-        uint256 totalTokens = 6;
+    //     uint256 totalTokens = 6;
 
-        address[] memory batchTnftArr = new address[](totalTokens);
-        uint256[] memory batchTokenIdArr = new uint256[](totalTokens);
+    //     address[] memory batchTnftArr = new address[](totalTokens);
+    //     uint256[] memory batchTokenIdArr = new uint256[](totalTokens);
 
-        // create multiple tokens with specific prices
+    //     // create multiple tokens with specific prices
 
-        // Mint Alice token
-        uint256[] memory tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1, // mintCount
-            1, // fingerprint
-            ALICE
-        );
-        uint256 firstTokenId = tokenIds[0];
-        batchTokenIdArr[0] = firstTokenId;
-        batchTnftArr[0] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     uint256[] memory tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1, // mintCount
+    //         1, // fingerprint
+    //         ALICE
+    //     );
+    //     uint256 firstTokenId = tokenIds[0];
+    //     batchTokenIdArr[0] = firstTokenId;
+    //     batchTnftArr[0] = address(realEstateTnft);
 
-        // Mint Alice token
-        tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1,
-            2,
-            ALICE
-        );
-        uint256 secondTokenId = tokenIds[0];
-        batchTokenIdArr[1] = secondTokenId;
-        batchTnftArr[1] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1,
+    //         2,
+    //         ALICE
+    //     );
+    //     uint256 secondTokenId = tokenIds[0];
+    //     batchTokenIdArr[1] = secondTokenId;
+    //     batchTnftArr[1] = address(realEstateTnft);
 
-        // Mint Alice token
-        tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1,
-            3,
-            ALICE
-        );
-        uint256 thirdTokenId = tokenIds[0];
-        batchTokenIdArr[2] = thirdTokenId;
-        batchTnftArr[2] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1,
+    //         3,
+    //         ALICE
+    //     );
+    //     uint256 thirdTokenId = tokenIds[0];
+    //     batchTokenIdArr[2] = thirdTokenId;
+    //     batchTnftArr[2] = address(realEstateTnft);
 
-        // Mint Alice token
-        tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1,
-            4,
-            ALICE
-        );
-        uint256 fourthTokenId = tokenIds[0];
-        batchTokenIdArr[3] = fourthTokenId;
-        batchTnftArr[3] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1,
+    //         4,
+    //         ALICE
+    //     );
+    //     uint256 fourthTokenId = tokenIds[0];
+    //     batchTokenIdArr[3] = fourthTokenId;
+    //     batchTnftArr[3] = address(realEstateTnft);
 
-        // Mint Alice token
-        tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1,
-            5,
-            ALICE
-        );
-        uint256 fifthTokenId = tokenIds[0];
-        batchTokenIdArr[4] = fifthTokenId;
-        batchTnftArr[4] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1,
+    //         5,
+    //         ALICE
+    //     );
+    //     uint256 fifthTokenId = tokenIds[0];
+    //     batchTokenIdArr[4] = fifthTokenId;
+    //     batchTnftArr[4] = address(realEstateTnft);
 
-        // Mint Alice token
-        tokenIds = _createItemAndMint(
-            address(realEstateTnft),
-            100_000_000,
-            1,
-            1,
-            6,
-            ALICE
-        );
-        uint256 sixthTokenId = tokenIds[0];
-        batchTokenIdArr[5] = sixthTokenId;
-        batchTnftArr[5] = address(realEstateTnft);
+    //     // Mint Alice token
+    //     tokenIds = _createItemAndMint(
+    //         address(realEstateTnft),
+    //         100_000_000,
+    //         1,
+    //         1,
+    //         6,
+    //         ALICE
+    //     );
+    //     uint256 sixthTokenId = tokenIds[0];
+    //     batchTokenIdArr[5] = sixthTokenId;
+    //     batchTnftArr[5] = address(realEstateTnft);
 
-        assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
+    //     assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
      
-        // batchDeposit all tokens
-        vm.startPrank(ALICE);
-        for (uint256 i; i < totalTokens; ++i) {
-            realEstateTnft.approve(address(basket), batchTokenIdArr[i]);
-        }
-        basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
-        vm.stopPrank();
+    //     // batchDeposit all tokens
+    //     vm.startPrank(ALICE);
+    //     for (uint256 i; i < totalTokens; ++i) {
+    //         realEstateTnft.approve(address(basket), batchTokenIdArr[i]);
+    //     }
+    //     basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+    //     vm.stopPrank();
 
-        // ~ Pre-state check ~
+    //     // ~ Pre-state check ~
 
-        assertEq(realEstateTnft.balanceOf(ALICE), 0);
-        assertEq(realEstateTnft.balanceOf(address(basket)), totalTokens);
-        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
-        assertEq(basket.inCounter(), preInCounter + totalTokens);
-        assertEq(basket.outCounter(), preOutCounter);
+    //     assertEq(realEstateTnft.balanceOf(ALICE), 0);
+    //     assertEq(realEstateTnft.balanceOf(address(basket)), totalTokens);
+    //     assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+    //     assertEq(basket.inCounter(), preInCounter + totalTokens);
+    //     assertEq(basket.outCounter(), preOutCounter);
 
-        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, totalTokens);
+    //     Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+    //     assertEq(deposited.length, totalTokens);
 
-        assertEq(realEstateTnft.ownerOf(firstTokenId),  address(basket));
-        assertEq(realEstateTnft.ownerOf(secondTokenId), address(basket));
-        assertEq(realEstateTnft.ownerOf(thirdTokenId),  address(basket));
-        assertEq(realEstateTnft.ownerOf(fourthTokenId), address(basket));
-        assertEq(realEstateTnft.ownerOf(fifthTokenId),  address(basket));
-        assertEq(realEstateTnft.ownerOf(sixthTokenId),  address(basket));
+    //     assertEq(realEstateTnft.ownerOf(firstTokenId),  address(basket));
+    //     assertEq(realEstateTnft.ownerOf(secondTokenId), address(basket));
+    //     assertEq(realEstateTnft.ownerOf(thirdTokenId),  address(basket));
+    //     assertEq(realEstateTnft.ownerOf(fourthTokenId), address(basket));
+    //     assertEq(realEstateTnft.ownerOf(fifthTokenId),  address(basket));
+    //     assertEq(realEstateTnft.ownerOf(sixthTokenId),  address(basket));
 
-        IBasket.RedeemData memory redeemable;
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, firstTokenId);
+    //     IBasket.RedeemData memory redeemable;
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, firstTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem firstTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem firstTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 1 ~
+    //     // ~ Post-state check 1 ~
 
-        assertEq(realEstateTnft.ownerOf(firstTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 1);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, secondTokenId);
+    //     assertEq(realEstateTnft.ownerOf(firstTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 1);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, secondTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem secondTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem secondTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 2 ~
+    //     // ~ Post-state check 2 ~
 
-        assertEq(realEstateTnft.ownerOf(secondTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 2);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, thirdTokenId);
+    //     assertEq(realEstateTnft.ownerOf(secondTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 2);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, thirdTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem thirdTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem thirdTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 3 ~
+    //     // ~ Post-state check 3 ~
 
-        assertEq(realEstateTnft.ownerOf(thirdTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 3);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, fourthTokenId);
+    //     assertEq(realEstateTnft.ownerOf(thirdTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 3);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, fourthTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fourthTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fourthTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 4 ~
+    //     // ~ Post-state check 4 ~
 
-        assertEq(realEstateTnft.ownerOf(fourthTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 4);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, fifthTokenId);
+    //     assertEq(realEstateTnft.ownerOf(fourthTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 4);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, fifthTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fifthTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fifthTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 5 ~
+    //     // ~ Post-state check 5 ~
 
-        assertEq(realEstateTnft.ownerOf(fifthTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 5);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, sixthTokenId);
+    //     assertEq(realEstateTnft.ownerOf(fifthTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 5);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, sixthTokenId);
 
-        // ~ Execute redeem ~
+    //     // ~ Execute redeem ~
 
-        vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem sixthTokenId
-        vm.stopPrank();
+    //     vm.startPrank(ALICE);
+    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem sixthTokenId
+    //     vm.stopPrank();
 
-        // ~ Post-state check 6 ~
+    //     // ~ Post-state check 6 ~
 
-        assertEq(realEstateTnft.ownerOf(sixthTokenId), ALICE);
-        assertEq(basket.outCounter(), preOutCounter + 6);
-        redeemable = basket.calculateFifo();
-        assertEq(redeemable.tokenId, 0);
+    //     assertEq(realEstateTnft.ownerOf(sixthTokenId), ALICE);
+    //     assertEq(basket.outCounter(), preOutCounter + 6);
+    //     redeemable = basket.calculateFifo();
+    //     assertEq(redeemable.tokenId, 0);
 
-        // ~ sanity check ~
+    //     // ~ sanity check ~
 
-        assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
-        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
-        assertEq(basket.totalSupply(), 0);
+    //     assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
+    //     assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+    //     assertEq(basket.totalSupply(), 0);
 
-        deposited = basket.getDepositedTnfts();
-        assertEq(deposited.length, 0);
-    }
+    //     deposited = basket.getDepositedTnfts();
+    //     assertEq(deposited.length, 0);
+    // }
 
     /// @notice Verifies redeem math -> proposed by Daniel.
     function test_baskets_redeemTNFT_math() public {
@@ -1503,13 +1558,20 @@ contract BasketsIntegrationTest is Utility {
         assertEq(MUMBAI_USDC.balanceOf(ALICE), 0);
         assertEq(MUMBAI_USDC.balanceOf(BOB), 0);
 
-        uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), aliceToken);
+        (,uint256 tokenIdRedeemable,,) = basket.nextToRedeem();
+
+        uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), tokenIdRedeemable);
         uint256 preBalAlice = basket.balanceOf(ALICE);
 
         // Bob executes a redeem of bobToken
         vm.startPrank(ALICE);
         basket.redeemTNFT(basket.balanceOf(ALICE));
         vm.stopPrank();
+
+        _mockVrfCoordinatorResponse(
+            basketVrfConsumer.outstandingRequest(address(basket)),
+            100
+        );
 
         // Post-state check
         assertEq(rentManager.claimableRentForToken(aliceToken), 0);
