@@ -36,7 +36,7 @@ jobs:
         run: |
           forge test
         env:
-          POLYGONSCAN_API_URL: ${{ vars.POLYGONSCAN_API_URL }}
+          POLYGONSCAN_API_URL: ${{ secrets.POLYGONSCAN_API_URL }}
           MUMBAI_RPC_URL: ${{ secrets.MUMBAI_RPC_URL }}
         id: test
 
