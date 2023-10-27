@@ -102,7 +102,7 @@ contract BasketsIntegrationTest is Utility {
     /// @notice Config function for test cases.
     function setUp() public {
 
-        vm.createSelectFork(MUMBAI_RPC_URL);
+        //vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
 
