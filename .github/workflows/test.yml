@@ -1,6 +1,6 @@
 name: test
 
-on: workflow_dispatch
+on: [push]
 
 env:
   FOUNDRY_PROFILE: ci
@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: true
 
-    name: Foundry project
+    name: Baskets Foundry Projects
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          forge test --fork-url https://rpc.ankr.com/polygon_mumbai
         id: test
 
       - name: Upload coverage reports to Codecov
