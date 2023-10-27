@@ -34,7 +34,9 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test --fork-url https://polygon-mumbai.infura.io/v3/6827bdf667064da4b2a0564cd45484d2 -vvvv
+          forge test
+        env:
+          MUMBAI_RPC_URL: https://polygon-mumbai.infura.io/v3/6827bdf667064da4b2a0564cd45484d2
         id: test
 
       - name: Upload coverage reports to Codecov

@@ -75,7 +75,7 @@ contract RentManagerTest is Utility {
 
     function setUp() public {
 
-        //vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
         proxyAdmin = new ProxyAdmin(address(this));
 

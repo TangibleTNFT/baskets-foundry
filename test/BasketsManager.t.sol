@@ -77,7 +77,7 @@ contract BasketsManagerTest is Utility {
 
     function setUp() public {
 
-        //vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin(address(this));
