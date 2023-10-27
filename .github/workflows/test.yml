@@ -34,7 +34,7 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test https://rpc.ankr.com/polygon_mumbai
+          forge test --fork-url https://rpc.ankr.com/polygon_mumbai
         env:
           POLYGONSCAN_API_URL: ${{ vars.POLYGONSCAN_API_URL }}
         id: test
