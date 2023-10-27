@@ -14,8 +14,6 @@ jobs:
 
     name: Baskets Foundry Projects
     runs-on: ubuntu-latest
-    env:
-      POLYGONSCAN_API_URL: ${{ vars.POLYGONSCAN_API_URL }}
     steps:
       - uses: actions/checkout@v3
         with:

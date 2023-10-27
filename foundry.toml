@@ -16,8 +16,5 @@ remappings = [
 [rpc_endpoints]
 mumbai = "${MUMBAI_RPC_URL}"
 
-[etherscan]
-mumbai = { key = "${POLYGONSCAN_API_URL}" }
-
 [profile.optimized]
 via_ir = true
