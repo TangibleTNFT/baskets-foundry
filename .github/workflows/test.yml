@@ -38,8 +38,8 @@ jobs:
           echo "POLYGONSCAN_API_URL: $POLYGONSCAN_API_URL"
           forge test
         env:
-          POLYGONSCAN_API_URL: ${{ secrets.POLYGONSCAN_API_URL }}
-          MUMBAI_RPC_URL: ${{ secrets.MUMBAI_RPC_URL }}
+          POLYGONSCAN_API_URL: ${{ vars.POLYGONSCAN_API_URL }}
+          MUMBAI_RPC_URL: ${{ vars.MUMBAI_RPC_URL }}
         id: test
 
       - name: Upload coverage reports to Codecov
