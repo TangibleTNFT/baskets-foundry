@@ -12,7 +12,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgrade
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 
 import { VRFCoordinatorV2Mock } from "../test/utils/VRFCoordinatorV2Mock.sol";
 import "../test/utils/MumbaiAddresses.sol";

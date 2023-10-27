@@ -15,7 +15,7 @@ import { IFactory } from "@tangible/interfaces/IFactory.sol";
 // local imports
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
-import { IBasketManager } from "./interfaces/IBasketsManager.sol";
+import { IBasketManager } from "./interfaces/IBasketManager.sol";
 import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgradeable.sol";
 
 

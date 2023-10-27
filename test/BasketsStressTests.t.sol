@@ -43,7 +43,7 @@ import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhit
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
@@ -102,6 +102,7 @@ contract StressTests is Utility {
     // State variables for VRF.
     uint64 internal subId;
 
+    // For avoiding stack too deep errors
     struct TestConfig {
         uint256 newCategories;
         uint256 amountFingerprints;
@@ -466,8 +467,6 @@ contract StressTests is Utility {
         uint256[] memory fingerprints = new uint256[](config.amountFingerprints);
         address[] memory tnfts = new address[](config.newCategories);
 
-        uint256 preInCounter = basket.inCounter();
-
         // store all new fingerprints in array.
         uint256 i;
         for (i; i < config.amountFingerprints; ++i) {
@@ -506,8 +505,6 @@ contract StressTests is Utility {
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), 0);
 
-        assertEq(basket.inCounter(), preInCounter);
-
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
 
@@ -545,8 +542,6 @@ contract StressTests is Utility {
                     basket.getTotalValueOfBasket(),
                     2
                 );
-
-                assertEq(basket.inCounter(), preInCounter + (++count));
 
                 // verify basket now owns token
                 assertEq(ITangibleNFT(tnft).ownerOf(tokenId), address(basket));

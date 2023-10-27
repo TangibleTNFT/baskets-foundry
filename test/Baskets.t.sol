@@ -35,7 +35,7 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
@@ -524,8 +524,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT_single() public {
-        uint256 preInCounter = basket.inCounter();
-        uint256 preOutCounter = basket.outCounter();
 
         // ~ Pre-state check ~
 
@@ -537,8 +535,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
-        assertEq(basket.inCounter(), preInCounter);
-        assertEq(basket.outCounter(), preOutCounter);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -582,12 +578,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.balanceOf(JOE), amountAfterFee);
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
-        assertEq(basket.inCounter(), preInCounter + 1);
-        assertEq(basket.outCounter(), preOutCounter);
-
-        (address _tnft, uint256 _tokenId,) = basket.fifoTracker(basket.inCounter());
-        assertEq(_tnft, address(realEstateTnft));
-        assertEq(_tokenId, JOE_TOKEN_ID);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 1);
@@ -606,8 +596,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
     function test_baskets_depositTNFT_multiple() public {
-        uint256 preInCounter = basket.inCounter();
-        uint256 preOutCounter = basket.outCounter();
 
         // ~ Pre-state check ~
 
@@ -623,8 +611,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), false);
-        assertEq(basket.inCounter(), preInCounter);
-        assertEq(basket.outCounter(), preOutCounter);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -679,16 +665,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
-        assertEq(basket.inCounter(), preInCounter + 2);
-        assertEq(basket.outCounter(), preOutCounter);
-
-        (address _tnft, uint256 _tokenId,) = basket.fifoTracker(basket.inCounter() - 1);
-        assertEq(_tnft, address(realEstateTnft));
-        assertEq(_tokenId, JOE_TOKEN_ID);
-
-        (_tnft, _tokenId,) = basket.fifoTracker(basket.inCounter());
-        assertEq(_tnft, address(realEstateTnft));
-        assertEq(_tokenId, NIK_TOKEN_ID);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 2);
@@ -984,8 +960,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
     function test_baskets_redeemTNFT_single() public {
-        uint256 preInCounter = basket.inCounter();
-        uint256 preOutCounter = basket.outCounter();
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1020,8 +994,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.balanceOf(JOE), amountAfterFee);
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
-        assertEq(basket.inCounter(), preInCounter + 1);
-        assertEq(basket.outCounter(), preOutCounter);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 1);
@@ -1059,8 +1031,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
-        assertEq(basket.inCounter(), preInCounter + 1);
-        assertEq(basket.outCounter(), preOutCounter + 1);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -1074,8 +1044,6 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed for multiple TNFTs.
     function test_baskets_redeemTNFT_multiple() public {
-        uint256 preInCounter = basket.inCounter();
-        uint256 preOutCounter = basket.outCounter();
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1123,8 +1091,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
-        assertEq(basket.inCounter(), preInCounter + 2);
-        assertEq(basket.outCounter(), preOutCounter);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 2);
@@ -1179,8 +1145,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
-        assertEq(basket.inCounter(), preInCounter + 2);
-        assertEq(basket.outCounter(), preOutCounter + 1);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 1);
@@ -1232,8 +1196,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), false);
-        assertEq(basket.inCounter(), preInCounter + 2);
-        assertEq(basket.outCounter(), preOutCounter + 2);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);

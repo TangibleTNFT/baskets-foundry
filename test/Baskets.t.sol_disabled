@@ -5,7 +5,7 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 import "./utils/Utility.sol";
 
 // tangible contract imports

@@ -11,7 +11,7 @@ The Tangible Real Estate TNFT Baskets will provide a more liquid and accessible 
 ## Contracts
 
 - [Basket](./src/Baskets.sol) - The Erc20 contract that facilitates the transaction of Basket tokens and TNFTs. Are able to be created by anyone who holds a TNFT.
-- [BasketManager](./src/BasketsManager.sol) - This contract allows the Tangible Factory to create new Basket contracts.
+- [BasketManager](./src/BasketManager.sol) - This contract allows the Tangible Factory to create new Basket contracts.
 - [BasketsVrfConsumer](./src/BasketsVrfConsumer.sol) - This contract is the central vrf consumer contract that handles all entropy requests from any basket to the vrf coordinator contract.
 
 ## Tests

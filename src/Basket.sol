@@ -28,7 +28,7 @@ import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhit
 
 // local imports
 import { IBasket } from "./interfaces/IBasket.sol";
-import { IBasketManager } from "./interfaces/IBasketsManager.sol";
+import { IBasketManager } from "./interfaces/IBasketManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 import { RebaseTokenUpgradeable } from "./abstract/RebaseTokenUpgradeable.sol";
@@ -78,20 +78,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint256 public depositFee; // 0.5% by default
 
-    /// @notice Increments upon successful deposit.
-    /// @dev Used for FIFO redeem.
-    uint256 public inCounter;
-
-    /// @notice Increments upon successful redeem.
-    /// @dev Used for FIFO redeem.
-    uint256 public outCounter;
-
-    /// @notice TangibleNFT contract => tokenId => InCounterId.
-    //mapping(address => mapping(uint256 => uint256)) public fifoTracker;
-
-    /// @notice Maps inCounter Id => TokenData data block.
-    mapping(uint256 => TokenData) public fifoTracker;
-
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     IERC20Metadata public primaryRentToken;
 
@@ -137,6 +123,15 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     // NOTE: FOR TESTING ONLY
     event Debug(string, uint256);
+
+
+    // ~ Modifiers ~
+
+    /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
+    modifier onlyBasketVrfConsumer() {
+        require(msg.sender == _getBasketVrfConsumer());
+        _;
+    }
 
 
     // ~ Constructor ~
@@ -234,30 +229,42 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
      * @param _budget Amount of basket tokens being submitted to redeem method.
      */
-    function redeemTNFT(uint256 _budget) external { // TODO: Replace with FIFO method
+    function redeemTNFT(uint256 _budget) external {
         _redeemTNFT(msg.sender, _budget);
     }
 
-    function fulfillRandomSeed(uint256 randomWord) external {
+    /**
+     * @notice This method is executed upon the callback of vrf for entropy. This method will use the randomWord to select
+     *         a ranom index from the `depositedTnfts` array to be next redeemable NFT.
+     * @param randomWord Random uint seed received from vrf.
+     */
+    function fulfillRandomSeed(uint256 randomWord) external onlyBasketVrfConsumer {
 
         // choose a nft to be next redeemable
 
         uint256 index;
-        // Use randomWord from vrf to identify a random index in the `depositedTnfts` arr to submit for redemption next.
         index = randomWord % depositedTnfts.length;
 
         address tnft = depositedTnfts[index].tnft;
         uint256 tokenId = depositedTnfts[index].tokenId;
 
         nextToRedeem = RedeemData(tnft, tokenId, 0, 0);
-
         seedRequestInFlight = false;
     }
 
+    /**
+     * @notice This method allows the factory owner to manually send a request for entropy to vrf.
+     * @dev This method should only be used as a last resort if a vrf callback reverts or if there resides a stale redeemable.
+     * @return requestId -> request identifier created by vrf coordinator.
+     */
     function sendRequestForSeed() external onlyFactoryOwner returns (uint256 requestId) {
         return _sendRequestForSeed();
     }
 
+    /**
+     * @notice Internal method that handles making requests to vrf through the BasketsVrfConsumer contract.
+     * @return requestId -> request identifier created by vrf coordinator.
+     */
     function _sendRequestForSeed() internal returns (uint256 requestId) {
         if (depositedTnfts.length > 0) {
             seedRequestInFlight = true;
@@ -440,7 +447,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     // ~ Public Methods ~
 
     /**
-     * @notice Rebase function TODO
+     * @notice This function allows for the Basket token to "rebase" and update the multiplier based
+     * on the amount of rent accrued by the basket tokens.
      */
     function rebase() public {
         uint256 previousRentalIncome = totalRentValue;
@@ -472,11 +480,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     //     return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
     // }
-
-    function getRedeemableWithSeed() public view returns (RedeemData memory redeemable) {
-        // use `seed` to get the nft that can be redeemed
-        // seed mod length of depositedTnfts
-    }
 
     /**
      * @notice Return the USD value of share token for underlying assets, 18 decimals
@@ -564,8 +567,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (!exists) {
             tnftsSupported.push(_tangibleNFT);
         }
-
-        fifoTracker[++inCounter] = TokenData(_tangibleNFT, _tokenId, fingerprint);
 
         // take token from depositor
         IERC721(_tangibleNFT).safeTransferFrom(msg.sender, address(this), _tokenId);
@@ -696,8 +697,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         totalNftValue -= _usdValue;
         _burn(_redeemer, _sharesRequired);
-        
-        ++outCounter;
 
         _sendRequestForSeed(); // get new seed
 
@@ -819,6 +818,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         return IGetNotificationDispatcher(address(_getOracle(_tangibleNFT))).notificationDispatcher();
     }
 
+    /**
+     * @notice Internal method for returning the address of BasketsVrfConsumer contract.
+     */
     function _getBasketVrfConsumer() internal returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).basketsVrfConsumer();
     }

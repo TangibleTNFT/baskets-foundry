@@ -11,7 +11,7 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
@@ -40,7 +40,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
  * @author Chase Brown
  * @notice This test file contains integration unit tests for the BasketManager contract. 
  */
-contract BasketsManagerTest is Utility {
+contract BasketManagerTest is Utility {
 
     Basket public basket;
     BasketManager public basketManager;
