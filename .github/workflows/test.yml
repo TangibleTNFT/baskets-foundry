@@ -36,7 +36,8 @@ jobs:
         run: |
           forge test
         env:
-          MUMBAI_RPC_URL: https://polygon-mumbai.infura.io/v3/6827bdf667064da4b2a0564cd45484d2
+          MUMBAI_RPC_URL: ${{ secrets.MUMBAI_RPC_URL }}
+          POLYGONSCAN_API_URL: ${{ secrets.POLYGONSCAN_API_URL }}
         id: test
 
       - name: Upload coverage reports to Codecov
