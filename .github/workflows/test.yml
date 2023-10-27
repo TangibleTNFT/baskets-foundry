@@ -34,10 +34,9 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test
+          forge test https://rpc.ankr.com/polygon_mumbai
         env:
           POLYGONSCAN_API_URL: ${{ vars.POLYGONSCAN_API_URL }}
-          MUMBAI_RPC_URL: ${{ vars.MUMBAI_RPC_URL }}
         id: test
 
       - name: Upload coverage reports to Codecov
