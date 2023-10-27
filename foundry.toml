@@ -14,7 +14,7 @@ remappings = [
 ]
 
 [rpc_endpoints]
-mumbai = "${MUMBAI_RPC_URL}"
+mumbai = { key = "${MUMBAI_RPC_URL}" }
 
 [etherscan]
 mumbai = { key = "${POLYGONSCAN_API_URL}" }
