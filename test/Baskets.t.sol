@@ -2090,6 +2090,45 @@ contract BasketsIntegrationTest is Utility {
         emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
         emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
+    }
 
+
+    // ~ sendRequestForSeed ~
+
+    /// @notice This method verifies correct state changes when sendRequestForSeed is executed
+    function test_baskets_sendRequestForSeed() public {
+        
+        // ~ Config ~
+
+        // Joe deposits so depositedTnfts.length > 0
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
+        basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
+        vm.stopPrank();
+
+        // ~ Pre-state check ~
+
+        assertEq(basket.seedRequestInFlight(), false);
+        assertEq(basket.pendingSeedRequestId(), 0);
+
+        // ~ Execute sendRequestForSeed ~
+
+        vm.prank(factoryOwner);
+        uint256 requestId = basket.sendRequestForSeed();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(basket.seedRequestInFlight(), true);
+        assertEq(basket.pendingSeedRequestId(), requestId);
+
+        // ~ Vrf responds with callback ~
+
+        vm.prank(address(vrfCoordinatorMock));
+        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(1));
+
+        // ~ Post-state check 1 ~
+
+        assertEq(basket.seedRequestInFlight(), false);
+        assertEq(basket.pendingSeedRequestId(), 0);
     }
 }

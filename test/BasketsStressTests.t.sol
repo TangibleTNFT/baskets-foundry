@@ -1644,4 +1644,189 @@ contract StressTests is Utility {
 
     }
 
+    /// @notice This stress test uses fuzzing to create random entries and therefore generate random redeemables.
+    function test_stress_fulfillRandomSeed_fuzzing(uint256 randomWord) public {
+        randomWord = bound(randomWord, 1000, type(uint256).max);
+
+        // ~ Config ~
+
+        config.newCategories = 2;
+        config.amountFingerprints = 10;
+        config.totalTokens = config.newCategories * config.amountFingerprints;
+
+        // declare arrays that will be used for args for batchDepositTNFT
+        address[] memory batchTnftArr = new address[](config.totalTokens);
+        uint256[] memory batchTokenIdArr = new uint256[](config.totalTokens);
+
+        // store all new fingerprints in array.
+        uint256 i;
+        for (; i < config.amountFingerprints; ++i) {
+            config.fingerprints.push(i);
+        }
+
+        // create multiple tnfts.
+        uint256 count;
+        for (i = 0; i < config.newCategories; ++i) {
+            config.tnfts.push(_deployNewTnftContract(Strings.toString(i)));
+            
+            // initialize batchTnftArr
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                batchTnftArr[count] = config.tnfts[i];
+                ++count;
+            }
+        }
+
+        // mint multiple tokens for each contract
+        count = 0;
+        for (i = 0; i < config.newCategories; ++i) {
+            address tnft = config.tnfts[i];
+            for (uint256 j; j < config.amountFingerprints; ++j) {
+                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+
+                uint256[] memory tokenIds = _createItemAndMint(
+                    tnft,
+                    100_000, // 100 GBP
+                    1,       // stock
+                    1,       // mint
+                    config.fingerprints[j],
+                    JOE
+                );
+                tokenIdMap[config.tnfts[i]].push(tokenIds[0]);
+
+                // initialize batchTokenIdArr
+                batchTokenIdArr[count] = tokenIds[0];
+                ++count;
+
+                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+            }
+            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
+        }
+
+        // create rent array
+        uint256 totalRent;
+        for (i = 0; i < config.totalTokens; ++i) {
+            config.rentArr.push((i + 1)*10**8); // $100 -> $10,000
+            totalRent += config.rentArr[i];
+        }
+
+        // shuffle rent array
+        for (i = 0; i < config.rentArr.length; ++i) {
+            uint256 key = i + (randomWord % (config.rentArr.length - i));
+
+            if (i != key) {
+                uint256 temp = config.rentArr[key];
+                config.rentArr[key] = config.rentArr[i];
+                config.rentArr[i] = temp;
+            }
+        }
+
+        // deal category owner USDC to deposit into rentManager
+        deal(address(MUMBAI_USDC), TANGIBLE_LABS, totalRent);
+
+        for (i = 0; i < config.totalTokens; ++i) {
+            IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(batchTnftArr[i]));
+
+            // deposit rent for each tnft (no vesting)
+            vm.startPrank(TANGIBLE_LABS);
+            MUMBAI_USDC.approve(address(tempRentManager), config.rentArr[i]);
+            tempRentManager.deposit(
+                batchTokenIdArr[i],
+                address(MUMBAI_USDC),
+                config.rentArr[i],
+                0,
+                block.timestamp + 1,
+                true
+            );
+            vm.stopPrank();
+        }
+
+        // deposit tokens via batch
+        vm.startPrank(JOE);
+        for (i = 0; i < config.totalTokens; ++i) {
+            ITangibleNFT(batchTnftArr[i]).approve(
+                address(basket),
+                batchTokenIdArr[i]
+            );
+        }
+        uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+
+        vm.stopPrank();
+
+        skip(1); // skip to end of vesting
+
+        // ~ Admin calls for random seed ~
+
+        vm.prank(factoryOwner);
+        uint256 requestId = basket.sendRequestForSeed();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(basket.seedRequestInFlight(), true);
+        assertEq(basket.pendingSeedRequestId(), requestId);
+        assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
+        assertEq(basketVrfConsumer.fulfilled(requestId), false);
+
+        // ~ Basket receives callback ~
+
+        vm.prank(address(vrfCoordinatorMock));
+        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
+
+        (address predictedTnft, uint256 predictedTokenId,,) = basket.nextToRedeem();
+        emit log_named_address("TNFT chosen for redeem", predictedTnft);
+        emit log_named_uint("TokenId chosen for redeem", predictedTokenId);
+
+        // ~ Post-state check 2 ~
+
+        assertEq(basket.seedRequestInFlight(), false);
+        assertEq(basket.pendingSeedRequestId(), 0);
+        assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
+        assertEq(basketVrfConsumer.fulfilled(requestId), true);
+
+        // ~ Execute redeemTNFT ~
+
+        vm.startPrank(JOE);
+        basket.redeemTNFT(basket.balanceOf(JOE));
+        vm.stopPrank();
+
+        // ~ Post-state check 3 ~
+
+        // find token that was redeemed
+        address tnft;
+        uint256 tokenId;
+        for (i = 0; i < config.totalTokens; ++i) {
+            if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
+                tnft = batchTnftArr[i];
+                tokenId = batchTokenIdArr[i];
+                break; 
+                // ce7, 5
+                // 3EB, 1
+                // 981, 3
+            }
+        }
+
+        assertEq(tnft, predictedTnft);
+        assertEq(tokenId, predictedTokenId);
+
+        assertEq(basket.seedRequestInFlight(), true);
+        assertEq(basket.pendingSeedRequestId(), requestId + 1);
+        assertEq(basketVrfConsumer.requestTracker(requestId + 1), address(basket));
+        assertEq(basketVrfConsumer.fulfilled(requestId + 1), false);
+
+        assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
+        assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
+
+        assertEq(basket.tokenDeposited(tnft, tokenId), false);
+
+        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(tnft);
+        assertEq(tokenIdLib.length, config.amountFingerprints - 1);
+
+        emit log_named_address("Redeemed: Tnft address", tnft);
+        emit log_named_uint("Redeemed: tokenId", tokenId);
+        emit log_named_uint("rentArr[0]", config.rentArr[0]);
+
+        // reset tokenIdMap
+        for (i = 0; i < config.newCategories; ++i) delete tokenIdMap[config.tnfts[i]];
+    }
+
 }

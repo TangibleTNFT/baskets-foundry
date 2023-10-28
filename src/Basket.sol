@@ -249,7 +249,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 tokenId = depositedTnfts[index].tokenId;
 
         nextToRedeem = RedeemData(tnft, tokenId, 0, 0);
+        
         seedRequestInFlight = false;
+        pendingSeedRequestId = 0;
     }
 
     /**
