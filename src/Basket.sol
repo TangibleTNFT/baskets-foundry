@@ -630,7 +630,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
                 nextToRedeem = RedeemData(_tangibleNFT, _tokenId, 0, 0);
             }
             else {
-                // if no request was made or fulfilled, but contract has more than 1 token in basket, send request
+                // if no request was made or fulfilled, but contract has more than 1 token in basket, send request.
                 // could happen if request for entropy was made, but failed on callback
                 _sendRequestForSeed();
             }

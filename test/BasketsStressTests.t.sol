@@ -1791,38 +1791,22 @@ contract StressTests is Utility {
 
         // ~ Post-state check 3 ~
 
-        // find token that was redeemed
-        address tnft;
-        uint256 tokenId;
-        for (i = 0; i < config.totalTokens; ++i) {
-            if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
-                tnft = batchTnftArr[i];
-                tokenId = batchTokenIdArr[i];
-                break; 
-                // ce7, 5
-                // 3EB, 1
-                // 981, 3
-            }
-        }
-
-        assertEq(tnft, predictedTnft);
-        assertEq(tokenId, predictedTokenId);
-
+        // verify new request for entropy was created
         assertEq(basket.seedRequestInFlight(), true);
         assertEq(basket.pendingSeedRequestId(), requestId + 1);
         assertEq(basketVrfConsumer.requestTracker(requestId + 1), address(basket));
         assertEq(basketVrfConsumer.fulfilled(requestId + 1), false);
 
-        assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
-        assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
+        assertEq(ITangibleNFT(predictedTnft).balanceOf(address(basket)), config.amountFingerprints - 1);
+        assertEq(ITangibleNFT(predictedTnft).balanceOf(JOE), 1);
 
-        assertEq(basket.tokenDeposited(tnft, tokenId), false);
+        assertEq(basket.tokenDeposited(predictedTnft, predictedTokenId), false);
 
-        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(tnft);
+        uint256[] memory tokenIdLib = basket.getTokenIdLibrary(predictedTnft);
         assertEq(tokenIdLib.length, config.amountFingerprints - 1);
 
-        emit log_named_address("Redeemed: Tnft address", tnft);
-        emit log_named_uint("Redeemed: tokenId", tokenId);
+        emit log_named_address("Redeemed: Tnft address", predictedTnft);
+        emit log_named_uint("Redeemed: TokenId", predictedTokenId);
         emit log_named_uint("rentArr[0]", config.rentArr[0]);
 
         // reset tokenIdMap
