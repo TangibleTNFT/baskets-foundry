@@ -1520,7 +1520,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(MUMBAI_USDC.balanceOf(ALICE), 0);
         assertEq(MUMBAI_USDC.balanceOf(BOB), 0);
 
-        (,uint256 tokenIdRedeemable,,) = basket.nextToRedeem();
+        (,uint256 tokenIdRedeemable) = basket.nextToRedeem();
 
         uint256 quoteOut = basket.getQuoteOut(address(realEstateTnft), tokenIdRedeemable);
         uint256 preBalAlice = basket.balanceOf(ALICE);

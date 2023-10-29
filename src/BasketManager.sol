@@ -35,7 +35,9 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
 contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     using ArrayUtils for uint256[];
 
-    // ~ State Variables ~
+    // ---------------
+    // State Variables
+    // ---------------
 
     /// @notice Mapping that stores the unique `featureHash` for each basket.
     mapping(address => bytes32) public hashedFeaturesForBasket;
@@ -65,7 +67,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     uint256[20] private __gap;
 
 
-    // ~ Events ~
+    // ------
+    // Events
+    // ------
 
     /**
      * @notice This event is emitted when a new basket instance is created // beaconProxy deployed.
@@ -75,7 +79,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     event BasketCreated(address creator, address basket);
 
 
-    // ~ Modifiers ~
+    // ---------
+    // Modifiers
+    // ---------
 
     /// @notice Modifier verifying msg.sender is a valid Basket contract.
     modifier onlyBasket() {
@@ -84,14 +90,18 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
 
-    // ~ Constructor ~
+    // -----------
+    // Constructor
+    // -----------
 
     constructor() {
         _disableInitializers();
     }
 
 
-    // ~ Initializer ~
+    // -----------
+    // Initializer
+    // -----------
 
     /**
      * @notice Initializes BasketManager contract.
@@ -109,7 +119,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
 
-    // ~ External Methods ~
+    // ----------------
+    // External Methods
+    // ----------------
 
     /**
      * @notice This method deploys a new Basket contract.
@@ -245,7 +257,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
 
-    // ~ Public Methods ~
+    // --------------
+    // Public Methods
+    // --------------
 
     /**
      * @notice This method checks whether a basket with featuresHash can be created or is taken.
@@ -306,8 +320,13 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
 
-    // ~ Internal Methods ~
+    // ----------------
+    // Internal Methods
+    // ----------------
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyFactoryOwner {}
+    /**
+     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the factory owner to upgrade this contract's implementation.
+     */
+    function _authorizeUpgrade(address) internal override onlyFactoryOwner {}
 
 }

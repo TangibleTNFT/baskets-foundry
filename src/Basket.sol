@@ -41,7 +41,9 @@ import { RebaseTokenUpgradeable } from "./abstract/RebaseTokenUpgradeable.sol";
  */
 contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNotificationReceiver, ReentrancyGuardUpgradeable, FactoryModifiers {
 
-    // ~ State Variables ~
+    // ---------------
+    // State Variables
+    // ---------------
 
     /// @notice Ledger of all TNFT tokens stored in this basket.
     TokenData[] public depositedTnfts;
@@ -76,25 +78,31 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     uint256 public totalRentValue;
 
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
-    uint256 public depositFee; // 0.5% by default
+    uint16 public depositFee; // 0.5% by default
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
-    IERC20Metadata public primaryRentToken;
+    /// @dev If this ERC-20 token decimals != 6 -> rent arithmetic will not work.
+    IERC20Metadata public primaryRentToken; // USDC by default
 
     /// @notice Address of basket creator.
     address public deployer;
 
+    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
     bool public seedRequestInFlight;
 
+    /// @notice If there is a pending, unfulfilled, Chainlink vrf request, the requestId will be stored here.
     uint256 public pendingSeedRequestId;
 
+    /// @notice This stores the data for the next NFT that is elgible for redemption.
     RedeemData public nextToRedeem;
 
     /// @notice Used to save slots for potential extra state variables later on.
     uint256[20] private __gap;
 
 
-    // ~ Events ~
+    // ------
+    // Events
+    // ------
 
     /**
      * @notice This event is emitted when a TNFT is deposited into this basket.
@@ -125,7 +133,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     event Debug(string, uint256);
 
 
-    // ~ Modifiers ~
+    // ---------
+    // Modifiers
+    // ---------
 
     /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
     modifier onlyBasketVrfConsumer() {
@@ -134,14 +144,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
 
-    // ~ Constructor ~
+    // -----------
+    // Constructor
+    // -----------
 
     constructor() {
         _disableInitializers();
     }
 
 
-    // ~ Initializer ~
+    // -----------
+    // Initializer
+    // -----------
 
     /**
      * @notice Initializes Basket contract.
@@ -189,8 +203,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         primaryRentToken = IERC20Metadata(_rentToken);
     }
 
-    
-    // ~ External Methods ~
+
+    // ----------------
+    // External Methods
+    // ----------------
 
     /**
      * @notice This method allows a user to deposit a batch of TNFTs into the basket.
@@ -248,7 +264,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address tnft = depositedTnfts[index].tnft;
         uint256 tokenId = depositedTnfts[index].tokenId;
 
-        nextToRedeem = RedeemData(tnft, tokenId, 0, 0);
+        nextToRedeem = RedeemData(tnft, tokenId);
         
         seedRequestInFlight = false;
         pendingSeedRequestId = 0;
@@ -446,7 +462,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     
-    // ~ Public Methods ~
+    // --------------
+    // Public Methods
+    // --------------
 
     /**
      * @notice This function allows for the Basket token to "rebase" and update the multiplier based
@@ -467,39 +485,23 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _setMultiplier(multiplier);
     }
 
-    // /**
-    //  * @notice TODO UPDATE
-    //  * @return redeemable -> RedeemData object containing all the data for token to be redeemed
-    //  */
-    // function calculateFifo() public view returns (RedeemData memory redeemable) {
-    //     // a. Locate tnft in array with correct fifo counter var
-    //     uint256 fifoNum = outCounter + 1;
-    //     TokenData memory token = fifoTracker[fifoNum];
-
-    //     // b. if budget suffices, return token
-    //     uint256 usdValue = valueTracker[token.tnft][token.tokenId];
-    //     uint256 sharesRequired = _quoteShares(usdValue);
-
-    //     return RedeemData(token.tnft, token.tokenId, usdValue, sharesRequired);
-    // }
-
     /**
      * @notice Return the USD value of share token for underlying assets, 18 decimals
      * @dev Underyling assets = TNFT + Accrued revenue
      */
-    function getSharePrice() public view returns (uint256 sharePrice) { // TODO: Remove? not used
+    function getSharePrice() public view returns (uint256 sharePrice) {
         if (totalSupply() == 0) {
             // initial share price is $1
             return 1e18;
         }
-        // Total value of collateral assets on basket, in 18 decimals
-        uint256 collateralValue = getTotalValueOfBasket();
 
-        sharePrice = (collateralValue * 10 ** decimals()) / totalSupply();
-
-        require(sharePrice != 0, "share is 0");
+        sharePrice = (getTotalValueOfBasket() * 10 ** decimals()) / totalSupply();
     }
 
+    /**
+     * @notice This method returns the total value of NFTs and claimable rent in this basket contract.
+     * @return totalValue -> total value in 18 decimals.
+     */
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
         unchecked {
             // get total value of nfts in basket.
@@ -513,6 +515,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice This view method returns true if a specified token contains the features needed to be deposited into this basket.
+     * @param _tangibleNFT TNFT contract address of token.
+     * @param _tokenId TokenId of token.
+     * @return If true, token is compatible and can be deposited into this basket contract.
      */
     function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
         if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
@@ -533,8 +538,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         return true;
     }
 
-    
-    // ~ Internal Methods ~
+
+    // ----------------
+    // Internal Methods
+    // ----------------
 
     /**
      * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
@@ -590,7 +597,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
         else {
             // if deposit isn't initial deposit from deployer (which will be most cases), charge a deposit fee.
-            uint256 feeShare = (basketShare * depositFee) / 100_00;
+            uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
             basketShare -= feeShare;
         }
 
@@ -627,7 +634,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if ((nextToRedeem.tnft == address(0)) && (!seedRequestInFlight)) {
             if (depositedTnfts.length == 1) {
                 // if first deposit, just assign first in to next redeem
-                nextToRedeem = RedeemData(_tangibleNFT, _tokenId, 0, 0);
+                nextToRedeem = RedeemData(_tangibleNFT, _tokenId);
             }
             else {
                 // if no request was made or fulfilled, but contract has more than 1 token in basket, send request.
@@ -652,13 +659,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(!seedRequestInFlight, "new seed is being generated");
         require(nextToRedeem.tnft != address(0), "None redeemable");
 
-        RedeemData memory redeemable = nextToRedeem;
-        delete nextToRedeem;
-
-        address _tangibleNFT = redeemable.tnft;
-        uint256 _tokenId = redeemable.tokenId;
+        address _tangibleNFT = nextToRedeem.tnft;
+        uint256 _tokenId = nextToRedeem.tokenId;
         uint256 _usdValue = valueTracker[_tangibleNFT][_tokenId];
         uint256 _sharesRequired = _quoteShares(_usdValue);
+
+        delete nextToRedeem;
 
         require(tokenDeposited[_tangibleNFT][_tokenId], "Invalid token");
         require(_budget >= _sharesRequired, "Insufficient budget");
@@ -822,6 +828,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice Internal method for returning the address of BasketsVrfConsumer contract.
+     * @return Address of BasketsVrfConsumer.
      */
     function _getBasketVrfConsumer() internal returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).basketsVrfConsumer();

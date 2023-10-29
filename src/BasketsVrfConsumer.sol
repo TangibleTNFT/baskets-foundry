@@ -28,7 +28,9 @@ import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgrad
  */
 contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBaseV2Upgradeable, UUPSUpgradeable, FactoryModifiers {
 
-    // ~ State Variables ~
+    // ---------------
+    // State Variables
+    // ---------------
 
     /// @notice Mapping from requestId to basket address that made request.
     mapping(uint256 => address) public requestTracker;
@@ -48,7 +50,9 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     uint32 public callbackGasLimit;
 
 
-    // ~ Events ~
+    // ------
+    // Events
+    // ------
 
     /// @notice Emitted when makeRequestForRandomWords is executed.
     event RequestSubmitted(uint256 requestId, address basket);
@@ -56,7 +60,9 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     event RequestFulfilled(uint256 requestId, address basket);
 
 
-    // ~ Modifiers ~
+    // ---------
+    // Modifiers
+    // ---------
 
     /// @notice Modifier to verify msg.sender was the basket manager contract.
     modifier onlyBasket() {
@@ -66,17 +72,25 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     }
 
 
-    // ~ Constructor ~
+    // -----------
+    // Constructor
+    // -----------
 
     constructor() {
         _disableInitializers();
     }
 
 
-    // ~ Initializer ~
+    // -----------
+    // Initializer
+    // -----------
 
     /**
      * @notice Initializes BasketVrfConsumer contract.
+     * @param _factory Contract address of Factory contract.
+     * @param _subId Subscription Id assigned by Chainlink's Vrf Coordinator.
+     * @param _vrfCoordinator Address of Chainlink's Vrf Coordinator contract.
+     * @param _keyHash KeyHash required by Vrf.
      */
     function initialize(address _factory, uint64 _subId, address _vrfCoordinator, bytes32 _keyHash) external initializer {
         __VRFConsumerBase_init(_vrfCoordinator);
@@ -90,7 +104,9 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     }
 
     
-    // ~ Functions ~
+    // -------
+    // Methods
+    // -------
 
     /**
      * @notice This method is used to trigger a request to chainlink's vrf coordinator contract.
@@ -136,5 +152,8 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         emit RequestFulfilled(requestId, basket);
     }
 
+    /**
+     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the factory owner to upgrade this contract's implementation.
+     */
     function _authorizeUpgrade(address newImplementation) internal override onlyFactoryOwner {}
 }

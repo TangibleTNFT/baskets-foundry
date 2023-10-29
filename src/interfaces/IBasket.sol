@@ -22,8 +22,6 @@ interface IBasket is IERC20, IERC20Metadata {
     struct RedeemData {
         address tnft;
         uint256 tokenId;
-        uint256 usdValue;
-        uint256 sharesRequired;
     }
     
     function getDepositedTnfts() external view returns (TokenData[] memory);

@@ -1601,7 +1601,7 @@ contract StressTests is Utility {
             // skip to end of vesting period
             skip(1);
 
-            uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+            //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
 
             // ~ Sanity check ~
 
@@ -1749,7 +1749,7 @@ contract StressTests is Utility {
                 batchTokenIdArr[i]
             );
         }
-        uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+        //uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
 
         vm.stopPrank();
 
@@ -1772,7 +1772,7 @@ contract StressTests is Utility {
         vm.prank(address(vrfCoordinatorMock));
         basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
 
-        (address predictedTnft, uint256 predictedTokenId,,) = basket.nextToRedeem();
+        (address predictedTnft, uint256 predictedTokenId) = basket.nextToRedeem();
         emit log_named_address("TNFT chosen for redeem", predictedTnft);
         emit log_named_uint("TokenId chosen for redeem", predictedTokenId);
 

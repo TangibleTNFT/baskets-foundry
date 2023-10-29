@@ -34,7 +34,7 @@ contract CounterContract1 is Initializable, UUPSUpgradeable, ICounterContract {
         ++counter;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override {
+    function _authorizeUpgrade(address) internal view override {
         require(msg.sender == address(222));
     }
 }
@@ -52,7 +52,7 @@ contract CounterContract2 is Initializable, UUPSUpgradeable, ICounterContract {
         counter = counter * 10;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override {
+    function _authorizeUpgrade(address) internal view override {
         require(msg.sender == address(222));
     }
 }
