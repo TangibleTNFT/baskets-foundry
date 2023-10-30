@@ -284,7 +284,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
      * @param _nameHash unique bytes32 hash created from string name.
      * @return If true, name is available to be created. If false, already exists.
      */
-    function checkBasketNameAvailability(bytes32 _nameHash) public view returns (bool) { // TODO: Taken off chain?
+    function checkBasketNameAvailability(bytes32 _nameHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
             if (basketNames[baskets[i]] == _nameHash) return false;
             unchecked {

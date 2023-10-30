@@ -129,9 +129,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     event PriceNotificationReceived(address indexed tnft, uint256 indexed tokenId, uint256 oldPrice, uint256 newPrice);
 
-    // NOTE: FOR TESTING ONLY
-    event Debug(string, uint256);
-
 
     // ---------
     // Modifiers
@@ -284,7 +281,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return requestId -> request identifier created by vrf coordinator.
      */
     function _sendRequestForSeed() internal returns (uint256 requestId) {
-        if (depositedTnfts.length > 0) {
+        if (depositedTnfts.length != 0) {
             seedRequestInFlight = true;
 
             requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
@@ -724,6 +721,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             uint256 claimable = _getRentManager(tnft).claimableRentForTokenBatchTotal(tokenIdLibrary[tnft]);
 
             if (claimable > 0) {
+                // note: base18 - primaryRentToken.decimals == 12
                 totalRent += claimable * 10**12;
             }
 
@@ -780,6 +778,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         );
         (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
         return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
+    }
+
+    /// NOTE: ONLY FOR TESTING
+    function getUSDValue(address _tangibleNFT, uint256 _tokenId) external view returns (uint256) {
+        return _getUSDValue(_tangibleNFT, _tokenId);
     }
 
     /**

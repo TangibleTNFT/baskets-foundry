@@ -1207,218 +1207,6 @@ contract BasketsIntegrationTest is Utility {
         assertEq(tokenIdLib.length, 0);
     }
 
-    /// @notice This test verifies the implementation of the First-In-First-Out redeem method.
-    // function test_baskets_redeemTNFT_fifo() public {
-    //     uint256 preInCounter = basket.inCounter();
-    //     uint256 preOutCounter = basket.outCounter();
-     
-    //     // ~ config ~
-
-    //     uint256 totalTokens = 6;
-
-    //     address[] memory batchTnftArr = new address[](totalTokens);
-    //     uint256[] memory batchTokenIdArr = new uint256[](totalTokens);
-
-    //     // create multiple tokens with specific prices
-
-    //     // Mint Alice token
-    //     uint256[] memory tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1, // mintCount
-    //         1, // fingerprint
-    //         ALICE
-    //     );
-    //     uint256 firstTokenId = tokenIds[0];
-    //     batchTokenIdArr[0] = firstTokenId;
-    //     batchTnftArr[0] = address(realEstateTnft);
-
-    //     // Mint Alice token
-    //     tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1,
-    //         2,
-    //         ALICE
-    //     );
-    //     uint256 secondTokenId = tokenIds[0];
-    //     batchTokenIdArr[1] = secondTokenId;
-    //     batchTnftArr[1] = address(realEstateTnft);
-
-    //     // Mint Alice token
-    //     tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1,
-    //         3,
-    //         ALICE
-    //     );
-    //     uint256 thirdTokenId = tokenIds[0];
-    //     batchTokenIdArr[2] = thirdTokenId;
-    //     batchTnftArr[2] = address(realEstateTnft);
-
-    //     // Mint Alice token
-    //     tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1,
-    //         4,
-    //         ALICE
-    //     );
-    //     uint256 fourthTokenId = tokenIds[0];
-    //     batchTokenIdArr[3] = fourthTokenId;
-    //     batchTnftArr[3] = address(realEstateTnft);
-
-    //     // Mint Alice token
-    //     tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1,
-    //         5,
-    //         ALICE
-    //     );
-    //     uint256 fifthTokenId = tokenIds[0];
-    //     batchTokenIdArr[4] = fifthTokenId;
-    //     batchTnftArr[4] = address(realEstateTnft);
-
-    //     // Mint Alice token
-    //     tokenIds = _createItemAndMint(
-    //         address(realEstateTnft),
-    //         100_000_000,
-    //         1,
-    //         1,
-    //         6,
-    //         ALICE
-    //     );
-    //     uint256 sixthTokenId = tokenIds[0];
-    //     batchTokenIdArr[5] = sixthTokenId;
-    //     batchTnftArr[5] = address(realEstateTnft);
-
-    //     assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
-     
-    //     // batchDeposit all tokens
-    //     vm.startPrank(ALICE);
-    //     for (uint256 i; i < totalTokens; ++i) {
-    //         realEstateTnft.approve(address(basket), batchTokenIdArr[i]);
-    //     }
-    //     basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
-    //     vm.stopPrank();
-
-    //     // ~ Pre-state check ~
-
-    //     assertEq(realEstateTnft.balanceOf(ALICE), 0);
-    //     assertEq(realEstateTnft.balanceOf(address(basket)), totalTokens);
-    //     assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
-    //     assertEq(basket.inCounter(), preInCounter + totalTokens);
-    //     assertEq(basket.outCounter(), preOutCounter);
-
-    //     Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
-    //     assertEq(deposited.length, totalTokens);
-
-    //     assertEq(realEstateTnft.ownerOf(firstTokenId),  address(basket));
-    //     assertEq(realEstateTnft.ownerOf(secondTokenId), address(basket));
-    //     assertEq(realEstateTnft.ownerOf(thirdTokenId),  address(basket));
-    //     assertEq(realEstateTnft.ownerOf(fourthTokenId), address(basket));
-    //     assertEq(realEstateTnft.ownerOf(fifthTokenId),  address(basket));
-    //     assertEq(realEstateTnft.ownerOf(sixthTokenId),  address(basket));
-
-    //     IBasket.RedeemData memory redeemable;
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, firstTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem firstTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 1 ~
-
-    //     assertEq(realEstateTnft.ownerOf(firstTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 1);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, secondTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem secondTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 2 ~
-
-    //     assertEq(realEstateTnft.ownerOf(secondTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 2);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, thirdTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem thirdTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 3 ~
-
-    //     assertEq(realEstateTnft.ownerOf(thirdTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 3);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, fourthTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fourthTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 4 ~
-
-    //     assertEq(realEstateTnft.ownerOf(fourthTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 4);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, fifthTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem fifthTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 5 ~
-
-    //     assertEq(realEstateTnft.ownerOf(fifthTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 5);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, sixthTokenId);
-
-    //     // ~ Execute redeem ~
-
-    //     vm.startPrank(ALICE);
-    //     basket.redeemTNFT(basket.balanceOf(ALICE)); // should redeem sixthTokenId
-    //     vm.stopPrank();
-
-    //     // ~ Post-state check 6 ~
-
-    //     assertEq(realEstateTnft.ownerOf(sixthTokenId), ALICE);
-    //     assertEq(basket.outCounter(), preOutCounter + 6);
-    //     redeemable = basket.calculateFifo();
-    //     assertEq(redeemable.tokenId, 0);
-
-    //     // ~ sanity check ~
-
-    //     assertEq(realEstateTnft.balanceOf(ALICE), totalTokens);
-    //     assertEq(realEstateTnft.balanceOf(address(basket)), 0);
-    //     assertEq(basket.totalSupply(), 0);
-
-    //     deposited = basket.getDepositedTnfts();
-    //     assertEq(deposited.length, 0);
-    // }
-
     /// @notice Verifies redeem math -> proposed by Daniel.
     function test_baskets_redeemTNFT_math() public {
 
@@ -1432,7 +1220,7 @@ contract BasketsIntegrationTest is Utility {
         // Mint Alice token worth $100
         uint256[] memory tokenIds = _createItemAndMint(
             address(realEstateTnft),
-            100_000, // 100 GBP TODO: Switch to USD
+            100_000, // 100 GBP
             1,
             1,
             1,
@@ -1443,7 +1231,7 @@ contract BasketsIntegrationTest is Utility {
         // Mint Bob token worth $50
         tokenIds = _createItemAndMint(
             address(realEstateTnft),
-            50_000, // 50 GBP TODO: Switch to USD
+            50_000, // 50 GBP
             1,
             1,
             2,
@@ -1738,8 +1526,7 @@ contract BasketsIntegrationTest is Utility {
 
 
     // ~ getTotalValueOfBasket ~
-    // TODO: Write getTotalValueOfBasket test using fuzzing
-
+    
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket
     function test_baskets_getTotalValueOfBasket_single() public {
 

@@ -448,7 +448,6 @@ contract StressTests is Utility {
     //    - 10-100+ tnftsSupported DONE
     //    - refactor iterating thru claimable rent array and test multiple iterations with 100-1000+ TNFTs
     //    - test multiple redeems in succession.
-    // d. multiple baskets
 
 
     // ~ stress depositTNFT ~
