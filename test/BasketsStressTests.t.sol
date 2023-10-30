@@ -1749,7 +1749,7 @@ contract StressTests is Utility {
                 batchTokenIdArr[i]
             );
         }
-        //uint256[] memory sharesReceived = basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
+        basket.batchDepositTNFT(batchTnftArr, batchTokenIdArr);
 
         vm.stopPrank();
 
