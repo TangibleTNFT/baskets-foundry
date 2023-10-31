@@ -129,6 +129,19 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     event PriceNotificationReceived(address indexed tnft, uint256 indexed tokenId, uint256 oldPrice, uint256 newPrice);
 
+    /**
+     * @notice This event is emitted when a successful request to vrf has been made.
+     * @param requestId Request identifier returned by Chainlink's Vrf Coordinator contract.
+     */
+    event RequestSentToVrf(uint256 requestId);
+
+    /**
+     * @notice This event is emitted when `fulfillRandomSeed` is successfully executed and a new `nextToRedeem` was assigned.
+     * @param tnft Tangible NFT contract address of NFT redeemable.
+     * @param tokenId TokenId of NFT redeemable.
+     */
+    event RedeemableChosen(address indexed tnft, uint256 indexed tokenId);
+
 
     // ---------
     // Modifiers
@@ -262,6 +275,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 tokenId = depositedTnfts[index].tokenId;
 
         nextToRedeem = RedeemData(tnft, tokenId);
+        emit RedeemableChosen(tnft, tokenId);
         
         seedRequestInFlight = false;
         pendingSeedRequestId = 0;
@@ -287,6 +301,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
 
             pendingSeedRequestId = requestId;
+            emit RequestSentToVrf(requestId);
         }
     }
 
