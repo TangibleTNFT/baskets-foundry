@@ -718,7 +718,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         totalNftValue -= _usdValue;
         _burn(_redeemer, _sharesRequired);
 
-        _sendRequestForSeed(); // get new seed
+        // fetch new seed
+        _sendRequestForSeed();
 
         emit TNFTRedeemed(_redeemer, _tangibleNFT, _tokenId);
     }
@@ -793,11 +794,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         );
         (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
         return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
-    }
-
-    /// NOTE: ONLY FOR TESTING
-    function getUSDValue(address _tangibleNFT, uint256 _tokenId) external view returns (uint256) {
-        return _getUSDValue(_tangibleNFT, _tokenId);
     }
 
     /**

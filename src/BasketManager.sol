@@ -7,6 +7,7 @@ import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Rec
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 // tangible imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -22,7 +23,6 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { ArrayUtils } from "./libraries/ArrayUtils.sol";
-import { UpgradeableBeacon } from "./proxy/beacon/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
@@ -328,5 +328,4 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the factory owner to upgrade this contract's implementation.
      */
     function _authorizeUpgrade(address) internal override onlyFactoryOwner {}
-
 }

@@ -208,6 +208,10 @@ contract StressTests is Utility {
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
+        chainlinkRWAOracle.updateStock(
+            RE_FINGERPRINT_1,
+            1
+        );
 
         uint256[] memory tokenIds = _mintToken(address(realEstateTnft), 1, RE_FINGERPRINT_1, CREATOR);
 
@@ -237,6 +241,9 @@ contract StressTests is Utility {
         basket.redeemTNFT(basket.balanceOf(CREATOR));
         vm.stopPrank();
 
+        // init state check
+        assertEq(basket.totalSupply(), 0);
+
         // labels
         vm.label(address(factoryV2), "FACTORY");
         vm.label(address(realEstateTnft), "RealEstate_TNFT");
@@ -256,9 +263,6 @@ contract StressTests is Utility {
         vm.label(NIK, "NIK");
         vm.label(ALICE, "ALICE");
         vm.label(BOB, "BOB");
-
-        // init state check
-        assertEq(basket.totalSupply(), 0);
     }
 
 
@@ -1637,10 +1641,7 @@ contract StressTests is Utility {
                 postRebaseSupply,
                 1e22
             );
-
         }
-
-
     }
 
     /// @notice This stress test uses fuzzing to create random entries and therefore generate random redeemables.

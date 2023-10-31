@@ -18,7 +18,6 @@ import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketManager.sol";
 import { VRFConsumerBaseV2Upgradeable } from "./abstract/VRFConsumerBaseV2Upgradeable.sol";
 
-
 // Note: VRF Consumer Network Info = https://docs.chain.link/vrf/v2/subscription/supported-networks/#configurations
 
 /**
@@ -100,7 +99,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         keyHash = _keyHash;
 
         requestConfirmations = 20;
-        callbackGasLimit = 50_000; // ideal for one word of entropy. TODO: Verify
+        callbackGasLimit = 50_000; // should be ideal.
     }
 
     
@@ -133,27 +132,34 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     }
 
     /**
+     * @notice This method is used to update `callbackGasLimit` in the event vrf callbacks need more gas.
+     */
+    function updateCallbackGasLimit(uint32 _gasLimit) external onlyFactoryOwner {
+        callbackGasLimit = _gasLimit;
+    }
+
+    /**
      * @notice This method is the vrf callback function. Vrf coordinator will respond with our random word by calling this method.
      * @dev    Only executable by the vrf coordinator contract.
      *         Will respond to the requesting basket with the random number.
-     * @param  requestId unique request identifier given to us by Chainlink.
-     * @param  randomWords array of random numbers requested via makeRequestForRandomWords.
+     * @param  _requestId unique request identifier given to us by Chainlink.
+     * @param  _randomWords array of random numbers requested via makeRequestForRandomWords.
      */
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
-        require(!fulfilled[requestId], "Request already fulfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
+        require(!fulfilled[_requestId], "Request already fulfilled"); // Note: Might not be necessary -> Depends on chainlink's reliability in this regard
 
-        fulfilled[requestId] = true;
-        address basket = requestTracker[requestId];
+        fulfilled[_requestId] = true;
+        address basket = requestTracker[_requestId];
         // respond to the basket contract requesting entropy with it's random number.
-        IBasket(basket).fulfillRandomSeed(randomWords[0]);
+        IBasket(basket).fulfillRandomSeed(_randomWords[0]);
 
-        delete requestTracker[requestId];
+        delete requestTracker[_requestId];
         delete outstandingRequest[basket];
-        emit RequestFulfilled(requestId, basket);
+        emit RequestFulfilled(_requestId, basket);
     }
 
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the factory owner to upgrade this contract's implementation.
      */
-    function _authorizeUpgrade(address newImplementation) internal override onlyFactoryOwner {}
+    function _authorizeUpgrade(address) internal override onlyFactoryOwner {}
 }

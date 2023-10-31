@@ -507,11 +507,18 @@ contract BasketsIntegrationTest is Utility {
         assertEq(notificationDispatcher.whitelistedReceiver(address(basket)), true);
 
         // verify BasketsVrfConsumer initial state
+        assertEq(basketVrfConsumer.factory(), address(factoryV2));
         assertEq(basketVrfConsumer.subId(), subId);
         assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
         assertEq(basketVrfConsumer.requestConfirmations(), 20);
         assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
         assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
+
+        // verify BasketManager initial state
+        assertEq(basketManager.factory(), address(factoryV2));
+        assertEq(basketManager.featureLimit(), 10);
+        assertNotEq(address(basketManager.beacon()), address(0));
+        assertNotEq(basketManager.beacon().implementation(), address(0));
     }
 
 
@@ -1917,5 +1924,24 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.seedRequestInFlight(), false);
         assertEq(basket.pendingSeedRequestId(), 0);
+    }
+
+
+    // ~ BasketsVrfConsumer::updateCallbackGasLimit ~
+
+    function test_baskets_basketsVrfConsumer_updateCallbackGasLimit() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
+
+        // ~ Execute updateCallbackGasLimit ~
+
+        vm.prank(factoryOwner);
+        basketVrfConsumer.updateCallbackGasLimit(1_000_000);
+
+        // ~ Post-state check ~
+
+        assertEq(basketVrfConsumer.callbackGasLimit(), 1_000_000);
     }
 }

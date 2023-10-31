@@ -4,8 +4,8 @@ pragma solidity ^0.8.13;
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
-import { UpgradeableBeacon } from "../src/proxy/beacon/UpgradeableBeacon.sol";
 import { BasketBeaconProxy } from "../src/proxy/beacon/BasketBeaconProxy.sol";
 import { ICounterContract } from "./utils/Utility.sol";
 
