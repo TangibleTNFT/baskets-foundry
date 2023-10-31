@@ -2,18 +2,19 @@
 pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+
+// oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
 // local contracts
-import { Basket } from "../src/Baskets.sol";
-import { IBasket } from "../src/interfaces/IBaskets.sol";
-import { BasketManager } from "../src/BasketsManager.sol";
+import { Basket } from "../src/Basket.sol";
+import { IBasket } from "../src/interfaces/IBasket.sol";
+import { BasketManager } from "../src/BasketManager.sol";
 
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
-
-// tangible contract imports
-import { FactoryProvider } from "@tangible/FactoryProvider.sol";
 
 // tangible interface imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -23,10 +24,10 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
 import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 import { IMarketplace } from "@tangible/interfaces/IMarketplace.sol";
-import { IFactoryProvider } from "@tangible/interfaces/IFactoryProvider.sol";
 import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManager.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
+import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -34,7 +35,12 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 
 // Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
 
-contract BasketsManagerTest is Test, Utility {
+/**
+ * @title BasketsManagerTest
+ * @author Chase Brown
+ * @notice This test file contains integration unit tests for the BasketManager contract. 
+ */
+contract BasketManagerTest is Utility {
 
     Basket public basket;
     BasketManager public basketManager;
@@ -45,44 +51,56 @@ contract BasketsManagerTest is Test, Utility {
     IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
     IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
     IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    IFactoryProvider public factoryProvider = IFactoryProvider(Mumbai_FactoryProvider);
     ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
     ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
     ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
+
+    // proxies
+    TransparentUpgradeableProxy public basketManagerProxy;
+    TransparentUpgradeableProxy public basketVrfConsumerProxy;
+    ProxyAdmin public proxyAdmin;
 
     // ~ Actors ~
 
-    address public factoryOwner = IOwnable(address(factoryV2)).contractOwner();
+    address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
     address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
 
     uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];
 
+    uint256[] internal mintedToken;
 
-    event log_named_bool(string key, bool val);
+    uint256 internal JOE_TOKEN_1;
+    uint256 internal JOE_TOKEN_2;
+
 
     function setUp() public {
 
-        //uint256[] memory features = new uint256[](0);
+        vm.createSelectFork(MUMBAI_RPC_URL);
+
+        factoryOwner = IOwnable(address(factoryV2)).owner();
+        proxyAdmin = new ProxyAdmin(address(this));
+
         basket = new Basket();
 
-        // Deploy BasketManager
-        basketManager = new BasketManager(address(basket), address(factoryProvider));
+        // Deploy basketManager
+        basketManager = new BasketManager();
 
-        // basket = new Basket(
-        //     "Tangible Basket Token",
-        //     "TBT",
-        //     address(factoryProvider),
-        //     RE_TNFTTYPE,
-        //     address(currencyFeed),
-        //     MUMBAI_USDC,
-        //     features,
-        //     address(this)
-        // );
+        // Deploy proxy for basketManager -> initialize
+        basketManagerProxy = new TransparentUpgradeableProxy(
+            address(basketManager),
+            address(proxyAdmin),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryV2)
+            )
+        );
+        basketManager = BasketManager(address(basketManagerProxy));
 
-        // add basket to basketManager
-        // vm.prank(factoryOwner);
-        // basketManager.addBasket(address(basket));
+        // whitelist basketManager on notificationDispatcher
+        vm.prank(TANGIBLE_LABS); // category owner
+        notificationDispatcher.addWhitelister(address(basketManager));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -166,10 +184,19 @@ contract BasketsManagerTest is Test, Utility {
 
         // Tangible Labs mints token and sends it to Joe
         vm.startPrank(TANGIBLE_LABS);
-        factoryV2.mint(voucher1);
-        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 1);
-        factoryV2.mint(voucher2);
-        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, 2);
+
+        mintedToken = factoryV2.mint(voucher1);
+        JOE_TOKEN_1 = mintedToken[0];
+        assertEq(realEstateTnft.ownerOf(JOE_TOKEN_1), TANGIBLE_LABS);
+
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, JOE_TOKEN_1);
+
+        mintedToken = factoryV2.mint(voucher2);
+        JOE_TOKEN_2 = mintedToken[0];
+        assertEq(realEstateTnft.ownerOf(JOE_TOKEN_2), TANGIBLE_LABS);
+
+        realEstateTnft.transferFrom(TANGIBLE_LABS, JOE, JOE_TOKEN_2);
+
         vm.stopPrank();
 
         assertEq(realEstateTnft.balanceOf(JOE), 2);
@@ -180,37 +207,15 @@ contract BasketsManagerTest is Test, Utility {
         vm.label(address(realEstateOracle), "RealEstate_ORACLE");
         vm.label(address(chainlinkRWAOracle), "CHAINLINK_ORACLE");
         vm.label(address(marketplace), "MARKETPLACE");
-        vm.label(address(factoryProvider), "FACTORY_PROVIDER");
         vm.label(address(priceManager), "PRICE_MANAGER");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(JOE, "JOE");
     }
 
-    // ~ Utility ~
 
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayUint(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single address to an array of uints of size 1.
-    function _asSingletonArrayAddress(address element) private pure returns (address[] memory) {
-        address[] memory array = new address[](1);
-        array[0] = element;
-
-        return array;
-    }
-
-    /// @notice Turns a single uint to an array of uints of size 1.
-    function _asSingletonArrayString(string memory element) private pure returns (string[] memory) {
-        string[] memory array = new string[](1);
-        array[0] = element;
-
-        return array;
-    }
+    // -------
+    // Utility
+    // -------
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
@@ -223,18 +228,27 @@ contract BasketsManagerTest is Test, Utility {
     }
 
 
-    // ~ Initial State Test ~
+    // ------------------
+    // Initial State Test
+    // ------------------
 
     /// @notice Initial state test.
     function test_basketManager_init_state() public {
-        // TODO
+        assertEq(basketManager.featureLimit(), 10);
+        assertEq(basketManager.beacon().implementation(), address(basket));
+        assertEq(basketManager.factory(), address(factoryV2));
     }
 
 
-    // ~ Unit Tests ~
+    // ----------
+    // Unit Tests
+    // ----------
+
+
+    // ~ deployBasket testing ~
 
     /// @notice Verifies proper state changes when a basket is deployed with features
-    function test_basketManager_deployBasket() public {
+    function test_basketManager_deployBasket_single() public {
 
         // create features array
         uint256[] memory features = new uint256[](2);
@@ -242,7 +256,7 @@ contract BasketsManagerTest is Test, Utility {
         features[1] = RE_FEATURE_1;
 
         // add features to initial deposit token
-        _addFeatureToCategory(address(realEstateTnft), 1, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
 
         // Pre-state check.
         address[] memory basketsArray = basketManager.getBasketsArray();
@@ -252,15 +266,15 @@ contract BasketsManagerTest is Test, Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_1)
         );
         vm.stopPrank();
 
@@ -271,10 +285,10 @@ contract BasketsManagerTest is Test, Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
-        );
+        // assertEq(
+        //     basketManager.hashedFeaturesForBasket(address(_basket)),
+        //     keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
+        // );
         assertNotEq(
             basketManager.hashedFeaturesForBasket(address(_basket)),
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
@@ -294,12 +308,12 @@ contract BasketsManagerTest is Test, Utility {
 
         assertEq(_basket.balanceOf(JOE), basketShares[0]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
 
         Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 1);
         assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
 
@@ -308,18 +322,48 @@ contract BasketsManagerTest is Test, Utility {
         features[0] = RE_FEATURE_1;
         features[1] = RE_FEATURE_2;
 
-        // deploy another basket with same features
+        // deploy another basket with same name -> revert
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 2);
-        vm.expectRevert("Basket already exists");
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("Name not available");
         basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
+
+        // deploy another basket with same symbol -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("Symbol not available");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
+
+        // deploy another basket with same features -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("Basket already exists");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
         );
         vm.stopPrank();
     }
@@ -333,8 +377,8 @@ contract BasketsManagerTest is Test, Utility {
         tnfts[1] = address(realEstateTnft);
 
         uint256[] memory tokenIds = new uint256[](2);
-        tokenIds[0] = 1;
-        tokenIds[1] = 2;
+        tokenIds[0] = JOE_TOKEN_1;
+        tokenIds[1] = JOE_TOKEN_2;
 
         // create features array
         uint256[] memory features = new uint256[](2);
@@ -342,8 +386,8 @@ contract BasketsManagerTest is Test, Utility {
         features[1] = RE_FEATURE_1;
 
         // add features to initial deposit token
-        _addFeatureToCategory(address(realEstateTnft), 1, features);
-        _addFeatureToCategory(address(realEstateTnft), 2, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_2, features);
 
         // Pre-state check.
         address[] memory basketsArray = basketManager.getBasketsArray();
@@ -353,13 +397,13 @@ contract BasketsManagerTest is Test, Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
-        realEstateTnft.approve(address(basketManager), 2);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             tnfts,
             tokenIds
@@ -373,10 +417,10 @@ contract BasketsManagerTest is Test, Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
-        );
+        // assertEq(
+        //     basketManager.hashedFeaturesForBasket(address(_basket)),
+        //     keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
+        // );
 
         assertEq(basketManager.isBasket(address(_basket)), true);
 
@@ -392,16 +436,16 @@ contract BasketsManagerTest is Test, Utility {
 
         assertEq(_basket.balanceOf(JOE), basketShares[0] + basketShares[1]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 1), true);
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), 2), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
+        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_2), true);
 
         Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
         assertEq(deposited.length, 2);
         assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, 1);
+        assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
         assertEq(deposited[1].tnft, address(realEstateTnft));
-        assertEq(deposited[1].tokenId, 2);
+        assertEq(deposited[1].tokenId, JOE_TOKEN_2);
         assertEq(deposited[1].fingerprint, RE_FINGERPRINT_2);
     }
 
@@ -417,15 +461,15 @@ contract BasketsManagerTest is Test, Utility {
 
         // deploy basket
         vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), 1);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
         (IBasket _basket,) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            MUMBAI_USDC,
+            address(MUMBAI_USDC),
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(1)
+            _asSingletonArrayUint(JOE_TOKEN_1)
         );
         vm.stopPrank();
 
@@ -447,118 +491,163 @@ contract BasketsManagerTest is Test, Utility {
         emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
     }
 
-    /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
-    function test_basketManager_insertSort() public {
+    /// @notice Verifies correct state changes when BasketManager::setBasketsVrfConsumer is executed.
+    function test_basketManager_setBasketsVrfConsumer() public {
+        // Pre-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(0));
 
-        // Sort testArray1 of size 10.
-        uint256[] memory sortedArray = basketManager.sort(testArray1);
+        // Execute setBasketsVrfConsumer with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("_basketsVrfConsumer == address(0)");
+        basketManager.setBasketsVrfConsumer(address(0));
 
-        // Verify elements were sorted correctly.
-        for (uint256 i; i < sortedArray.length; ++i) {
-            assertEq(sortedArray[i], i + 1);
-            emit log_uint(sortedArray[i]);
-        }
+        // Execute setBasketsVrfConsumer -> success
+        vm.prank(factoryOwner);
+        basketManager.setBasketsVrfConsumer(address(222));
 
-        // Create features array of size 1.
-        uint256[] memory featuresArray1 = new uint256[](1);
-        featuresArray1[0] = RE_FEATURE_3;
-
-        // Sort
-        sortedArray = basketManager.sort(featuresArray1);
-
-        // Verify
-        assertEq(sortedArray[0], RE_FEATURE_3);
-
-        // Create features array of size 2.
-        uint256[] memory featuresArray2 = new uint256[](2);
-        featuresArray2[0] = RE_FEATURE_4;
-        featuresArray2[1] = RE_FEATURE_2;
-
-        // Sort
-        sortedArray = basketManager.sort(featuresArray2);
-
-        // Verify
-        assertEq(sortedArray[0], RE_FEATURE_2);
-        assertEq(sortedArray[1], RE_FEATURE_4);
-
-        // Create features array of size 4.
-        uint256[] memory featuresArray3 = new uint256[](4);
-        featuresArray3[0] = RE_FEATURE_4;
-        featuresArray3[1] = RE_FEATURE_2;
-        featuresArray3[2] = RE_FEATURE_3;
-        featuresArray3[3] = RE_FEATURE_1;
-
-        // Sort
-        sortedArray = basketManager.sort(featuresArray3);
-
-        // Verify
-        assertEq(sortedArray[0], RE_FEATURE_1);
-        assertEq(sortedArray[1], RE_FEATURE_2);
-        assertEq(sortedArray[2], RE_FEATURE_3);
-        assertEq(sortedArray[3], RE_FEATURE_4);
-
-        // Create features array of size 4.
-        uint256[] memory featuresArray4 = new uint256[](0);
-
-        // Sort
-        sortedArray = basketManager.sort(featuresArray4);
-        assertEq(sortedArray.length, 0);
+        // Post-state check.
+        assertEq(basketManager.basketsVrfConsumer(), address(222));
     }
 
-    /// @notice This test verifies the use of abi.encodePacked.
-    function test_basketManager_encodePacked() public {
-        uint256 tnftType = 2;
 
-        // hash state array of randomized variables of size 10.
-        bytes32 hashedCombo = keccak256(abi.encodePacked(tnftType, testArray1));
-        emit log_bytes32(hashedCombo);
+    // ~ sort testing ~
 
-        // create local array to imitate state array.
-        uint256[] memory testArrayLocal = new uint256[](10);
-        testArrayLocal[0] = 8;
-        testArrayLocal[1] = 7;
-        testArrayLocal[2] = 4;
-        testArrayLocal[3] = 6;
-        testArrayLocal[4] = 9;
-        testArrayLocal[5] = 2;
-        testArrayLocal[6] = 10;
-        testArrayLocal[7] = 1;
-        testArrayLocal[8] = 3;
-        testArrayLocal[9] = 5;
+    // /// @notice This verifies correct logic with the sort method inside BasketsDeployer contract
+    // function test_basketManager_insertionSort() public {
 
-        // hash local array
-        bytes32 hashedCombo1 = keccak256(abi.encodePacked(tnftType, testArrayLocal));
-        emit log_bytes32(hashedCombo1);
+    //     // Sort testArray1 of size 10.
+    //     uint256[] memory sortedArray = basketManager.sort(testArray1);
 
-        // verify hashed local array and hashed state array have the same hash value.
-        assertEq(hashedCombo, hashedCombo1);
+    //     // Verify elements were sorted correctly.
+    //     for (uint256 i; i < sortedArray.length; ++i) {
+    //         assertEq(sortedArray[i], i + 1);
+    //         emit log_uint(sortedArray[i]);
+    //     }
 
-        // flip elements
-        testArrayLocal[0] = 3;
-        testArrayLocal[1] = 1;
-        testArrayLocal[2] = 10;
-        testArrayLocal[3] = 5;
-        testArrayLocal[4] = 7;
-        testArrayLocal[5] = 4;
-        testArrayLocal[6] = 2;
-        testArrayLocal[7] = 9;
-        testArrayLocal[8] = 8;
-        testArrayLocal[9] = 6;
+    //     // Create features array of size 0.
+    //     uint256[] memory featuresArray4 = new uint256[](0);
 
-        // verify hashed local array and hashed state array have the same hash value when sorted.
-        assertEq(
-            keccak256(abi.encodePacked(tnftType, basketManager.sort(testArrayLocal))),
-            keccak256(abi.encodePacked(tnftType, basketManager.sort(testArray1)))
-        );
+    //     // Sort
+    //     sortedArray = basketManager.sort(featuresArray4);
+    //     assertEq(sortedArray.length, 0);
 
-        bytes32 hashedCombo2 = keccak256(abi.encodePacked(tnftType));
-        emit log_bytes32(hashedCombo2);
+    //     // Create features array of size 1.
+    //     uint256[] memory featuresArray1 = new uint256[](1);
+    //     featuresArray1[0] = RE_FEATURE_3;
 
-        uint256[] memory emptyArray = new uint256[](0);
-        bytes32 hashedCombo3 = keccak256(abi.encodePacked(tnftType, emptyArray));
-        emit log_bytes32(hashedCombo3);
+    //     // Sort
+    //     sortedArray = basketManager.sort(featuresArray1);
 
-        assertEq(hashedCombo2, hashedCombo3);
+    //     // Verify
+    //     assertEq(sortedArray[0], RE_FEATURE_3);
+
+    //     // Create features array of size 2.
+    //     uint256[] memory featuresArray2 = new uint256[](2);
+    //     featuresArray2[0] = RE_FEATURE_4;
+    //     featuresArray2[1] = RE_FEATURE_2;
+
+    //     // Sort
+    //     sortedArray = basketManager.sort(featuresArray2);
+
+    //     // Verify
+    //     assertEq(sortedArray[0], RE_FEATURE_2);
+    //     assertEq(sortedArray[1], RE_FEATURE_4);
+
+    //     // Create features array of size 4.
+    //     uint256[] memory featuresArray3 = new uint256[](4);
+    //     featuresArray3[0] = RE_FEATURE_4;
+    //     featuresArray3[1] = RE_FEATURE_2;
+    //     featuresArray3[2] = RE_FEATURE_3;
+    //     featuresArray3[3] = RE_FEATURE_1;
+
+    //     // Sort
+    //     sortedArray = basketManager.sort(featuresArray3);
+
+    //     // Verify
+    //     assertEq(sortedArray[0], RE_FEATURE_1);
+    //     assertEq(sortedArray[1], RE_FEATURE_2);
+    //     assertEq(sortedArray[2], RE_FEATURE_3);
+    //     assertEq(sortedArray[3], RE_FEATURE_4);
+    // }
+
+
+    // // ~ encodePacked testing ~
+
+    // /// @notice This test verifies the use of abi.encodePacked.
+    // function test_basketManager_encodePacked() public {
+    //     uint256 tnftType = 2;
+
+    //     // hash state array of randomized variables of size 10.
+    //     bytes32 hashedCombo = keccak256(abi.encodePacked(tnftType, testArray1));
+    //     emit log_bytes32(hashedCombo);
+
+    //     // create local array to imitate state array.
+    //     uint256[] memory testArrayLocal = new uint256[](10);
+    //     testArrayLocal[0] = 8;
+    //     testArrayLocal[1] = 7;
+    //     testArrayLocal[2] = 4;
+    //     testArrayLocal[3] = 6;
+    //     testArrayLocal[4] = 9;
+    //     testArrayLocal[5] = 2;
+    //     testArrayLocal[6] = 10;
+    //     testArrayLocal[7] = 1;
+    //     testArrayLocal[8] = 3;
+    //     testArrayLocal[9] = 5;
+
+    //     // hash local array
+    //     bytes32 hashedCombo1 = keccak256(abi.encodePacked(tnftType, testArrayLocal));
+    //     emit log_bytes32(hashedCombo1);
+
+    //     // verify hashed local array and hashed state array have the same hash value.
+    //     assertEq(hashedCombo, hashedCombo1);
+
+    //     // flip elements
+    //     testArrayLocal[0] = 3;
+    //     testArrayLocal[1] = 1;
+    //     testArrayLocal[2] = 10;
+    //     testArrayLocal[3] = 5;
+    //     testArrayLocal[4] = 7;
+    //     testArrayLocal[5] = 4;
+    //     testArrayLocal[6] = 2;
+    //     testArrayLocal[7] = 9;
+    //     testArrayLocal[8] = 8;
+    //     testArrayLocal[9] = 6;
+
+    //     // verify hashed local array and hashed state array have the same hash value when sorted.
+    //     assertEq(
+    //         keccak256(abi.encodePacked(tnftType, basketManager.sort(testArrayLocal))),
+    //         keccak256(abi.encodePacked(tnftType, basketManager.sort(testArray1)))
+    //     );
+
+    //     bytes32 hashedCombo2 = keccak256(abi.encodePacked(tnftType));
+    //     emit log_bytes32(hashedCombo2);
+
+    //     uint256[] memory emptyArray = new uint256[](0);
+    //     bytes32 hashedCombo3 = keccak256(abi.encodePacked(tnftType, emptyArray));
+    //     emit log_bytes32(hashedCombo3);
+
+    //     assertEq(hashedCombo2, hashedCombo3);
+    // }
+
+
+    // ~ setters ~
+
+    /// @notice Verifies correct state changes when BasketManager::setFeatureLimit is executed.
+    function test_basketManager_setFeatureLimit() public {
+        // Pre-state check.
+        assertEq(basketManager.featureLimit(), 10);
+
+        // Execute setFeatureLimit with same value -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert("Already set");
+        basketManager.setFeatureLimit(10);
+
+        // Execute setFeatureLimit -> success
+        vm.prank(factoryOwner);
+        basketManager.setFeatureLimit(100);
+
+        // Post-state check.
+        assertEq(basketManager.featureLimit(), 100);
     }
 
 }

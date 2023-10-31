@@ -4,12 +4,13 @@ pragma solidity ^0.8.13;
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
-import { UpgradeableBeacon } from "../src/proxy/UpgradeableBeacon.sol";
-import { BasketBeaconProxy } from "../src/proxy/BasketBeaconProxy.sol";
+import { BasketBeaconProxy } from "../src/proxy/beacon/BasketBeaconProxy.sol";
 import { ICounterContract } from "./utils/Utility.sol";
 
-/// @notice Counter contract for testing.
+
+/// @notice Counter helper contract for testing.
 contract CounterContract is Initializable, ICounterContract {
 
     uint256 public counter;
@@ -23,7 +24,11 @@ contract CounterContract is Initializable, ICounterContract {
     }
 }
 
-/// @notice Testing file for testing beacon proxies.
+/**
+ * @title BeaconProxyTest
+ * @author Chase Brown
+ * @notice Testing file for testing beacon proxies.
+ */
 contract BeaconProxyTest is Test {
 
     CounterContract public counterContract;
@@ -35,7 +40,10 @@ contract BeaconProxyTest is Test {
         counterContract = new CounterContract();
 
         // deploy upgradeableBeacon.
-        beacon = new UpgradeableBeacon(address(counterContract));
+        beacon = new UpgradeableBeacon(
+            address(counterContract),
+            address(this)
+        );
 
         // Verify implementation for beacon is counterContract.
         assertEq(beacon.implementation(), address(counterContract));

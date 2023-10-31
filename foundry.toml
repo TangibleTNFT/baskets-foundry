@@ -2,6 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+optimizer = true
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
@@ -11,3 +12,12 @@ remappings = [
     "@tangible/=lib/contracts-inside-team/contracts/",
     "@chainlink/=lib/chainlink/"
 ]
+
+[rpc_endpoints]
+mumbai = "${MUMBAI_RPC_URL}"
+
+[etherscan]
+mumbai = { key = "${POLYGONSCAN_API_URL}" }
+
+[profile.optimized]
+via_ir = true

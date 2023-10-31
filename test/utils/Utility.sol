@@ -1,22 +1,56 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import { Test } from "../../lib/forge-std/src/Test.sol";
+
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
+import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 
-contract Utility {
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+
+contract Utility is Test{
+
+    // ~ RPCs ~
+
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
+
 
     // ~ Actors ~
 
-    address public constant JOE   = address(bytes20(bytes("Joe")));
-    address public constant NIK   = address(bytes20(bytes("Nik")));
+    address public constant JOE     = address(bytes20(bytes("Joe")));
+    address public constant NIK     = address(bytes20(bytes("Nik")));
+    address public constant ALICE   = address(bytes20(bytes("Alice")));
+    address public constant BOB     = address(bytes20(bytes("Bob")));
+    address public constant CREATOR = address(bytes20(bytes("Creator")));
+
     address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant PROXY = address(bytes20(bytes("Proxy")));
 
+
     // ~ Constants ~
 
-    address public constant MUMBAI_USDC = 0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747;
-    address public constant MUMBAI_DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747);
+    IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F);
+
+    VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
+    VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);
+
+    /// @dev https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mainnet
+    bytes32 public constant POLYGON_VRF_KEY_HASH = 0xd729dc84e21ae57ffb6be0053bf2b0668aa2aaf300a2a7b2ddf7dc0bb6e875a8; // 1000 gwei
+    /// @dev https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mumbai-testnet
+    bytes32 public constant MUMBAI_VRF_KEY_HASH = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f; // 500 gwei
+
+
+    // ~ Precision ~
+
+    uint256 constant USD = 10 ** 6;  // USDC precision decimals
+    uint256 constant BTC = 10 ** 8;  // WBTC precision decimals
+    uint256 constant WAD = 10 ** 18;
+    uint256 constant RAY = 10 ** 27;
+
 
     // ~ Types and Features ~
 
@@ -33,6 +67,68 @@ contract Utility {
     uint256 public constant RE_FEATURE_4 = 444444;
 
     uint256 public constant GOLD_TNFTTYPE = 1;
+
+
+    // ~ Events ~
+
+    event log_named_bool(string key, bool val);
+
+
+    // ~ Utility Functions ~
+
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayUint(uint256 element) internal pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single address to an array of uints of size 1.
+    function _asSingletonArrayAddress(address element) internal pure returns (address[] memory) {
+        address[] memory array = new address[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Turns a single uint to an array of uints of size 1.
+    function _asSingletonArrayString(string memory element) internal pure returns (string[] memory) {
+        string[] memory array = new string[](1);
+        array[0] = element;
+
+        return array;
+    }
+
+    /// @notice Verify equality within accuracy decimals.
+    function assertWithinPrecision(uint256 val0, uint256 val1, uint256 accuracy) internal {
+        uint256 diff  = val0 > val1 ? val0 - val1 : val1 - val0;
+        if (diff == 0) return;
+
+        uint256 denominator = val0 == 0 ? val1 : val0;
+        bool check = ((diff * RAY) / denominator) < (RAY / 10 ** accuracy);
+
+        if (!check){
+            emit log_named_uint("Error: approx a == b not satisfied, accuracy digits ", accuracy);
+            emit log_named_uint("  Expected", val0);
+            emit log_named_uint("    Actual", val1);
+            fail();
+        }
+    }
+
+    /// @notice Verify equality within difference.
+    function assertWithinDiff(uint256 val0, uint256 val1, uint256 expectedDiff) internal {
+        uint256 actualDiff = val0 > val1 ? val0 - val1 : val1 - val0;
+        bool check = actualDiff <= expectedDiff;
+
+        if (!check) {
+            emit log_named_uint("Error: approx a == b not satisfied, accuracy difference ", expectedDiff);
+            emit log_named_uint("Actual difference ", actualDiff);
+            emit log_named_uint("  Expected", val0);
+            emit log_named_uint("    Actual", val1);
+            fail();
+        }
+    }
 
 }
 
@@ -63,6 +159,8 @@ interface IPriceOracleExt {
         uint16 currency,
         uint16 location
     ) external;
+    function updateItem(uint256 fingerprint, uint256 weSellAt, uint256 lockedAmount) external;
+    function chainlinkRWAOracle() external returns (IChainlinkRWAOracle);
 }
 
 interface IFactoryExt {
@@ -81,6 +179,17 @@ interface IFactoryExt {
     function setRequireWhitelistCategory(ITangibleNFT tnft, bool required) external;
 
     function setContract(FACT_ADDRESSES _contractId, address _contractAddress) external;
+
+    function newCategory(
+        string calldata name,
+        string calldata symbol,
+        string calldata uri,
+        bool isStoragePriceFixedAmount,
+        bool storageRequired,
+        address priceOracle,
+        bool symbolInUri,
+        uint256 _tnftType
+    ) external returns (ITangibleNFT);
 }
 
 interface IPriceManagerExt {

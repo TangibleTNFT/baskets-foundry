@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import { IBasket } from "./IBaskets.sol";
+import { IBasket } from "./IBasket.sol";
 
 /// @title IBasketManager interface defines the interface of the BasketManager contract.
 interface IBasketManager {
@@ -26,4 +26,8 @@ interface IBasketManager {
     function createHash(uint256 _tnftType, uint256[] memory _features) external pure returns (bytes32 hashedFeatures);
 
     function sort(uint[] memory data) external pure returns (uint[] memory);
+
+    function isBasket(address _basket) external returns (bool);
+
+    function basketsVrfConsumer() external returns (address);
 }
