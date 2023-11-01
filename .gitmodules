@@ -6,10 +6,9 @@
 	path = lib/chainlink
 	url = git@github.com:smartcontractkit/chainlink.git
 
-[submodule "lib/contacts-inside-team"]
-	path = lib/contracts-inside-team
-	branch = auditFractions
-	url = git@github.com:TangibleTNFT/contracts-inside-team.git
+[submodule "lib/tnftv2-audit"]
+	path = lib/tnftv2-audit
+	url = git@github.com:TangibleTNFT/tnftv2-audit.git
 
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts

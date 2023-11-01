@@ -9,7 +9,7 @@ optimizer = true
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@tangible/=lib/contracts-inside-team/contracts/",
+    "@tangible/=lib/tnftv2-audit/contracts/",
     "@chainlink/=lib/chainlink/"
 ]
 
