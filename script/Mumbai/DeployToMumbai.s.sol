@@ -8,15 +8,15 @@ import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC196
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // local contracts
-import { Basket } from "../src/Basket.sol";
-import { IBasket } from "../src/interfaces/IBasket.sol";
-import { BasketManager } from "../src/BasketManager.sol";
-import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
+import { Basket } from "../../src/Basket.sol";
+import { IBasket } from "../../src/interfaces/IBasket.sol";
+import { BasketManager } from "../../src/BasketManager.sol";
+import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 
 // helper contracts
-import { VRFCoordinatorV2Mock } from "../test/utils/VRFCoordinatorV2Mock.sol";
-import "../test/utils/MumbaiAddresses.sol";
-import "../test/utils/Utility.sol";
+import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol";
+import "../../test/utils/MumbaiAddresses.sol";
+import "../../test/utils/Utility.sol";
 
 /**
  * @title DeployBasketsToMumbai
@@ -24,6 +24,8 @@ import "../test/utils/Utility.sol";
  * @notice This script deploys a new instance of the baskets protocol (in full) to the Mumbai Testnet.
  */
 contract DeployToMumbai is Script {
+
+    // ~ Script Configure ~
 
     // baskets
     Basket public basket;
@@ -99,9 +101,6 @@ contract DeployToMumbai is Script {
 
         // 6. Add consumer to vrf coordinator
         vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
-
-
-        // 7. deploy new basket -> NEED TOKENS
         
 
         // log addresses

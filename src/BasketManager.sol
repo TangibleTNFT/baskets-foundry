@@ -112,7 +112,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
-            address(this)
+            IOwnable(factory()).owner()
         );
 
         featureLimit = 10;

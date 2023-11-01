@@ -429,6 +429,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice This method is used to fetch the nextToRedeem var data.
+     * @dev Since `nextToRedeem` is of type RedeemData, sometimes it may be difficult for the block explorer to translate
+     *      this data when being queried. So this method offers a second way to fetch the `nextToRedeem` data.
+     * @return tnft -> address of Tangible NFT that is redeemable.
+     * @return tokenId -> tokenId of token that is redeemable.
+     */
+    function getNextRedeemable() external view returns (address tnft, uint256 tokenId) {
+        return (nextToRedeem.tnft, nextToRedeem.tokenId);
+    }
+
+    /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
      * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
      * @param totalRent Total claimable rent balance of TNFTs inside basket.
