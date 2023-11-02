@@ -323,6 +323,7 @@ contract BasketsIntegrationTest is Utility {
             "TBT",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(CREATOR_TOKEN_ID)

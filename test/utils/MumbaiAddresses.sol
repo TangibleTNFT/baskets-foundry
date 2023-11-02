@@ -42,3 +42,10 @@ address constant Mumbai_TangibleReaderHelper           = 0xbb3833446316f92b1D657
 
 address constant Mumbai_BasketManager = 0x1618efC9867F3Bd7D2bf80ce5f7E6174Fd3bEf96;
 address constant Mumbai_Basket1 = 0x8D28AdB25d1EE045eB06BA44EF90B4bD90AF3cB8;
+
+address constant Mumbai_MockVrfCoordinator = 0x1CFd36EcA4D765E858a21dBD9acdCB2A7dC368B7;
+address constant Mumbai_BasketVrfConsumer = 0x0527bB4d1AaC36F01933632Ba311d3A36EfE0A33;
+
+address constant Mumbai_BasketImplementation = 0xf89c10e67b2F8bDd2a44cF4E081378e0EAA5C428;
+address constant Mumbai_BasketManagerImplementation = 0xb325e5299d7d1Be4Eb59a71A08F1F87CF61Ce30D;
+address constant Mumbai_BasketVrfConsumerImplementation = 0x0566eE6aF0cf91fd5b5F6e98D02EcAe1317AD9F0;

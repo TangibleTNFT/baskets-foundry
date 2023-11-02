@@ -323,6 +323,7 @@ contract BasketsIntegrationTest is Utility {
             "TBT",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(CREATOR_TOKEN_ID)
@@ -720,6 +721,7 @@ contract BasketsIntegrationTest is Utility {
             "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(tokenId)
@@ -802,6 +804,7 @@ contract BasketsIntegrationTest is Utility {
             "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             featuresToAdd,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(tokenId)

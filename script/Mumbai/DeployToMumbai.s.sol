@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "../lib/forge-std/src/Script.sol";
+import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 
 // oz imports
 import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -113,12 +113,4 @@ contract DeployToMumbai is Script {
 
         vm.stopBroadcast();
     }
-
-    //   == Logs ==
-    //   1. Mock Vrf Coordinator: 0x1CFd36EcA4D765E858a21dBD9acdCB2A7dC368B7
-    //   2. Basket Implementation: 0xf89c10e67b2F8bDd2a44cF4E081378e0EAA5C428
-    //   3. BasketManager Implementation: 0x1659a4b7085Af6Ad033a77a5A85e9aE9A69aDE5a
-    //   4. BasketManager Proxy: 0x1618efC9867F3Bd7D2bf80ce5f7E6174Fd3bEf96
-    //   5. BasketVrfConsumer Implementation: 0x0566eE6aF0cf91fd5b5F6e98D02EcAe1317AD9F0
-    //   6. BasketVrfConsumer Proxy: 0x0527bB4d1AaC36F01933632Ba311d3A36EfE0A33
 }

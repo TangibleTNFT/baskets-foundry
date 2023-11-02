@@ -25,12 +25,14 @@ import { IRentManager, IRentManagerExt } from "@tangible/interfaces/IRentManager
 import { IRWAPriceNotificationReceiver } from "@tangible/notifications/IRWAPriceNotificationReceiver.sol";
 import { IRWAPriceNotificationDispatcher } from "@tangible/interfaces/IRWAPriceNotificationDispatcher.sol";
 import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhitelister.sol";
+import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.sol";
 
 // local imports
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
+import { IGetOracle } from "./interfaces/IGetOracle.sol";
 import { RebaseTokenUpgradeable } from "./abstract/RebaseTokenUpgradeable.sol";
 
 
@@ -80,15 +82,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint16 public depositFee; // 0.5% by default
 
+    uint16 public location;
+
+    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
+    bool public seedRequestInFlight;
+
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     /// @dev If this ERC-20 token decimals != 6 -> rent arithmetic will not work.
     IERC20Metadata public primaryRentToken; // USDC by default
 
     /// @notice Address of basket creator.
     address public deployer;
-
-    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
-    bool public seedRequestInFlight;
 
     /// @notice If there is a pending, unfulfilled, Chainlink vrf request, the requestId will be stored here.
     uint256 public pendingSeedRequestId;
@@ -175,6 +179,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _tnftType TNFT Type (category).
      * @param _rentToken ERC-20 token being used for rent. USDC by default.
      * @param _features Array of features TNFTs must support to be in this basket.
+     * @param _location ISO country code for supported location of basket.
      * @param _deployer Address of creator of the basket contract.
      */
     function initialize(
@@ -184,23 +189,23 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 _tnftType,
         address _rentToken,
         uint256[] memory _features,
+        uint16 _location,
         address _deployer
     ) external initializer {   
         require(_factoryProvider != address(0), "FactoryProvider == address(0)");
         
         // If _features is not empty, add features
-        if (_features.length > 0) {
-            for (uint256 i; i < _features.length;) {
-                supportedFeatures.push(_features[i]);
-                featureSupported[_features[i]] = true;
+        for (uint256 i; i < _features.length;) {
+            supportedFeatures.push(_features[i]);
+            featureSupported[_features[i]] = true;
 
-                unchecked {
-                    ++i;
-                }
+            unchecked {
+                ++i;
             }
         }
 
         depositFee = 50; // 0.5%
+        location = _location;
 
         __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
@@ -422,21 +427,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) {
         // fetch usd value of tnft
         uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
-        require(usdValue > 0, "Unsupported TNFT");
+        require(usdValue != 0, "Unsupported TNFT");
 
         // Get shares required
         sharesRequired = _quoteShares(usdValue);
-    }
-
-    /**
-     * @notice This method is used to fetch the nextToRedeem var data.
-     * @dev Since `nextToRedeem` is of type RedeemData, sometimes it may be difficult for the block explorer to translate
-     *      this data when being queried. So this method offers a second way to fetch the `nextToRedeem` data.
-     * @return tnft -> address of Tangible NFT that is redeemable.
-     * @return tokenId -> tokenId of token that is redeemable.
-     */
-    function getNextRedeemable() external view returns (address tnft, uint256 tokenId) {
-        return (nextToRedeem.tnft, nextToRedeem.tokenId);
     }
 
     /**
@@ -543,19 +537,31 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return If true, token is compatible and can be deposited into this basket contract.
      */
     function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
+        // a. Check supported TNFTType (category)
         if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
 
         uint256 length = supportedFeatures.length;
-        if(length > 0) {
-            for (uint256 i; i < length;) {
 
-                ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-                if (!featureData.added) return false;
+        // b. Check supported features, if any (sub-category)
+        for (uint256 i; i < length;) {
 
-                unchecked {
-                    ++i;
-                }
+            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
+            if (!featureData.added) return false;
+
+            unchecked {
+                ++i;
             }
+        }
+
+        // c. Check supported location, if any
+        if (location != 0) {
+
+            uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
+
+            IChainlinkRWAOracle oracle = IGetOracle(address(_getOracle(_tangibleNFT))).chainlinkRWAOracle();
+            IChainlinkRWAOracle.Data memory data = oracle.fingerprintData(fingerprint);
+
+            if (data.location != location) return false;
         }
 
         return true;
@@ -577,6 +583,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal nonReentrant returns (uint256 basketShare) {
         require(!tokenDeposited[_tangibleNFT][_tokenId], "Token already deposited");
+
         // if contract supports features, make sure tokenId has a supported feature
         require(isCompatibleTnft(_tangibleNFT, _tokenId), "Token incompatible");
 
@@ -632,7 +639,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // claim rent for TNFT being redeemed.
         IRentManager rentManager = _getRentManager(_tangibleNFT);
 
-        if (rentManager.claimableRentForToken(_tokenId) > 0) {
+        if (rentManager.claimableRentForToken(_tokenId) != 0) {
             uint256 receivedRent;
             unchecked {
                 receivedRent += rentManager.claimRentForToken(_tokenId);

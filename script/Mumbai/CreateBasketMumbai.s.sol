@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "../lib/forge-std/src/Script.sol";
+import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 
 // local contracts
 import { IBasket } from "../../src/interfaces/IBasket.sol";
@@ -69,6 +69,7 @@ contract CreateBasketMumbai is Script {
             "TBT",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(TOKEN_ID)
