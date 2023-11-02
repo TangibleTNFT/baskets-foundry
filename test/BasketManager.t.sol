@@ -589,6 +589,43 @@ contract BasketManagerTest is Utility {
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
     }
 
+    // ~ withdrawERC20 ~
+
+    /// @notice Verifies proper state changes when BasketManager::withdrawERC20 is executed.
+    function test_basketManager_withdrawERC20() public {
+        
+        // ~ Config ~
+
+        uint256 amount = 1_000 * USD;
+        deal(address(MUMBAI_USDC), address(basketManager), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(MUMBAI_USDC.balanceOf(address(basketManager)), amount);
+        assertEq(MUMBAI_USDC.balanceOf(address(factoryOwner)), 0);
+
+        // ~ Execute withdrawERC20 ~
+
+        // force revert -> address(0)
+        vm.prank(factoryOwner);
+        vm.expectRevert("Address cannot be zero address");
+        basketManager.withdrawERC20(address(0));
+
+        // withdraw USDC balance -> success
+        vm.prank(factoryOwner);
+        basketManager.withdrawERC20(address(MUMBAI_USDC));
+
+        // ~ Post-state check ~
+
+        assertEq(MUMBAI_USDC.balanceOf(address(basketManager)), 0);
+        assertEq(MUMBAI_USDC.balanceOf(address(factoryOwner)), amount);
+
+        // force revert -> Insufficient amount
+        vm.prank(factoryOwner);
+        vm.expectRevert("Insufficient token balance");
+        basketManager.withdrawERC20(address(MUMBAI_USDC));
+    }
+
 
     // ~ setters ~
 
