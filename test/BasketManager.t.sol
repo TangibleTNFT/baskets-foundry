@@ -590,87 +590,6 @@ contract BasketManagerTest is Utility {
     }
 
 
-    // ~ setters ~
-
-    /// @notice Verifies correct state changes when BasketManager::setBasketsVrfConsumer is executed.
-    function test_basketManager_setBasketsVrfConsumer() public {
-        // Pre-state check.
-        assertEq(basketManager.basketsVrfConsumer(), address(0));
-
-        // Execute setBasketsVrfConsumer with address(0) -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("_basketsVrfConsumer == address(0)");
-        basketManager.setBasketsVrfConsumer(address(0));
-
-        // create features array
-        uint256[] memory features = new uint256[](0);
-
-        // ~ Pre-state check ~
-
-        address[] memory basketsArray = basketManager.getBasketsArray();
-        assertEq(basketsArray.length, 0);
-
-        assertEq(realEstateTnft.balanceOf(JOE), 2);
-
-        // deploy basket -> revert -> deposit tokens dont support US ISO Code.
-        vm.startPrank(JOE);
-        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
-        vm.expectRevert("Token incompatible");
-        (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
-            RE_TNFTTYPE,
-            address(MUMBAI_USDC),
-            US_ISO, // US ISO code
-            features,
-            _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(JOE_TOKEN_1)
-        );
-
-        // deploy basket -> success
-        (_basket, basketShares) = basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
-            RE_TNFTTYPE,
-            address(MUMBAI_USDC),
-            UK_ISO, // UK ISO code
-            features,
-            _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(JOE_TOKEN_1)
-        );
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        basketsArray = basketManager.getBasketsArray();
-        assertEq(basketsArray.length, 1);
-        assertEq(basketsArray[0], address(_basket));
-
-        assertEq(basketManager.isBasket(address(_basket)), true);
-
-        assertEq(_basket.location(), UK_ISO);
-
-        uint256 sharePrice = IBasket(_basket).getSharePrice();
-
-        assertEq(realEstateTnft.balanceOf(JOE), 1);
-        assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
-
-        assertEq(
-            (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            _basket.getTotalValueOfBasket()
-        );
-
-        assertEq(_basket.balanceOf(JOE), basketShares[0]);
-        assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
-        assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
-
-        Basket.TokenData[] memory deposited = IBasket(_basket).getDepositedTnfts();
-        assertEq(deposited.length, 1);
-        assertEq(deposited[0].tnft, address(realEstateTnft));
-        assertEq(deposited[0].tokenId, JOE_TOKEN_1);
-        assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
-    }
-
     // ~ withdrawERC20 ~
 
     /// @notice Verifies proper state changes when BasketManager::withdrawERC20 is executed.
@@ -708,13 +627,8 @@ contract BasketManagerTest is Utility {
         basketManager.withdrawERC20(address(MUMBAI_USDC));
     }
 
-        // Execute setBasketsVrfConsumer -> success
-        vm.prank(factoryOwner);
-        basketManager.setBasketsVrfConsumer(address(222));
 
-        // Post-state check.
-        assertEq(basketManager.basketsVrfConsumer(), address(222));
-    }
+    // ~ setters ~
 
     /// @notice Verifies correct state changes when BasketManager::setBasketsVrfConsumer is executed.
     function test_basketManager_setBasketsVrfConsumer() public {
