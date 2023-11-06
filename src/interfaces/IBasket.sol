@@ -38,6 +38,8 @@ interface IBasket is IERC20, IERC20Metadata {
 
     function tnftType() external returns (uint256);
 
+    function location() external view returns (uint16);
+
     function batchDepositTNFT(
         address[] memory _tangibleNFTs,
         uint256[] memory _tokenIds
@@ -54,7 +56,7 @@ interface IBasket is IERC20, IERC20Metadata {
 
     function redeemTNFT(uint256 _budget) external;
 
-    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external view returns (bool);
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external returns (bool);
 
     function fulfillRandomSeed(uint256 randomWord) external;
 }

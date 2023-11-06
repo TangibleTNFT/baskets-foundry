@@ -54,6 +54,9 @@ contract Utility is Test{
 
     // ~ Types and Features ~
 
+    uint16 public constant UK_ISO = 826;
+    uint16 public constant US_ISO = 840;
+
     uint256 public constant RE_TNFTTYPE = 2;
 
     uint256 public constant RE_FINGERPRINT_1 = 2241;

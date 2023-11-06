@@ -225,6 +225,7 @@ contract StressTests is Utility {
             "TBT",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(tokenIds[0])

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
@@ -112,7 +113,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
-            IOwnable(factory()).owner()
+            address(this)
         );
 
         featureLimit = 10;
@@ -130,6 +131,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
      * @param _symbol Symbol of new basket.
      * @param _tnftType Tnft category supported by basket.
      * @param _rentToken ERC-20 token being used for rent. USDC by default.
+     * @param _location ISO country code for supported location of basket.
      * @param _features Array of uint feature identifiers (subcategories) supported by basket.
      * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
      * @param _tokenIdDeposit Array of tokenIds being deposited into basket initally. Note: Corresponds with _tangibleNFTDeposit.
@@ -139,6 +141,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         string memory _symbol,
         uint256 _tnftType,
         address _rentToken,
+        uint16 _location,
         uint256[] memory _features,
         address[] memory _tangibleNFTDeposit,
         uint256[] memory _tokenIdDeposit
@@ -150,8 +153,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         require(featureLimit >= _features.length, "Too many features");
 
         // verify _tnftType is a supported type in the Metadata contract.
-        address metadata = IFactory(factory()).tnftMetadata();
-        (bool added,,) = ITNFTMetadata(metadata).tnftTypes(_tnftType);
+        (bool added,,) = ITNFTMetadata(IFactory(factory()).tnftMetadata()).tnftTypes(_tnftType);
         require(added, "Invalid tnftType");
 
         // verify _name is unique and available
@@ -160,15 +162,12 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // verify _symbol is unique and available
         require(checkBasketSymbolAvailability(keccak256(abi.encodePacked(_symbol))), "Symbol not available");
 
-        // create unique hash
-        bytes32 hashedFeatures = createHash(_tnftType, _features);
-
         // might not be necessary -> hash is checked when Basket is initialized
-        require(checkBasketAvailability(hashedFeatures), "Basket already exists");
+        require(checkBasketAvailability(createHash(_tnftType, _location, _features)), "Basket already exists");
 
         // check features are valid.
         for (uint256 i; i < _features.length;) {
-            require(ITNFTMetadata(metadata).featureInType(_tnftType, _features[i]), "Feature not supported in type");
+            require(ITNFTMetadata(IFactory(factory()).tnftMetadata()).featureInType(_tnftType, _features[i]), "Feature not supported in type");
             unchecked {
                 ++i;
             }
@@ -184,6 +183,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
                 _tnftType,
                 _rentToken,
                 _features,
+                _location,
                 msg.sender
             )
         );
@@ -191,18 +191,15 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // store hash and new newBasketBeacon
         baskets.push(address(newBasketBeacon));
 
-        hashedFeaturesForBasket[address(newBasketBeacon)] = hashedFeatures;
+        hashedFeaturesForBasket[address(newBasketBeacon)] = createHash(_tnftType, _location, _features);
         isBasket[address(newBasketBeacon)] = true;
 
         basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
         basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
 
-        // fetch priceManager to whitelist basket for notifications on RWApriceNotificationDispatcher
-        ITangiblePriceManager priceManager = IFactory(factory()).priceManager();
-
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
-            IPriceOracle oracle = ITangiblePriceManager(address(priceManager)).oracleForCategory(ITangibleNFT(_tangibleNFTDeposit[i]));
+            IPriceOracle oracle = ITangiblePriceManager(address(IFactory(factory()).priceManager())).oracleForCategory(ITangibleNFT(_tangibleNFTDeposit[i]));
             IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
 
             if (!INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(newBasketBeacon))) {
@@ -221,6 +218,27 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
         emit BasketCreated(msg.sender, address(newBasketBeacon));
         return (IBasket(address(newBasketBeacon)), basketShares);
+    }
+
+    /**
+     * @notice Withdraws any ERC20 token balance of this contract into the multisig wallet.
+     * @param _contract Address of an ERC20 compliant token.
+     */
+    function withdrawERC20(address _contract) external onlyFactoryOwner {
+        require(_contract != address(0), "Address cannot be zero address");
+
+        uint256 balance = IERC20(_contract).balanceOf(address(this));
+        require(balance > 0, "Insufficient token balance");
+
+        require(IERC20(_contract).transfer(msg.sender, balance), "Transfer failed on ERC20 contract");
+    }
+
+    /**
+     * @notice This function allows the factory owner to update the Basket implementation.
+     * @param _newBasketImp Address of new Basket contract implementation.
+     */
+    function updateBasketImplementation(address _newBasketImp) external onlyFactoryOwner {
+        beacon.upgradeTo(_newBasketImp);
     }
 
     /**
@@ -313,10 +331,11 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /**
      * @notice This method is used to create a unique hash given a category and list of sub categories.
      * @param _tnftType Category identifier.
+     * @param _location ISO Code for country.
      * @param _features List of subcategories.
      */
-    function createHash(uint256 _tnftType, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
-        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _features.sort()));
+    function createHash(uint256 _tnftType, uint16 _location, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
+        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _location, _features.sort()));
     }
 
 
