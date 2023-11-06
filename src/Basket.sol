@@ -147,6 +147,14 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     event RedeemableChosen(address indexed tnft, uint256 indexed tokenId);
 
+    /**
+     * @notice This event is emitted when `rebase` is successfully executed.
+     * @param caller msg.sender that called `rebase`
+     * @param newTotalRentValue New value assigned to `totalRentValue`.
+     * @param newMultiplier New multiplier used for calculating rebase tokens.
+     */
+    event RebaseExecuted(address caller, uint256 newTotalRentValue, uint256 newMultiplier);
+
 
     // ---------
     // Modifiers
@@ -501,6 +509,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         
         totalRentValue = totalRentalIncome;
         _setMultiplier(multiplier);
+
+        emit RebaseExecuted(msg.sender, totalRentValue, multiplier);
     }
 
     /**
