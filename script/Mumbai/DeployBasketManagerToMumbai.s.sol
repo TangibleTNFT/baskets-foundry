@@ -46,6 +46,7 @@ contract DeployBasketManagerToMumbai is Script {
         // todo: Do manually
 
         // log addresses
+
         console2.log("BasketManager address:", address(basketManager));
 
         vm.stopBroadcast();

@@ -46,6 +46,7 @@ contract DeployBasketToMumbai is Script {
         // todo: Do manually
 
         // log addresses
+
         console2.log("Basket address:", address(basket));
 
         vm.stopBroadcast();
