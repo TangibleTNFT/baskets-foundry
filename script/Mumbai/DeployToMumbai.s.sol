@@ -18,6 +18,8 @@ import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol"
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
 
+/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --fork-url <RPC_URL> --broadcast --verify
+
 /**
  * @title DeployBasketsToMumbai
  * @author Chase Brown
