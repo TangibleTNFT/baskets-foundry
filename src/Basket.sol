@@ -82,6 +82,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint16 public depositFee; // 0.5% by default
 
+    /// @notice Stores the ISO country code for location this basket supports
     uint16 public location;
 
     /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
