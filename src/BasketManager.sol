@@ -52,6 +52,12 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice Mapping that stores each symbol (as a hash) for each basket.
     mapping(address => bytes32) public basketSymbols;
 
+    /// @notice This mapping provides a low-gas method to checking the availability of a name for a new basket.
+    mapping(bytes32 => bool) public nameHashTaken;
+
+    /// @notice This mapping provides a low-gas method to checking the availability of a symbol for a new basket.
+    mapping(bytes32 => bool) public symbolHashTaken;
+
     /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
     UpgradeableBeacon public beacon;
 
@@ -77,7 +83,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
      * @param creator Address of deployer.
      * @param basket Address of basket deployed.
      */
-    event BasketCreated(address creator, address basket);
+    event BasketCreated(address indexed creator, address indexed basket);
 
 
     // ---------
@@ -157,10 +163,10 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         require(added, "Invalid tnftType");
 
         // verify _name is unique and available
-        require(checkBasketNameAvailability(keccak256(abi.encodePacked(_name))), "Name not available");
+        require(!nameHashTaken[keccak256(abi.encodePacked(_name))], "Name not available");
 
         // verify _symbol is unique and available
-        require(checkBasketSymbolAvailability(keccak256(abi.encodePacked(_symbol))), "Symbol not available");
+        require(!symbolHashTaken[keccak256(abi.encodePacked(_symbol))], "Symbol not available");
 
         // might not be necessary -> hash is checked when Basket is initialized
         require(checkBasketAvailability(createHash(_tnftType, _location, _features)), "Basket already exists");
@@ -196,6 +202,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
         basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
         basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
+
+        nameHashTaken[keccak256(abi.encodePacked(_name))] = true;
+        symbolHashTaken[keccak256(abi.encodePacked(_symbol))] = true;
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
@@ -289,38 +298,6 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     function checkBasketAvailability(bytes32 _featuresHash) public view returns (bool) {
         for (uint256 i; i < baskets.length;) {
             if (hashedFeaturesForBasket[baskets[i]] == _featuresHash) return false;
-            unchecked {
-                ++i;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * @notice This method checks whether a basket with a given name is taken.
-     * @dev No 2 baskets that have the same name can co-exist.
-     * @param _nameHash unique bytes32 hash created from string name.
-     * @return If true, name is available to be created. If false, already exists.
-     */
-    function checkBasketNameAvailability(bytes32 _nameHash) public view returns (bool) {
-        for (uint256 i; i < baskets.length;) {
-            if (basketNames[baskets[i]] == _nameHash) return false;
-            unchecked {
-                ++i;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * @notice This method checks whether a basket with a given symbol is taken.
-     * @dev No 2 baskets that have the same symbol can co-exist.
-     * @param _symbolHash unique bytes32 hash created from string symbol.
-     * @return If true, symbol is available to be created. If false, already exists.
-     */
-    function checkBasketSymbolAvailability(bytes32 _symbolHash) public view returns (bool) {
-        for (uint256 i; i < baskets.length;) {
-            if (basketSymbols[baskets[i]] == _symbolHash) return false;
             unchecked {
                 ++i;
             }
