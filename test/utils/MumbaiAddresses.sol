@@ -45,7 +45,7 @@ address constant Mumbai_BasketManager = 0x3D476cF33307c3407A72399a10CA633480E0Bd
 address constant Mumbai_MockVrfCoordinator = 0xD06c6091f3c29c989172A64ce30AF84981c59D48;
 address constant Mumbai_BasketVrfConsumer = 0x6f455478f24b849E7e182429cd05Dc8Ab530f79D;
 
-address constant Mumbai_BasketImplementation = 0x4f233dbA3E21D762AeAf7c81103A15A8980706B3;
-address constant Mumbai_BasketManagerImplementation = 0xCfAEc6bBB31C69a1CF0108aF8936d9fC76B4D9E0;
+address constant Mumbai_BasketImplementation = 0x345D4dA62A1670891d697C2be5ADC38F625dE037;
+address constant Mumbai_BasketManagerImplementation = 0xf6abb20384b00b964649Ba8ec4078dB2CE660EE6;
 
 address constant Mumbai_BasketVrfConsumerImplementation = 0x6Ca53fe01D1007Ae89Ad730F5c66515819fD5145;
