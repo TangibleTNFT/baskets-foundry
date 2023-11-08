@@ -33,7 +33,7 @@ import { IBasketManager } from "./interfaces/IBasketManager.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 import { IGetOracle } from "./interfaces/IGetOracle.sol";
-import { RebaseTokenUpgradeable } from "./abstract/RebaseTokenUpgradeable.sol";
+import { RebaseTokenUpgradeable } from "@tangible-foundation-contracts/tokens/RebaseTokenUpgradeable.sol";
 
 
 /**
@@ -151,9 +151,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This event is emitted when `rebase` is successfully executed.
      * @param caller msg.sender that called `rebase`
      * @param newTotalRentValue New value assigned to `totalRentValue`.
-     * @param newMultiplier New multiplier used for calculating rebase tokens.
+     * @param newRebaseIndex New multiplier used for calculating rebase tokens.
      */
-    event RebaseExecuted(address caller, uint256 newTotalRentValue, uint256 newMultiplier);
+    event RebaseExecuted(address caller, uint256 newTotalRentValue, uint256 newRebaseIndex);
 
 
     // ---------
@@ -219,7 +219,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
 
-        _setMultiplier(1 ether);
+        _setRebaseIndex(1 ether);
 
         tnftType = _tnftType;
         deployer = _deployer;
@@ -501,16 +501,16 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 totalRentalIncome = _getRentBal();
     
         uint256 collectedRent = totalRentalIncome - previousRentalIncome;
-        uint256 multiplierDelta = collectedRent * 1e18 / getTotalValueOfBasket();
+        uint256 rebaseIndexDelta = collectedRent * 1e18 / getTotalValueOfBasket();
 
-        uint256 multiplier = multiplier();
+        uint256 rebaseIndex = rebaseIndex();
 
-        multiplier += multiplierDelta;
+        rebaseIndex += rebaseIndexDelta;
         
         totalRentValue = totalRentalIncome;
-        _setMultiplier(multiplier);
+        _setRebaseIndex(rebaseIndex);
 
-        emit RebaseExecuted(msg.sender, totalRentValue, multiplier);
+        emit RebaseExecuted(msg.sender, totalRentValue, rebaseIndex);
     }
 
     /**

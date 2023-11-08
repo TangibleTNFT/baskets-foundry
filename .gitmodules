@@ -19,3 +19,7 @@
 	path = lib/openzeppelin-contracts-upgradeable
 	branch = release-v5.0
 	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
+
+[submodule "lib/tangible-foundation-contracts"]
+	path = lib/tangible-foundation-contracts
+	url = git@github.com:TangibleTNFT/tangible-foundation-contracts.git
