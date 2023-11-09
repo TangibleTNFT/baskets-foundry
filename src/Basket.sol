@@ -101,9 +101,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice This stores the data for the next NFT that is elgible for redemption.
     RedeemData public nextToRedeem;
 
-    /// @notice Used to save slots for potential extra state variables later on.
-    uint256[20] private __gap;
-
 
     // ------
     // Events
@@ -644,14 +641,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // ~ Handle rent ~
 
-        // Claim rent from tnft::rentManager and keep it in this contract
-        uint256 preBal = primaryRentToken.balanceOf(address(this));
-
         // claim rent for TNFT being redeemed.
         IRentManager rentManager = _getRentManager(_tangibleNFT);
 
         if (rentManager.claimableRentForToken(_tokenId) != 0) {
+            uint256 preBal = primaryRentToken.balanceOf(address(this));
             uint256 receivedRent;
+
             unchecked {
                 receivedRent += rentManager.claimRentForToken(_tokenId);
             }

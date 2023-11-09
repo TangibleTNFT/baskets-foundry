@@ -25,7 +25,7 @@ contract CreateBasketMumbai is Script {
     // ~ Dev Configure ~
 
     // TODO
-    uint256 public constant TOKEN_ID = 10;
+    uint256 public constant TOKEN_ID = 9;
 
 
     // ~ Script Configure ~
@@ -38,7 +38,7 @@ contract CreateBasketMumbai is Script {
     address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
     uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
 
-    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0xe6b8a5CF854791412c1f6EFC7CAf629f5Df1c747);
+    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636);
 
     uint256 public constant RE_TNFTTYPE = 2;
 
@@ -58,26 +58,27 @@ contract CreateBasketMumbai is Script {
         // NOTE: Ensure basketManager is whitelisted on notification dispatcher
         // NOTE: Also ensure basketManager address is set on the Factory
 
-        uint256[] memory features = new uint256[](0);
+        uint256[] memory features = new uint256[](1);
+        features[0] = 1;
 
         // 1. approve token transfer to basketManager
         realEstateTnft.approve(address(basketManager), TOKEN_ID);
 
         // 2. Deploy new basket
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
-            "Tangible Basket Token",
-            "TBT",
+            "Tangible Basket Token ft 1",
+            "TBT1",
             RE_TNFTTYPE,
             address(MUMBAI_USDC),
-            0,
+            826, // UK_ISO
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(TOKEN_ID)
         );
 
         // log
-        console2.log("1. Basket Address:", address(_basket)); // 0x8D28AdB25d1EE045eB06BA44EF90B4bD90AF3cB8
-        console2.log("2. Basket Shares:", basketShares[0]); // 571_235_470000000000000000
+        console2.log("1. Basket Address:", address(_basket)); // 0x9Df071d66ebaE7cBa85339cFf36D0313c781210E
+        console2.log("2. Basket Shares:", basketShares[0]); // 574106000000000000000000
 
         vm.stopBroadcast();
     }

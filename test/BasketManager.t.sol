@@ -255,6 +255,9 @@ contract BasketManagerTest is Utility {
         features[0] = RE_FEATURE_2;
         features[1] = RE_FEATURE_1;
 
+        address[] memory emptyAddrArr = new address[](0);
+        uint256[] memory emptyUintArr = new uint256[](0);
+
         // add features to initial deposit token
         _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
         _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_2, features);
@@ -365,6 +368,22 @@ contract BasketManagerTest is Utility {
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
+
+        // deploy another basket with no deposit -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("Must be an initial deposit");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            address(MUMBAI_USDC),
+            UK_ISO,
+            features,
+            emptyAddrArr,
+            emptyUintArr
         );
         vm.stopPrank();
 

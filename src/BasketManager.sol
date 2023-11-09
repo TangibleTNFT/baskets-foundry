@@ -70,9 +70,6 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
 
-    /// @notice Used to save slots for potential extra state variables later on.
-    uint256[20] private __gap;
-
 
     // ------
     // Events
@@ -154,6 +151,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     ) external returns (IBasket, uint256[] memory basketShares) {
         // verify _tanfibleNFTDeposit array and _tokenIdDeposit array are the same size.
         require(_tangibleNFTDeposit.length == _tokenIdDeposit.length, "Differing lengths");
+
+        // verify deployer is depositing an initial token into basket.
+        require(_tangibleNFTDeposit.length !=0, "Must be an initial deposit");
 
         // verify _features does not have more features that what is allowed.
         require(featureLimit >= _features.length, "Too many features");
@@ -281,6 +281,16 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
      */
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
+    }
+
+    
+    // ----------------
+    // External Methods
+    // ----------------
+
+    function destroyBasket(address _basket) external onlyFactoryOwner {
+        require(block.chainid == 80001, "mumbai only");
+        // TODO
     }
 
 

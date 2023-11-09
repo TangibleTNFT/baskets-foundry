@@ -1947,4 +1947,8 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basketVrfConsumer.callbackGasLimit(), 1_000_000);
     }
+
+    function test_baskets_chainId() public {
+        emit log_uint(block.chainid);
+    }
 }
