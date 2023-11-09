@@ -103,6 +103,7 @@ contract BasketsIntegrationTest is Utility {
     function setUp() public {
 
         vm.createSelectFork(MUMBAI_RPC_URL);
+        emit log_uint(block.chainid);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
 
@@ -1946,9 +1947,5 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(basketVrfConsumer.callbackGasLimit(), 1_000_000);
-    }
-
-    function test_baskets_chainId() public {
-        emit log_uint(block.chainid);
     }
 }
