@@ -283,16 +283,6 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    
-    // ----------------
-    // External Methods
-    // ----------------
-
-    function destroyBasket(address _basket) external onlyFactoryOwner {
-        require(block.chainid == 80001, "mumbai only");
-        // TODO
-    }
-
 
     // --------------
     // Public Methods
