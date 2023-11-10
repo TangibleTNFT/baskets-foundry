@@ -41,13 +41,17 @@ address constant Mumbai_TangibleReaderHelper           = 0xbb3833446316f92b1D657
 // ~ Baskets ~
 
 // proxies
-address constant Mumbai_BasketManager =     0xcDCB34206b12015F75Ae1972e718c53b7278501C;
+address constant Mumbai_BasketManager     = 0xcDCB34206b12015F75Ae1972e718c53b7278501C;
 address constant Mumbai_BasketVrfConsumer = 0xf75ABF187E67489a7e454E601E86702Eb18cA8c7;
 
 // implementation
-address constant Mumbai_BasketImplementation =            0xb6aC5A149044Ed14Db52bD2c8E0fAd2e60d61c60;
-address constant Mumbai_BasketManagerImplementation =     0x0A2acde2C52aa83554BC0A50087D3187aFE93290;
+address constant Mumbai_BasketImplementation            = 0xb6aC5A149044Ed14Db52bD2c8E0fAd2e60d61c60;
+address constant Mumbai_BasketManagerImplementation     = 0x0A2acde2C52aa83554BC0A50087D3187aFE93290;
 address constant Mumbai_BasketVrfConsumerImplementation = 0x6D2bA31d45Dbcf461c02eD43d8D97DD72Ccbd79F;
 
 // mock
 address constant Mumbai_MockVrfCoordinator = 0x4CA126ca3f8298cD0ec7Fefe2833a7B51e850A45;
+
+// ~ Deployed Baskets ~
+
+address constant Mumbai_Basket_1 = 0x9Df071d66ebaE7cBa85339cFf36D0313c781210E;
