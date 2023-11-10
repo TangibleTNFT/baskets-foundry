@@ -25,7 +25,7 @@ import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
 import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
-// local
+// helper imports
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 

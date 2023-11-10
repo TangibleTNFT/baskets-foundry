@@ -3,9 +3,11 @@ pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
+// oz imports
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
+// local
 import { BasketBeaconProxy } from "../src/proxy/beacon/BasketBeaconProxy.sol";
 import { ICounterContract } from "./utils/Utility.sol";
 

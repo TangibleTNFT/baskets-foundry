@@ -3,14 +3,18 @@ pragma solidity ^0.8.13;
 
 import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
+// oz imports
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
+// tangible contracts
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
 import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
 
+// tangible interface
 import { ITNFTMetadata } from "@tangible/interfaces/ITNFTMetadata.sol";
 
+// helper
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
