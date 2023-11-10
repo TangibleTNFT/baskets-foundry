@@ -290,8 +290,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
     /**
      * @notice This method allows the factory owner to delete baskets from the basketManager.
-     * @dev This method if for testing purposes only for testing basket deployments with same hash.
-     *      NOT available on mainnet.
+     * @dev This method is for testing purposes only. NOT available on mainnet.
      * @param _basket Address of basket trying to delete.
      */
     function destroyBasket(address _basket) external onlyFactoryOwner {

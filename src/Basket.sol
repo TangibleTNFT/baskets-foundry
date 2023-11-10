@@ -112,7 +112,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param tnft TNFT contract address of token being deposited.
      * @param tokenId TokenId identifier of token being deposited.
      */
-    event TNFTDeposited(address prevOwner, address indexed tnft, uint256 indexed tokenId);
+    event TNFTDeposited(address indexed prevOwner, address indexed tnft, uint256 indexed tokenId);
 
     /**
      * @notice This event is emitted when a TNFT is redeemed from this basket.
@@ -120,7 +120,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param tnft TNFT contract address of token being redeemed.
      * @param tokenId TokenId identifier of token being redeemed.
      */
-    event TNFTRedeemed(address newOwner, address indexed tnft, uint256 indexed tokenId);
+    event TNFTRedeemed(address indexed newOwner, address indexed tnft, uint256 indexed tokenId);
 
     /**
      * @notice This event is emitted when the price of a TNFT token is updated by the oracle.
