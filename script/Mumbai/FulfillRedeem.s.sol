@@ -4,25 +4,31 @@ pragma solidity ^0.8.13;
 import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 
 // local contracts
-import { Basket } from "../../src/Basket.sol";
+import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol";
 
 // helper contracts
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/mumbai/RedeemFromBasket.s.sol:RedeemFromBasket --fork-url <RPC_URL> --broadcast -vvvv
+/// @dev To run: forge script script/mumbai/FulfillRedeem.s.sol:FulfillRedeem --fork-url <RPC_URL> --broadcast -vvvv
 
 /**
  * @title RedeemFromBasket
  * @author Chase Brown
  * @notice This script allows a designated EOA to redeem from a mumbai basket.
  */
-contract RedeemFromBasket is Script {
+contract FulfillRedeem is Script {
+
+    // ~ Dev config ~
+
+    // TODO
+    uint64 public requestId = 2;
 
     // ~ Script Configure ~
 
     // baskets
-    Basket public basket = Basket(Mumbai_Basket_1);
+    VRFCoordinatorV2Mock public vrfCoordinator = VRFCoordinatorV2Mock(Mumbai_MockVrfCoordinator);
+    address public vrfConsumer = Mumbai_BasketVrfConsumer;
 
     // wallets
     address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
@@ -41,12 +47,8 @@ contract RedeemFromBasket is Script {
 
         vm.startBroadcast(deployerPrivKey);
 
-        uint256 balance = basket.balanceOf(deployerAddress);
-
-        console2.log("balance of basket tokens", balance);
-
         // 1. redeem from Basket
-        basket.redeemTNFT(balance);
+        vrfCoordinator.fulfillRandomWords(requestId, vrfConsumer);
 
         vm.stopBroadcast();
     }

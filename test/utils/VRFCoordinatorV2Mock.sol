@@ -119,6 +119,8 @@ contract VRFCoordinatorV2Mock is VRFCoordinatorV2Interface {
     bytes memory callReq = abi.encodeWithSelector(v.rawFulfillRandomWords.selector, _requestId, _words);
     (bool success, ) = _consumer.call{gas: req.callbackGasLimit}(callReq);
 
+    require(success, "call to consumer not successful");
+
     uint96 payment = uint96(BASE_FEE + ((startGas - gasleft()) * GAS_PRICE_LINK));
     if (s_subscriptions[req.subId].balance < payment) {
       revert InsufficientBalance();

@@ -261,8 +261,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice This method is used to redeem a TNFT token. This method will take a budget of basket tokens and chooses
-     *         the lowest rent yielding TNFT token in that specified budget range to transfer to redeemer.
+     * @notice This method is used to redeem a TNFT token. This method will take a budget of basket tokens and
+     *         if the budget is sufficient will transfer the NFT stored in `nextToRedeem` to the msg.sender.
      * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
      * @param _budget Amount of basket tokens being submitted to redeem method.
      */
@@ -490,7 +490,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     // --------------
 
     /**
-     * @notice This function allows for the Basket token to "rebase" and update the multiplier based
+     * @notice This function allows for the Basket token to "rebase" and will update the multiplier based
      * on the amount of rent accrued by the basket tokens.
      */
     function rebase() public {

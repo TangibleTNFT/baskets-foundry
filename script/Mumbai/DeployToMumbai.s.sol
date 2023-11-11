@@ -102,9 +102,11 @@ contract DeployToMumbai is Script {
         );
 
         // 6. Add consumer to vrf coordinator
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
+        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumerProxy));
 
-        // 7. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
+        // 7. TODO: call basketManager::setBasketsVrfConsumer
+
+        // 8. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
         
 
         // log addresses
