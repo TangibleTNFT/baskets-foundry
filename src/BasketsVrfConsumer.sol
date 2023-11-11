@@ -99,7 +99,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
         keyHash = _keyHash;
 
         requestConfirmations = 20;
-        callbackGasLimit = 50_000; // should be ideal.
+        callbackGasLimit = 100_000; // should be ideal.
     }
 
     

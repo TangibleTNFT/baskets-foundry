@@ -482,10 +482,15 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
     function _mockVrfCoordinatorResponse(uint256 _requestId, uint256 _randomWord) internal {
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(
-            _requestId, // requestId
-            _asSingletonArrayUint(_randomWord) // random word
+        // vm.prank(address(vrfCoordinatorMock));
+        // basketVrfConsumer.rawFulfillRandomWords(
+        //     _requestId, // requestId
+        //     _asSingletonArrayUint(_randomWord) // random word
+        // );
+        vrfCoordinatorMock.fulfillRandomWordsWithOverride(
+            _requestId,
+            address(basketVrfConsumer),
+            _asSingletonArrayUint(_randomWord)
         );
     }
 
