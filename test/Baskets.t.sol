@@ -1540,7 +1540,6 @@ contract BasketsIntegrationTest is Utility {
     // View Method Unit Tests
     // ----------------------
 
-
     // ~ getTotalValueOfBasket ~
     
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket

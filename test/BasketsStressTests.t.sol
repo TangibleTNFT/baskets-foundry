@@ -1196,12 +1196,12 @@ contract StressTests is Utility {
         // mint multiple tokens for each contract
         count = 0;
         for (i = 0; i < config.newCategories; ++i) {
-            address tnft = config.tnfts[i];
+            address tempTnft = config.tnfts[i];
             for (uint256 j; j < config.amountFingerprints; ++j) {
-                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+                uint256 preBal = ITangibleNFT(tempTnft).balanceOf(JOE);
 
                 uint256[] memory tokenIds = _createItemAndMint(
-                    tnft,
+                    tempTnft,
                     100_000, // 100 GBP
                     1,       // stock
                     1,       // mint
@@ -1214,10 +1214,10 @@ contract StressTests is Utility {
                 batchTokenIdArr[count] = tokenIds[0];
                 ++count;
 
-                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
-                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+                assertEq(ITangibleNFT(tempTnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tempTnft).balanceOf(JOE), preBal + 1);
             }
-            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
+            assertEq(ITangibleNFT(tempTnft).balanceOf(JOE), config.amountFingerprints);
         }
 
         // deposit tokens via batch
@@ -1310,12 +1310,12 @@ contract StressTests is Utility {
         // mint multiple tokens for each contract
         count = 0;
         for (i = 0; i < config.newCategories; ++i) {
-            address tnft = config.tnfts[i];
+            address tempTnft = config.tnfts[i];
             for (uint256 j; j < config.amountFingerprints; ++j) {
-                uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
+                uint256 preBal = ITangibleNFT(tempTnft).balanceOf(JOE);
 
                 uint256[] memory tokenIds = _createItemAndMint(
-                    tnft,
+                    tempTnft,
                     100_000_000, // 100 GBP
                     1,       // stock
                     1,       // mint
@@ -1328,10 +1328,10 @@ contract StressTests is Utility {
                 batchTokenIdArr[count] = tokenIds[0];
                 ++count;
 
-                assertEq(ITangibleNFT(tnft).ownerOf(tokenIds[0]), JOE);
-                assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal + 1);
+                assertEq(ITangibleNFT(tempTnft).ownerOf(tokenIds[0]), JOE);
+                assertEq(ITangibleNFT(tempTnft).balanceOf(JOE), preBal + 1);
             }
-            assertEq(ITangibleNFT(tnft).balanceOf(JOE), config.amountFingerprints);
+            assertEq(ITangibleNFT(tempTnft).balanceOf(JOE), config.amountFingerprints);
         }
 
         // create rent array

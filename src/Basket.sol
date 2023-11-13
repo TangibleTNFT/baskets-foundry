@@ -408,12 +408,35 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         assert(primaryRentToken.transfer(msg.sender, _withdrawAmount));
     }
 
-    function getBatchQuoteIn() external view {
-        // TODO
+    /**
+     * @notice This method is used to quote a batch amount of basket tokens transferred to depositor if a specfied token is deposted.
+     * @dev Does NOT include the amount of basket tokens subtracted for deposit fee.
+     *      The amount of tokens quoted will be slightly different if the same tokens are deposited via batchDepositTNFT.
+     *      Reason being, when tokens are deposited sequentially via batch, the share price will fluctuate in between deposits.
+     * @param _tangibleNFTs Array of TangibleNFT contract addresses of NFTs being quoted.
+     * @param _tokenIds Array of TokenIds of NFTs being quoted.
+     * @return shares -> Array of Erc20 basket tokens quoted for each NFT respectively.
+     */
+    function getBatchQuoteIn(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external view returns (uint256[] memory shares) {
+        uint256 len = _tangibleNFTs.length;
+        shares = new uint256[](len);
+        for (uint i; i < len;) {
+
+            // calculate usd value of TNFT with 18 decimals
+            uint256 usdValue = _getUSDValue(_tangibleNFTs[i], _tokenIds[i]);
+            require(usdValue > 0, "Unsupported TNFT");
+
+            // calculate shares for depositor
+            shares[i] = _quoteShares(usdValue);
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /**
-     * @notice This method is used to quote an amount of basket tokens transferred to depositor if a specfiied token is deposted.
+     * @notice This method is used to quote an amount of basket tokens transferred to depositor if a specfied token is deposted.
      * @dev Does NOT include the amount of basket tokens subtracted for deposit fee.
      * @param _tangibleNFT TangibleNFT contract address of NFT being quoted.
      * @param _tokenId TokenId of NFT being quoted.
