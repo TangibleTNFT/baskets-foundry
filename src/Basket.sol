@@ -408,6 +408,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         assert(primaryRentToken.transfer(msg.sender, _withdrawAmount));
     }
 
+    function getBatchQuoteIn() external view {
+        // TODO
+    }
+
     /**
      * @notice This method is used to quote an amount of basket tokens transferred to depositor if a specfiied token is deposted.
      * @dev Does NOT include the amount of basket tokens subtracted for deposit fee.
