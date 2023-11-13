@@ -155,6 +155,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
 
         delete requestTracker[_requestId];
         delete outstandingRequest[basket];
+        
         emit RequestFulfilled(_requestId, basket);
     }
 
