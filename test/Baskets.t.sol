@@ -518,7 +518,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basketVrfConsumer.subId(), subId);
         assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
         assertEq(basketVrfConsumer.requestConfirmations(), 20);
-        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
+        assertEq(basketVrfConsumer.callbackGasLimit(), 200_000);
         assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
 
         // verify BasketManager initial state
@@ -1942,7 +1942,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(basketVrfConsumer.callbackGasLimit(), 50_000);
+        assertEq(basketVrfConsumer.callbackGasLimit(), 200_000);
 
         // ~ Execute updateCallbackGasLimit ~
 
