@@ -70,6 +70,9 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
 
+    /// @notice This stores the contract address of the revenue share contract.
+    address public revenueShare;
+
 
     // ------
     // Events
@@ -257,6 +260,14 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
         require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
         basketsVrfConsumer = _basketsVrfConsumer;
+    }
+
+    /**
+     * @notice TODO
+     */
+    function setRevenueShare(address _revenueShare) external onlyFactoryOwner {
+        require(_revenueShare != address(0), "_revenueShare == address(0)");
+        revenueShare = _revenueShare;
     }
 
     /**

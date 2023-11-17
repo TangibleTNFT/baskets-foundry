@@ -89,8 +89,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     bool public seedRequestInFlight;
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
-    /// @dev If this ERC-20 token decimals != 6 -> rent arithmetic will not work.
-    IERC20Metadata public primaryRentToken; // USDC by default
+    IERC20Metadata public primaryRentToken; // USTB by default
 
     /// @notice Address of basket creator.
     address public deployer;
@@ -100,6 +99,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /// @notice This stores the data for the next NFT that is elgible for redemption.
     RedeemData public nextToRedeem;
+
+    /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 10% == 1000)
+    uint16 public rentFee; // 10% by default
 
 
     // ------
@@ -183,7 +185,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _symbol Unique symbol of basket contract.
      * @param _factoryProvider FactoryProvider contract address.
      * @param _tnftType TNFT Type (category).
-     * @param _rentToken ERC-20 token being used for rent. USDC by default.
+     * @param _rentToken ERC-20 token being used for rent. USTB by default.
      * @param _features Array of features TNFTs must support to be in this basket.
      * @param _location ISO country code for supported location of basket.
      * @param _deployer Address of creator of the basket contract.
@@ -211,6 +213,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         depositFee = 50; // 0.5%
+        rentFee = 1000; // 10.0%
+
         location = _location;
 
         __RebaseToken_init(_name, _symbol);
@@ -345,67 +349,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
-     * @param _withdrawAmount Amount of rent to withdraw. note: Should input decimals from `primaryRentToken.decimals()`. Default is 6.
+     * @param _withdrawAmount Amount of rent to withdraw. note: Should input with basis points == `primaryRentToken.decimals()`.
      */
     function withdrawRent(uint256 _withdrawAmount) external onlyFactoryOwner {
-        require((_getRentBal() / 10**12) >= _withdrawAmount, "Amount exceeds withdrawable rent");
-
-        // if we still need more rent, start claiming rent from TNFTs in basket.
-        if (_withdrawAmount > primaryRentToken.balanceOf(address(this))) {
-
-            // declare master array to store all claimable rent data.
-            RentData[] memory claimableRent = new RentData[](depositedTnfts.length);
-            uint256 counter;
-
-            // iterate through all TNFT contracts supported by this basket.
-            for (uint256 i; i < tnftsSupported.length;) {
-                address tnft = tnftsSupported[i];
-
-                // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
-                uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
-
-                // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
-                for (uint256 j; j < claimables.length;) {
-                    uint256 amountClaimable = claimables[j];
-
-                    if (amountClaimable > 0) {
-                        claimableRent[counter] = RentData(tnft, tokenIdLibrary[tnft][j], amountClaimable);
-                        unchecked {
-                            ++counter;
-                        }
-                    }
-                    unchecked {
-                        ++j;
-                    }
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-
-            // start iterating through the master claimable rent array claiming rent for each token.
-            uint256 index;
-            while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
-
-                IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
-                uint256 tokenId = claimableRent[index].tokenId;
-
-                if (rentManager.claimableRentForToken(tokenId) > 0) {
-
-                    uint256 preBal = primaryRentToken.balanceOf(address(this));
-                    uint256 claimedRent = rentManager.claimRentForToken(tokenId);
-
-                    require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "claiming error");
-                }
-
-                unchecked {
-                    ++index;
-                }
-            }
-        }
-
-        // transfer rent to msg.sender (factory owner)
-        assert(primaryRentToken.transfer(msg.sender, _withdrawAmount));
+        _transferRent(msg.sender, _withdrawAmount);
     }
 
     /**
@@ -525,13 +472,19 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 totalRentalIncome = _getRentBal();
     
         uint256 collectedRent = totalRentalIncome - previousRentalIncome;
-        uint256 rebaseIndexDelta = collectedRent * 1e18 / getTotalValueOfBasket();
+
+        // Take 10% off collectedRent and send to revenue contract for RWA holders TODO: Test
+        uint256 rentDistribution = (collectedRent * rentFee) / 100_00;
+        collectedRent -= rentDistribution;
+
+        uint256 rebaseIndexDelta = (collectedRent * decimalsDiff()) * 1e18 / getTotalValueOfBasket();
 
         uint256 rebaseIndex = rebaseIndex();
 
         rebaseIndex += rebaseIndexDelta;
-        
         totalRentValue = totalRentalIncome;
+
+        _transferRent(_getRevenueShare(), rentDistribution);
         _setRebaseIndex(rebaseIndex);
 
         emit RebaseExecuted(msg.sender, totalRentValue, rebaseIndex);
@@ -560,8 +513,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             totalValue += totalNftValue;
 
             // get value of rent accrued by this contract.
-            //totalValue += _getRentBal();
-            totalValue += totalRentValue;
+            totalValue += totalRentValue * decimalsDiff();
         }
     }
 
@@ -600,6 +552,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         return true;
+    }
+
+    /**
+     * @notice TODO
+     */
+    function decimalsDiff() public view returns (uint256) {
+        uint256 decimalsDiff = decimals() - primaryRentToken.decimals();
+        if (decimalsDiff != 0) {
+            return 10 ** decimalsDiff;
+        }
+        else return 1;
     }
 
 
@@ -777,8 +740,72 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice TODO
+     */
+    function _transferRent(address _recipient, uint256 _withdrawAmount) internal {
+        require(totalRentValue >= _withdrawAmount, "Amount exceeds withdrawable rent");
+
+        // if we still need more rent, start claiming rent from TNFTs in basket.
+        if (_withdrawAmount > primaryRentToken.balanceOf(address(this))) {
+
+            // declare master array to store all claimable rent data.
+            RentData[] memory claimableRent = new RentData[](depositedTnfts.length);
+            uint256 counter;
+
+            // iterate through all TNFT contracts supported by this basket.
+            for (uint256 i; i < tnftsSupported.length;) {
+                address tnft = tnftsSupported[i];
+
+                // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
+                uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
+
+                // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
+                for (uint256 j; j < claimables.length;) {
+                    uint256 amountClaimable = claimables[j];
+
+                    if (amountClaimable > 0) {
+                        claimableRent[counter] = RentData(tnft, tokenIdLibrary[tnft][j], amountClaimable);
+                        unchecked {
+                            ++counter;
+                        }
+                    }
+                    unchecked {
+                        ++j;
+                    }
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+
+            // start iterating through the master claimable rent array claiming rent for each token.
+            uint256 index;
+            while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
+
+                IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
+                uint256 tokenId = claimableRent[index].tokenId;
+
+                if (rentManager.claimableRentForToken(tokenId) > 0) {
+
+                    uint256 preBal = primaryRentToken.balanceOf(address(this));
+                    uint256 claimedRent = rentManager.claimRentForToken(tokenId);
+
+                    require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "claiming error");
+                }
+
+                unchecked {
+                    ++index;
+                }
+            }
+        }
+
+        // transfer rent to msg.sender (factory owner)
+        assert(primaryRentToken.transfer(_recipient, _withdrawAmount));
+        totalRentValue -= _withdrawAmount;
+    }
+
+    /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
-     * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
      * @return totalRent -> Amount of claimable rent by from all TNFTs in this basket + rent in basket balance.
      */
     function _getRentBal() internal view returns (uint256 totalRent) {
@@ -789,8 +816,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             uint256 claimable = _getRentManager(tnft).claimableRentForTokenBatchTotal(tokenIdLibrary[tnft]);
 
             if (claimable > 0) {
-                // note: base18 - primaryRentToken.decimals == 12
-                totalRent += claimable * 10**12;
+                totalRent += claimable;
             }
 
             unchecked {
@@ -798,7 +824,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             }
         }
 
-        totalRent += primaryRentToken.balanceOf(address(this)) * 10**12;
+        totalRent += primaryRentToken.balanceOf(address(this));
     }
 
     /**
@@ -898,6 +924,14 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function _getBasketVrfConsumer() internal returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).basketsVrfConsumer();
+    }
+
+    /**
+     * @notice Internal method for returning the address of RevenueShare contract.
+     * @return Address of RevenueShare.
+     */
+    function _getRevenueShare() internal returns (address) {
+        return IBasketManager(IFactory(factory()).basketsManager()).revenueShare();
     }
 
     /**

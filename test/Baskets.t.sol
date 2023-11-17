@@ -147,6 +147,10 @@ contract BasketsIntegrationTest is Utility {
         vm.prank(factoryOwner);
         basketManager.setBasketsVrfConsumer(address(basketVrfConsumer));
 
+        // set revenueShare address on basketManager
+        vm.prank(factoryOwner);
+        basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
+
         // add consumer on vrf coordinator 
         vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
@@ -632,10 +636,6 @@ contract BasketsIntegrationTest is Utility {
         address[] memory tnftsSupported = basket.getTnftsSupported();
         assertEq(tnftsSupported.length, 0);
 
-        //uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        //uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
-
-        //uint256 feeTaken_Joe = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
         uint256 amountAfterFee_Joe = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID));
 
         // ~ Joe deposits TNFT ~
@@ -647,7 +647,6 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Nik deposits TNFT ~
 
-        //uint256 feeTaken_Nik = _calculateFeeAmount(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
         uint256 amountAfterFee_Nik = _calculateAmountAfterFee(basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID));
 
         vm.startPrank(NIK);
@@ -1555,18 +1554,19 @@ contract BasketsIntegrationTest is Utility {
 
         // get nft value
         uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
-        assertEq(usdValue1, 650_000 ether); //1e18
+        assertEq(usdValue1, 650_000 ether);
 
-        // deal category owner USDC to deposit into rentManager
-        uint256 amount = 10_000 * USD;
-        deal(address(MUMBAI_USDC), TANGIBLE_LABS, amount);
+        // deal category owner USTB to deposit into rentManager
+        uint256 amount = 10_000 * WAD;
+        deal(address(MUMBAI_USTB), TANGIBLE_LABS, amount);
+        //address(MUMBAI_USTB).call(abi.encodeWithSignature("mint(address,uint256)", TANGIBLE_LABS, amount));
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_USDC.approve(address(rentManager), amount);
+        MUMBAI_USTB.approve(address(rentManager), amount);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(MUMBAI_USDC),
+            address(MUMBAI_USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -1578,18 +1578,20 @@ contract BasketsIntegrationTest is Utility {
 
         // get rent value
         uint256 rentClaimable = rentManager.claimableRentForToken(JOE_TOKEN_ID);
-        assertEq(rentClaimable, 10_000 * USD); //1e6
+        assertEq(rentClaimable, 10_000 * WAD);
 
         // grab rent value
         basket.rebase();
+
+        emit log_uint(basket.getRentBal());
 
         // call getTotalValueOfBasket
         uint256 totalValue = basket.getTotalValueOfBasket();
         
         // post state check
         emit log_named_uint("Total value of basket", totalValue);
-        assertEq(basket.getRentBal(), rentClaimable * 10**12);
-        assertEq(totalValue, usdValue1 + basket.getRentBal());
+        assertEq(basket.getRentBal(), rentClaimable - ((rentClaimable * basket.rentFee()) / 100_00));
+        assertEq(totalValue, usdValue1 + (basket.getRentBal() * basket.decimalsDiff()));
     }
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket with many TNFTs.
