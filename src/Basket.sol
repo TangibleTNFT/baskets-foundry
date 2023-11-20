@@ -415,7 +415,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice This method returns the unclaimed rent balance of all TNFTs inside the basket.
-     * @dev Returns an amount in USD (stablecoin) with 18 decimal points.
+     * @dev Returns an amount of `primaryRentToken` in contract + claimable from rent manager.
      * @param totalRent Total claimable rent balance of TNFTs inside basket.
      */
     function getRentBal() external view returns (uint256 totalRent) {
@@ -473,7 +473,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     
         uint256 collectedRent = totalRentalIncome - previousRentalIncome;
 
-        // Take 10% off collectedRent and send to revenue contract for RWA holders TODO: Test
+        // Take 10% off collectedRent and send to revenue contract
         uint256 rentDistribution = (collectedRent * rentFee) / 100_00;
         collectedRent -= rentDistribution;
 
@@ -555,9 +555,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice TODO
+     * @notice This method provides an easy way to fetch the decimal difference between the `primaryRentToken` and
+     *         the basket's native 18 decimals.
+     * @return decimalsDiff -> If the difference of decimals is gt 0, it will return 10**x (x being the difference).
+     *         This can make converting basis points much easier. However, if the difference is == 0, will just return 1.
      */
-    function decimalsDiff() public view returns (uint256) {
+    function decimalsDiff() public view returns (uint256 decimalsDiff) {
         uint256 decimalsDiff = decimals() - primaryRentToken.decimals();
         if (decimalsDiff != 0) {
             return 10 ** decimalsDiff;
@@ -740,7 +743,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice TODO
+     * @notice This method will transfer an arbitrary amount of `primaryRentToken` to a specified recipient.
+     * @dev Will claim any rent from the rent manager that is needed if balanceOf(address(this)) is not sufficient.
+     * @param _recipient Recipient of `primaryRentToken`.
+     * @param _withdrawAmount Amount of `primaryRentToken` to transfer to `_recipient`.
      */
     function _transferRent(address _recipient, uint256 _withdrawAmount) internal {
         require(totalRentValue >= _withdrawAmount, "Amount exceeds withdrawable rent");

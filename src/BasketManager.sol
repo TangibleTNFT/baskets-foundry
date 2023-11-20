@@ -254,7 +254,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
     /**
-     * @notice This method allows the factory owner to update the basketsVrfConsumer contract address.
+     * @notice This method allows the factory owner to update the `basketsVrfConsumer` contract address.
      * @param _basketsVrfConsumer New contract address.
      */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
@@ -263,7 +263,8 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
     /**
-     * @notice TODO
+     * @notice This method allows the factory owner to update the `revenueShare` contract address.
+     * @param _revenueShare New contract address.
      */
     function setRevenueShare(address _revenueShare) external onlyFactoryOwner {
         require(_revenueShare != address(0), "_revenueShare == address(0)");
@@ -293,11 +294,6 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }
-
-
-    // ---------------
-    // External Method
-    // ---------------
 
     /**
      * @notice This method allows the factory owner to delete baskets from the basketManager.
