@@ -1645,8 +1645,8 @@ contract StressTests is Utility {
 
             // ~ Post-state check ~
 
-            uint256 rentPostFee = amountRent - ((amountRent * basket.rentFee()) / 100_00);
-            uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * rentPostFee) / preTotalValue);
+            // uint256 rentPostFee = amountRent - ((amountRent * basket.rentFee()) / 100_00);
+            // uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * rentPostFee) / preTotalValue);
 
             assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
             assertGt(basket.totalSupply(), preTotalSupply);

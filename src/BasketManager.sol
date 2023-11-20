@@ -73,6 +73,14 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice This stores the contract address of the revenue share contract.
     address public revenueShare;
 
+    /// @notice Returns the address of the basket, given it's unique hash.
+    /// @dev Mainly implemented for the front end.
+    mapping(bytes32 => address) public fetchBasketByHash;
+
+    /// @notice This variable caches the most recent hash created for a new basket.
+    /// @dev Created primarily in response to stack-too-deep errors when calling `deployBasket`.
+    bytes32 internal hashCache;
+
 
     // ------
     // Events
@@ -171,8 +179,11 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // verify _symbol is unique and available
         require(!symbolHashTaken[keccak256(abi.encodePacked(_symbol))], "Symbol not available");
 
+        // create unique hash for new basket
+        hashCache = createHash(_tnftType, _location, _features);
+
         // might not be necessary -> hash is checked when Basket is initialized
-        require(checkBasketAvailability(createHash(_tnftType, _location, _features)), "Basket already exists");
+        require(checkBasketAvailability(hashCache), "Basket already exists");
 
         // check features are valid.
         for (uint256 i; i < _features.length;) {
@@ -200,7 +211,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // store hash and new newBasketBeacon
         baskets.push(address(newBasketBeacon));
 
-        hashedFeaturesForBasket[address(newBasketBeacon)] = createHash(_tnftType, _location, _features);
+        hashedFeaturesForBasket[address(newBasketBeacon)] = hashCache;
         isBasket[address(newBasketBeacon)] = true;
 
         basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
@@ -208,6 +219,8 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
         nameHashTaken[keccak256(abi.encodePacked(_name))] = true;
         symbolHashTaken[keccak256(abi.encodePacked(_symbol))] = true;
+
+        fetchBasketByHash[hashCache] = address(newBasketBeacon);
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
@@ -315,6 +328,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
             }
         }
 
+        delete fetchBasketByHash[hashedFeaturesForBasket[_basket]];
         delete hashedFeaturesForBasket[_basket];
         delete isBasket[_basket];
         delete nameHashTaken[basketNames[_basket]];

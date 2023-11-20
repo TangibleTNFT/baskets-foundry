@@ -348,6 +348,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice This method allows the factory owner to update the `primaryRentToken` state variable.
+     * @dev If the rent token is being changed indefinitely, make sure to change the address of the rent token being used
+     *      to initialize new baskets on the BasketManager.
+     * @param _primaryRentToken New address for `primaryRentToken`.
+     */
+    function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
+        require(_primaryRentToken != address(0), "Cannot be == address(0)");
+        primaryRentToken = IERC20Metadata(_primaryRentToken);
+    }
+
+    /**
      * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
      * @param _withdrawAmount Amount of rent to withdraw. note: Should input with basis points == `primaryRentToken.decimals()`.
      */

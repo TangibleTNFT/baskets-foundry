@@ -306,6 +306,11 @@ contract BasketManagerTest is Utility {
             _basket.getTotalValueOfBasket()
         );
 
+        assertEq(
+            basketManager.fetchBasketByHash(basketManager.hashedFeaturesForBasket(address(_basket))),
+            address(_basket)
+        );
+
         assertEq(_basket.balanceOf(JOE), basketShares[0]);
         assertEq(_basket.totalSupply(), _basket.balanceOf(JOE));
         assertEq(_basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_1), true);
@@ -691,6 +696,8 @@ contract BasketManagerTest is Utility {
         assertEq(basketManager.nameHashTaken(basketManager.basketNames(address(_basket))), true);
         assertEq(basketManager.symbolHashTaken(basketManager.basketSymbols(address(_basket))), true);
 
+        assertEq(basketManager.fetchBasketByHash(_hash), address(_basket));
+
         // ~ Execute destroyBasket() ~
 
         vm.prank(factoryOwner);
@@ -711,6 +718,8 @@ contract BasketManagerTest is Utility {
 
         assertEq(basketManager.nameHashTaken(basketManager.basketNames(address(_basket))), false);
         assertEq(basketManager.symbolHashTaken(basketManager.basketSymbols(address(_basket))), false);
+
+        assertEq(basketManager.fetchBasketByHash(_hash), address(0));
     }
 
 

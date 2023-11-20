@@ -1683,11 +1683,23 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ config ~
 
-        uint256 tokenId = JOE_TOKEN_ID;
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            500_000_000,
+            1,
+            1,
+            9999, // fp
+            JOE
+        );
+
+        uint256 tokenId = tokenIds[0];
         uint256 newNftValue = 625_000_000; //GBP -> 25% more expensive
 
         // get fingerprint
         uint256 fingerprint = realEstateTnft.tokensFingerprint(tokenId);
+        emit log_named_uint("FP", fingerprint);
+        emit log_named_uint("JOE TOKENID", tokenId);
+        emit log_named_uint("TOKENID", realEstateTnft.fingerprintTokens(fingerprint, 0));
 
         // Joe deposits NFT
         vm.startPrank(JOE);
@@ -1980,5 +1992,24 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(basketVrfConsumer.callbackGasLimit(), 1_000_000);
+    }
+
+
+    // ~ updatePrimaryRentToken ~
+
+    function test_baskets_updatePrimaryRentToken() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(basket.primaryRentToken()), address(MUMBAI_DAI));
+
+        // ~ Execute updatePrimaryRentToken ~
+
+        vm.prank(factoryOwner);
+        basket.updatePrimaryRentToken(address(MUMBAI_USTB));
+
+        // ~ Post-state check ~
+
+        assertEq(address(basket.primaryRentToken()), address(MUMBAI_USTB));
     }
 }
