@@ -274,7 +274,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -335,7 +335,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -351,7 +351,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -367,7 +367,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -383,7 +383,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             UK_ISO,
             features,
             emptyAddrArr,
@@ -398,7 +398,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -445,7 +445,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             tnfts,
@@ -511,7 +511,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             location,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -561,7 +561,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             US_ISO, // US ISO code
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -573,7 +573,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             UK_ISO, // UK ISO code
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -620,13 +620,13 @@ contract BasketManagerTest is Utility {
         
         // ~ Config ~
 
-        uint256 amount = 1_000 * USD;
-        deal(address(MUMBAI_USDC), address(basketManager), amount);
+        uint256 amount = 1_000 * WAD;
+        deal(address(MUMBAI_DAI), address(basketManager), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(MUMBAI_USDC.balanceOf(address(basketManager)), amount);
-        assertEq(MUMBAI_USDC.balanceOf(address(factoryOwner)), 0);
+        assertEq(MUMBAI_DAI.balanceOf(address(basketManager)), amount);
+        assertEq(MUMBAI_DAI.balanceOf(address(factoryOwner)), 0);
 
         // ~ Execute withdrawERC20 ~
 
@@ -635,19 +635,19 @@ contract BasketManagerTest is Utility {
         vm.expectRevert("Address cannot be zero address");
         basketManager.withdrawERC20(address(0));
 
-        // withdraw USDC balance -> success
+        // withdraw DAI balance -> success
         vm.prank(factoryOwner);
-        basketManager.withdrawERC20(address(MUMBAI_USDC));
+        basketManager.withdrawERC20(address(MUMBAI_DAI));
 
         // ~ Post-state check ~
 
-        assertEq(MUMBAI_USDC.balanceOf(address(basketManager)), 0);
-        assertEq(MUMBAI_USDC.balanceOf(address(factoryOwner)), amount);
+        assertEq(MUMBAI_DAI.balanceOf(address(basketManager)), 0);
+        assertEq(MUMBAI_DAI.balanceOf(address(factoryOwner)), amount);
 
         // force revert -> Insufficient amount
         vm.prank(factoryOwner);
         vm.expectRevert("Insufficient token balance");
-        basketManager.withdrawERC20(address(MUMBAI_USDC));
+        basketManager.withdrawERC20(address(MUMBAI_DAI));
     }
 
     
@@ -669,7 +669,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_USDC),
+            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
