@@ -353,7 +353,7 @@ contract StressTests is Utility {
         vm.prank(TANGIBLE_LABS); // category owner
         ITangibleNFT tnft = IFactoryExt(address(factoryV2)).newCategory(
             name,  // Name
-            "RLTY",     // Symbol
+            name,     // Symbol
             "",         // Metadata base uri
             false,      // storage price fixed
             false,      // storage required

@@ -1930,6 +1930,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), (amountRent * basket.rentFee()) / 100_00);
         assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()) + basket.totalRentValue(), amountRent);
  
+        emit log_named_uint("decimals diff", basket.decimalsDiff());
         emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
         emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000

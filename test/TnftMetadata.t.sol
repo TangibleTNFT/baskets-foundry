@@ -86,7 +86,8 @@ contract TnftMetadataTest is Utility {
     /// @notice Verifies restrictions and state changes of addFeatures
     function test_TnftMetadata_addFeatures() public {
 
-        // Pre-state check.
+        // ~ Pre-state check ~
+
         TNFTMetadata.FeatureInfo memory feature;
         (feature.added, feature.description) = metadata.featureInfo(FEATURE_1);
         assertEq(feature.added, false);
@@ -95,13 +96,15 @@ contract TnftMetadataTest is Utility {
         uint256[] memory features = metadata.getFeatureList();
         assertEq(features.length, 0);
 
-        // Execute addFeatures 
+        // ~ Execute addFeatures ~
+
         metadata.addFeatures(
             _asSingletonArrayUint(FEATURE_1),
             _asSingletonArrayString(DESC_1)
         );
 
-        // Post-state check.
+        // ~ Post-state check ~
+
         (feature.added, feature.description) = metadata.featureInfo(FEATURE_1);
         assertEq(feature.added, true);
         assertEq(feature.description, DESC_1);
@@ -132,7 +135,8 @@ contract TnftMetadataTest is Utility {
     /// @notice Verifies restrictions and state changes of addFeatures with multiple features
     function test_TnftMetadata_addFeatures_multiple() public {
 
-        // Pre-state check.
+        // ~ Pre-state check ~
+
         uint256[] memory features = metadata.getFeatureList();
         assertEq(features.length, 0);
         assertEq(metadata.featureIndexInList(FEATURE_1), 0);
@@ -154,13 +158,15 @@ contract TnftMetadataTest is Utility {
         stringArray[2] = DESC_3;
         stringArray[3] = DESC_4;
 
-        // Execute addFeatures 
+        // ~ Execute addFeatures ~
+
         metadata.addFeatures(
             featureArray,
             stringArray
         );
 
-        // Post-state check.
+        // ~ Post-state check ~
+        
         features = metadata.getFeatureList();
         assertEq(features.length, 4);
         assertEq(features[0], FEATURE_1);

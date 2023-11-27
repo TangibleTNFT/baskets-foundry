@@ -9,7 +9,7 @@ import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.so
 
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
+import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
 contract Utility is Test{
 
@@ -34,8 +34,8 @@ contract Utility is Test{
 
     IERC20Metadata public constant MUMBAI_USTB = IERC20Metadata(0xbFB1dB179d9710Ed05F6dfCEd279205156EA3684);
 
-    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636);
-    IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F);
+    IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x667269618f67f543d3121DE3DF169747950Deb13); // 0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636
+    IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0xf46c460F5B2D33aC5c4cE2aA015c8B5c430231C5); // 0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F
 
     VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
     VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);
