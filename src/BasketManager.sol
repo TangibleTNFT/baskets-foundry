@@ -57,28 +57,28 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice This mapping provides a low-gas method to checking the availability of a symbol for a new basket.
     mapping(bytes32 => bool) public symbolHashTaken;
 
-    /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
-    UpgradeableBeacon public beacon;
+    /// @notice Returns the address of the basket, given it's unique hash.
+    /// @dev Mainly implemented for the front end.
+    mapping(bytes32 => address) public fetchBasketByHash;
+
+    /// @notice Limit of amount of features allowed per basket.
+    uint256 public featureLimit;
+
+    /// @notice This variable caches the most recent hash created for a new basket.
+    /// @dev Created primarily in response to stack-too-deep errors when calling `deployBasket`.
+    bytes32 internal hashCache;
 
     /// @notice Array of all baskets deployed.
     address[] public baskets;
 
-    /// @notice Limit of amount of features allowed per basket.
-    uint256 public featureLimit;
+    /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
+    UpgradeableBeacon public beacon;
 
     /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
 
     /// @notice This stores the contract address of the revenue share contract.
     address public revenueShare;
-
-    /// @notice Returns the address of the basket, given it's unique hash.
-    /// @dev Mainly implemented for the front end.
-    mapping(bytes32 => address) public fetchBasketByHash;
-
-    /// @notice This variable caches the most recent hash created for a new basket.
-    /// @dev Created primarily in response to stack-too-deep errors when calling `deployBasket`.
-    bytes32 internal hashCache;
 
 
     // ------

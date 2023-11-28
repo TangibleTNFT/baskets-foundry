@@ -8,6 +8,9 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgrade
 // chainlink imports
 import { VRFCoordinatorV2Interface } from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
+// gelato imports 
+import { GelatoVRFConsumerBase } from "@vrf/contracts/GelatoVRFConsumerBase.sol";
+
 // tangible imports
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -39,14 +42,14 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, VRFConsumerBa
     /// @dev If value is over-written, must mean the previous requestId didn't receive a successful callback.
     mapping(address => uint256) public outstandingRequest;
 
-    /// @notice Stores Vrf subscription Id.
-    uint64 public subId;
     /// @notice KeyHash required by VRF.
     bytes32 public keyHash;
-    /// @notice Number of block confirmations before VRF fulfills request.
-    uint16 public requestConfirmations;
+    /// @notice Stores Vrf subscription Id.
+    uint64 public subId;
     /// @notice Callback gas limit for VRF request
     uint32 public callbackGasLimit;
+    /// @notice Number of block confirmations before VRF fulfills request.
+    uint16 public requestConfirmations;
 
 
     // ------

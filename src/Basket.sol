@@ -50,6 +50,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Ledger of all TNFT tokens stored in this basket.
     TokenData[] public depositedTnfts;
 
+    /// @notice This stores the data for the next NFT that is elgible for redemption.
+    RedeemData public nextToRedeem;
+
     /// @notice Array of TNFT contract addresses supported by this contract.
     address[] public tnftsSupported;
 
@@ -79,14 +82,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice This value stores the amount of rent claimable by this contract. Updated upon rebase.
     uint256 public totalRentValue;
 
-    /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
-    uint16 public depositFee; // 0.5% by default
-
-    /// @notice Stores the ISO country code for location this basket supports.
-    uint16 public location;
-
-    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
-    bool public seedRequestInFlight;
+    /// @notice If there is a pending, unfulfilled, Chainlink vrf request, the requestId will be stored here.
+    uint256 public pendingSeedRequestId;
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
     IERC20Metadata public primaryRentToken; // USTB by default
@@ -94,14 +91,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Address of basket creator.
     address public deployer;
 
-    /// @notice If there is a pending, unfulfilled, Chainlink vrf request, the requestId will be stored here.
-    uint256 public pendingSeedRequestId;
-
-    /// @notice This stores the data for the next NFT that is elgible for redemption.
-    RedeemData public nextToRedeem;
+    /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
+    uint16 public depositFee; // 0.5% by default
 
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 10% == 1000)
     uint16 public rentFee; // 10% by default
+
+    /// @notice Stores the ISO country code for location this basket supports.
+    uint16 public location;
+
+    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
+    bool public seedRequestInFlight;
 
 
     // ------

@@ -11,7 +11,8 @@ remappings = [
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
     "@tangible/=lib/tnftv2-audit/contracts/",
     "@chainlink/=lib/chainlink/",
-    "@tangible-foundation-contracts/=lib/tangible-foundation-contracts/src/"
+    "@tangible-foundation-contracts/=lib/tangible-foundation-contracts/src/",
+    "@vrf/=lib/vrf-contracts"
 ]
 
 [rpc_endpoints]
