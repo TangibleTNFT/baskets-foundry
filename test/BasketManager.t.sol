@@ -64,7 +64,7 @@ contract BasketManagerTest is Utility {
 
     address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
-    address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4;
+    address public TANGIBLE_LABS;
 
     uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];
 
@@ -80,6 +80,9 @@ contract BasketManagerTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin(address(this));
+
+        // new category owner
+        TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
 
         basket = new Basket();
 

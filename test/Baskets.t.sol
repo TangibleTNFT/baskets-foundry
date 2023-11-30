@@ -83,7 +83,7 @@ contract BasketsIntegrationTest is Utility {
 
     address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
-    address public constant TANGIBLE_LABS = 0x23bfB039Fe7fE0764b830960a9d31697D154F2E4; // NOTE: category owner
+    address public TANGIBLE_LABS; // NOTE: category owner
 
     address public rentManagerDepositor = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
@@ -106,6 +106,9 @@ contract BasketsIntegrationTest is Utility {
         emit log_uint(block.chainid);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
+
+        // new category owner
+        TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
 
         // vrf config
         vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
@@ -155,7 +158,7 @@ contract BasketsIntegrationTest is Utility {
         vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         // updateDepositor for rent manager
-        vm.prank(TANGIBLE_LABS);
+        vm.prank(factoryV2.categoryOwner(ITangibleNFT(realEstateTnft)));
         rentManager.updateDepositor(TANGIBLE_LABS);
 
         // set basketManager
