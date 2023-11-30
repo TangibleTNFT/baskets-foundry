@@ -30,4 +30,6 @@ interface IBasketManager {
     function isBasket(address _basket) external returns (bool);
 
     function basketsVrfConsumer() external returns (address);
+
+    function revenueShare() external returns (address);
 }

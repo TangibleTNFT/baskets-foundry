@@ -22,7 +22,7 @@ contract FulfillRedeem is Script {
     // ~ Dev config ~
 
     // TODO
-    uint64 public requestId = 2;
+    uint64 public requestId = 3;
 
     // ~ Script Configure ~
 

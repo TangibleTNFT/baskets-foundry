@@ -104,19 +104,33 @@ contract DeployToMumbai is Script {
         // 6. Add consumer to vrf coordinator
         vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumerProxy));
 
-        // 7. TODO: call basketManager::setBasketsVrfConsumer
+        // 7. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
 
-        // 8. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
+        // 8. TODO: set revenueShare via BasketManager::setRevenueShare
+
+        // 9. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
         
 
         // log addresses
-        console2.log("1. Mock Vrf Coordinator:", address(vrfCoordinatorMock));
-        console2.log("2. Basket Implementation:", address(basket));
-        console2.log("3. BasketManager Implementation:", address(basketManager));
-        console2.log("4. BasketManager Proxy:", address(basketManagerProxy));
-        console2.log("5. BasketVrfConsumer Implementation:", address(basketVrfConsumer));
-        console2.log("6. BasketVrfConsumer Proxy:", address(basketVrfConsumerProxy));
-
+        console2.log("1. BasketManager (proxy)            =", address(basketManagerProxy));
+        console2.log("2. BasketManager Implementation     =", address(basketManager));
+        
+        console2.log("3. BasketVrfConsumer (proxy)        =", address(basketVrfConsumerProxy));
+        console2.log("4. BasketVrfConsumer Implementation =", address(basketVrfConsumer));
+        
+        console2.log("5. Mock Vrf Coordinator             =", address(vrfCoordinatorMock));
+        console2.log("6. Basket Implementation            =", address(basket));
+        
         vm.stopBroadcast();
     }
+
+    /**
+        == Logs ==
+        1. Mock Vrf Coordinator: 0x19d3746C662973E17C2a8658D958a977fbfdeb29
+        2. Basket Implementation: 0x86892455EB3F49307607aA006c15D11Af0ac7aA4
+        3. BasketManager Implementation: 0x1FA8f797A5D6a56aee856850aa701157EA53f57E
+        4. BasketManager Proxy: 0x1e44E0a4B8596E47E291f868A0485864AC7eE869
+        5. BasketVrfConsumer Implementation: 0x36b6240FD63D5A4fb095AbF7cC8476659C76071C
+        6. BasketVrfConsumer Proxy: 0x192ab3Dfee4e087C4F5a5cE54F3053fe4D0C277D
+    */
 }

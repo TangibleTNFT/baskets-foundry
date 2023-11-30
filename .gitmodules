@@ -23,3 +23,7 @@
 [submodule "lib/tangible-foundation-contracts"]
 	path = lib/tangible-foundation-contracts
 	url = git@github.com:TangibleTNFT/tangible-foundation-contracts.git
+	
+[submodule "lib/vrf-contracts"]
+	path = lib/vrf-contracts
+	url = https://github.com/gelatodigital/vrf-contracts

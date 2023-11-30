@@ -5,7 +5,6 @@ pragma solidity ^0.8.19;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -58,17 +57,28 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     /// @notice This mapping provides a low-gas method to checking the availability of a symbol for a new basket.
     mapping(bytes32 => bool) public symbolHashTaken;
 
-    /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
-    UpgradeableBeacon public beacon;
-
-    /// @notice Array of all baskets deployed.
-    address[] public baskets;
+    /// @notice Returns the address of the basket, given it's unique hash.
+    /// @dev Mainly implemented for the front end.
+    mapping(bytes32 => address) public fetchBasketByHash;
 
     /// @notice Limit of amount of features allowed per basket.
     uint256 public featureLimit;
 
+    /// @notice This variable caches the most recent hash created for a new basket.
+    /// @dev Created primarily in response to stack-too-deep errors when calling `deployBasket`.
+    bytes32 internal hashCache;
+
+    /// @notice Array of all baskets deployed.
+    address[] public baskets;
+
+    /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
+    UpgradeableBeacon public beacon;
+
     /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
+
+    /// @notice This stores the contract address of the revenue share contract.
+    address public revenueShare;
 
 
     // ------
@@ -168,8 +178,11 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // verify _symbol is unique and available
         require(!symbolHashTaken[keccak256(abi.encodePacked(_symbol))], "Symbol not available");
 
+        // create unique hash for new basket
+        hashCache = createHash(_tnftType, _location, _features);
+
         // might not be necessary -> hash is checked when Basket is initialized
-        require(checkBasketAvailability(createHash(_tnftType, _location, _features)), "Basket already exists");
+        require(checkBasketAvailability(hashCache), "Basket already exists");
 
         // check features are valid.
         for (uint256 i; i < _features.length;) {
@@ -197,7 +210,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         // store hash and new newBasketBeacon
         baskets.push(address(newBasketBeacon));
 
-        hashedFeaturesForBasket[address(newBasketBeacon)] = createHash(_tnftType, _location, _features);
+        hashedFeaturesForBasket[address(newBasketBeacon)] = hashCache;
         isBasket[address(newBasketBeacon)] = true;
 
         basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
@@ -205,6 +218,8 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
 
         nameHashTaken[keccak256(abi.encodePacked(_name))] = true;
         symbolHashTaken[keccak256(abi.encodePacked(_symbol))] = true;
+
+        fetchBasketByHash[hashCache] = address(newBasketBeacon);
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
@@ -251,12 +266,21 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
     }
 
     /**
-     * @notice This method allows the factory owner to update the basketsVrfConsumer contract address.
+     * @notice This method allows the factory owner to update the `basketsVrfConsumer` contract address.
      * @param _basketsVrfConsumer New contract address.
      */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
         require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
         basketsVrfConsumer = _basketsVrfConsumer;
+    }
+
+    /**
+     * @notice This method allows the factory owner to update the `revenueShare` contract address.
+     * @param _revenueShare New contract address.
+     */
+    function setRevenueShare(address _revenueShare) external onlyFactoryOwner {
+        require(_revenueShare != address(0), "_revenueShare == address(0)");
+        revenueShare = _revenueShare;
     }
 
     /**
@@ -283,11 +307,6 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-
-    // ---------------
-    // External Method
-    // ---------------
-
     /**
      * @notice This method allows the factory owner to delete baskets from the basketManager.
      * @dev This method is for testing purposes only. NOT available on mainnet.
@@ -308,6 +327,7 @@ contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
             }
         }
 
+        delete fetchBasketByHash[hashedFeaturesForBasket[_basket]];
         delete hashedFeaturesForBasket[_basket];
         delete isBasket[_basket];
         delete nameHashTaken[basketNames[_basket]];
