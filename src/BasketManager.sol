@@ -5,7 +5,6 @@ pragma solidity ^0.8.19;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
@@ -26,13 +25,12 @@ import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
-
 /**
  * @title BasketManager
  * @author Chase Brown
  * @notice This contract manages all Basket contracts.
  */
-contract BasketManager is Initializable, UUPSUpgradeable, FactoryModifiers {
+contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     using ArrayUtils for uint256[];
 
     // ---------------
