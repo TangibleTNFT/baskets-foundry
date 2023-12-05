@@ -60,9 +60,6 @@ contract BasketsIntegrationTest is Utility {
     BasketManager public basketManager;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // helper
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
-
     // tangible mumbai contracts
     FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
     TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
@@ -95,9 +92,6 @@ contract BasketsIntegrationTest is Utility {
 
     uint256[] internal preMintedTokens;
 
-    // State variables for VRF.
-    uint64 internal subId;
-
 
     /// @notice Config function for test cases.
     function setUp() public {
@@ -109,11 +103,6 @@ contract BasketsIntegrationTest is Utility {
 
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
-
-        // vrf config
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        subId = vrfCoordinatorMock.createSubscription();
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
 
         // Deploy Basket implementation
         basket = new Basket();
@@ -139,9 +128,7 @@ contract BasketsIntegrationTest is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
+                GELATO_OPERATOR
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
@@ -155,7 +142,7 @@ contract BasketsIntegrationTest is Utility {
         basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
 
         // add consumer on vrf coordinator 
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
+        //vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         // updateDepositor for rent manager
         vm.prank(factoryV2.categoryOwner(ITangibleNFT(realEstateTnft)));
@@ -355,7 +342,7 @@ contract BasketsIntegrationTest is Utility {
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
-        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
+        //vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
         vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
 
         vm.label(address(this), "TEST_FILE");
@@ -488,17 +475,24 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
-    function _mockVrfCoordinatorResponse(uint256 _requestId, uint256 _randomWord) internal {
-        // vm.prank(address(vrfCoordinatorMock));
-        // basketVrfConsumer.rawFulfillRandomWords(
-        //     _requestId, // requestId
-        //     _asSingletonArrayUint(_randomWord) // random word
-        // );
-        vrfCoordinatorMock.fulfillRandomWordsWithOverride(
-            _requestId,
-            address(basketVrfConsumer),
-            _asSingletonArrayUint(_randomWord)
-        );
+    function _mockVrfCoordinatorResponse(address _basket, uint256 _randomWord) internal {
+        uint256 requestId = Basket(_basket).pendingSeedRequestId();
+        uint256 roundId = _round();
+
+        bytes memory data = abi.encode(0);
+        bytes memory dataWithRound = abi.encode(roundId, abi.encode(requestId, data));
+
+        vm.prank(GELATO_OPERATOR);
+        basketVrfConsumer.fulfillRandomness(_randomWord, dataWithRound);
+    }
+
+    /// @notice Emulates the computation on GelatoVRFConsumerBase when calculating round number of drand.
+    function _round() internal view returns (uint256 round) {
+        // solhint-disable-next-line not-rely-on-time
+        uint256 elapsedFromGenesis = block.timestamp - 1692803367;
+        uint256 currentRound = (elapsedFromGenesis / 3) + 1;
+
+        round = block.chainid == 1 ? currentRound + 4 : currentRound + 1;
     }
 
 
@@ -522,11 +516,7 @@ contract BasketsIntegrationTest is Utility {
 
         // verify BasketsVrfConsumer initial state
         assertEq(basketVrfConsumer.factory(), address(factoryV2));
-        assertEq(basketVrfConsumer.subId(), subId);
-        assertEq(basketVrfConsumer.keyHash(), MUMBAI_VRF_KEY_HASH);
-        assertEq(basketVrfConsumer.requestConfirmations(), 20);
-        assertEq(basketVrfConsumer.callbackGasLimit(), 200_000);
-        assertEq(basketVrfConsumer.vrfCoordinator(), address(vrfCoordinatorMock));
+        assertEq(basketVrfConsumer.operator(), GELATO_OPERATOR);
 
         // verify BasketManager initial state
         assertEq(basketManager.factory(), address(factoryV2));
@@ -1139,7 +1129,7 @@ contract BasketsIntegrationTest is Utility {
 
         // This redeem generates a request to vrf. Mock response.
         _mockVrfCoordinatorResponse(
-            basketVrfConsumer.outstandingRequest(address(basket)),
+            address(basket),
             100
         );
 
@@ -1337,7 +1327,7 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         _mockVrfCoordinatorResponse(
-            basketVrfConsumer.outstandingRequest(address(basket)),
+            address(basket),
             100
         );
 
@@ -1970,32 +1960,12 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Vrf responds with callback ~
 
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(1));
+        _mockVrfCoordinatorResponse(address(basket), 10);
 
         // ~ Post-state check 1 ~
 
         assertEq(basket.seedRequestInFlight(), false);
         assertEq(basket.pendingSeedRequestId(), 0);
-    }
-
-
-    // ~ BasketsVrfConsumer::updateCallbackGasLimit ~
-
-    function test_baskets_basketsVrfConsumer_updateCallbackGasLimit() public {
-
-        // ~ Pre-state check ~
-
-        assertEq(basketVrfConsumer.callbackGasLimit(), 200_000);
-
-        // ~ Execute updateCallbackGasLimit ~
-
-        vm.prank(factoryOwner);
-        basketVrfConsumer.updateCallbackGasLimit(1_000_000);
-
-        // ~ Post-state check ~
-
-        assertEq(basketVrfConsumer.callbackGasLimit(), 1_000_000);
     }
 
 

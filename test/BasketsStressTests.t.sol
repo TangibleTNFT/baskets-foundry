@@ -69,9 +69,6 @@ contract StressTests is Utility {
     BasketManager public basketManager;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // helper
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
-
     // imported mumbai tangible contracts
     FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
     TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
@@ -99,9 +96,6 @@ contract StressTests is Utility {
 
     mapping(address => uint256[]) internal tokenIdMap;
 
-    // State variables for VRF.
-    uint64 internal subId;
-
     // For avoiding stack too deep errors
     struct TestConfig {
         uint256 newCategories;
@@ -127,11 +121,6 @@ contract StressTests is Utility {
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
 
-        // vrf config
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        subId = vrfCoordinatorMock.createSubscription();
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
-
         // basket stuff
         basket = new Basket();
         
@@ -156,9 +145,7 @@ contract StressTests is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
+                GELATO_OPERATOR
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
@@ -170,9 +157,6 @@ contract StressTests is Utility {
         // set revenueShare address on basketManager
         vm.prank(factoryOwner);
         basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
-
-        // add consumer on vrf coordinator 
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         vm.prank(TANGIBLE_LABS); // category owner
         notificationDispatcher.addWhitelister(address(basketManager));
@@ -262,7 +246,7 @@ contract StressTests is Utility {
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
-        vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
+        //vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
         vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
 
         vm.label(address(this), "TEST_FILE");
@@ -434,12 +418,24 @@ contract StressTests is Utility {
     }
 
     /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
-    function _mockVrfCoordinatorResponse(uint256 _requestId, uint256 _randomWord) internal {
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(
-            _requestId, // requestId
-            _asSingletonArrayUint(_randomWord) // random word
-        );
+    function _mockVrfCoordinatorResponse(address _basket, uint256 _randomWord) internal {
+        uint256 requestId = Basket(_basket).pendingSeedRequestId();
+        uint256 roundId = _round();
+
+        bytes memory data = abi.encode(0);
+        bytes memory dataWithRound = abi.encode(roundId, abi.encode(requestId, data));
+
+        vm.prank(GELATO_OPERATOR);
+        basketVrfConsumer.fulfillRandomness(_randomWord, dataWithRound);
+    }
+
+    /// @notice Emulates the computation on GelatoVRFConsumerBase when calculating round number of drand.
+    function _round() internal view returns (uint256 round) {
+        // solhint-disable-next-line not-rely-on-time
+        uint256 elapsedFromGenesis = block.timestamp - 1692803367;
+        uint256 currentRound = (elapsedFromGenesis / 3) + 1;
+
+        round = block.chainid == 1 ? currentRound + 4 : currentRound + 1;
     }
 
 
@@ -1786,12 +1782,11 @@ contract StressTests is Utility {
         assertEq(basket.seedRequestInFlight(), true);
         assertEq(basket.pendingSeedRequestId(), requestId);
         assertEq(basketVrfConsumer.requestTracker(requestId), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId), false);
+        assertEq(basketVrfConsumer.requestPending(requestId), true);
 
         // ~ Basket receives callback ~
 
-        vm.prank(address(vrfCoordinatorMock));
-        basketVrfConsumer.rawFulfillRandomWords(requestId, _asSingletonArrayUint(randomWord));
+        _mockVrfCoordinatorResponse(address(basket), randomWord);
 
         (address predictedTnft, uint256 predictedTokenId) = basket.nextToRedeem();
         emit log_named_address("TNFT chosen for redeem", predictedTnft);
@@ -1802,7 +1797,7 @@ contract StressTests is Utility {
         assertEq(basket.seedRequestInFlight(), false);
         assertEq(basket.pendingSeedRequestId(), 0);
         assertEq(basketVrfConsumer.requestTracker(requestId), address(0));
-        assertEq(basketVrfConsumer.fulfilled(requestId), true);
+        assertEq(basketVrfConsumer.requestPending(requestId), false);
 
         // ~ Execute redeemTNFT ~
 
@@ -1816,7 +1811,7 @@ contract StressTests is Utility {
         assertEq(basket.seedRequestInFlight(), true);
         assertEq(basket.pendingSeedRequestId(), requestId + 1);
         assertEq(basketVrfConsumer.requestTracker(requestId + 1), address(basket));
-        assertEq(basketVrfConsumer.fulfilled(requestId + 1), false);
+        assertEq(basketVrfConsumer.requestPending(requestId + 1), true);
 
         assertEq(ITangibleNFT(predictedTnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(predictedTnft).balanceOf(JOE), 1);

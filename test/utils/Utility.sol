@@ -28,6 +28,7 @@ contract Utility is Test{
 
     address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant REV_SHARE = address(bytes20(bytes("Revenue Share"))); // NOTE: temporary
+    address public constant GELATO_OPERATOR = address(bytes20(bytes("Gelato Vrf Operator")));
 
 
     // ~ Constants ~
