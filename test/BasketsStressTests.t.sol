@@ -694,6 +694,9 @@ contract StressTests is Utility {
                 assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
+                // verify share price is gt $100 per share
+                assertGt(basket.getSharePrice(), 100 ether);
+
                 // verify notificationDispatcher state
                 assertEq(
                     _getNotificationDispatcher(address(tnft)).registeredForNotification(address(tnft), tokenId),
@@ -1404,10 +1407,7 @@ contract StressTests is Utility {
             if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
                 tnft = batchTnftArr[i];
                 tokenId = batchTokenIdArr[i];
-                break; 
-                // ce7, 5
-                // 3EB, 1
-                // 981, 3
+                break;
             }
         }
 

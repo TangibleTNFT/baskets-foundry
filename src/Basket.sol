@@ -881,12 +881,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param usdValue $USD value of token being quoted.
      */
     function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
-        //uint256 value = (usdValue * 10_00) / 100_00; // take 10% of home value
-        uint256 value = usdValue; // take 10% of home value
         if (totalSupply() == 0) {
-            shares = value;
+            shares = usdValue / 100; // set initial price -> $100.xx
         } else {
-            shares = ((value * totalSupply()) / getTotalValueOfBasket());
+            shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
         }
     }
 

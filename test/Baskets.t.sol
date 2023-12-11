@@ -569,7 +569,6 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Post-state check ~
 
-        //uint256 feeTaken = _calculateFeeAmount(quote);
         uint256 amountAfterFee = _calculateAmountAfterFee(quote);
 
         assertWithinPrecision(
@@ -577,8 +576,6 @@ contract BasketsIntegrationTest is Utility {
             basket.getTotalValueOfBasket(),
             8
         );
-
-        assertEq(quote, usdValue);
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
@@ -1398,7 +1395,6 @@ contract BasketsIntegrationTest is Utility {
         uint256 feeTaken = _calculateFeeAmount(quote);
         uint256 amountAfterFee = _calculateAmountAfterFee(quote);
 
-        assertEq(quote, usdValue);
         assertEq(quote, amountAfterFee + feeTaken);
 
         // ~ Joe deposits ~
@@ -1479,7 +1475,6 @@ contract BasketsIntegrationTest is Utility {
         uint256 feeTaken = _calculateFeeAmount(quote);
         uint256 amountAfterFee = _calculateAmountAfterFee(quote);
 
-        assertEq(quote, usdValue);
         assertEq(quote, amountAfterFee + feeTaken);
 
         // ~ Joe deposits ~
