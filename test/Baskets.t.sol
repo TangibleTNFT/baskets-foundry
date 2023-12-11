@@ -1929,6 +1929,28 @@ contract BasketsIntegrationTest is Utility {
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
     }
 
+    /// @notice Verifies correct state changes when disableRebase is executed.
+    function test_baskets_disableRebase() public {
+
+        // ~ Config ~
+
+        vm.prank(factoryOwner);
+        basket.updateRebaseIndexManager(address(222));
+
+        // ~ Pre-state check
+
+        assertEq(basket.isRebaseDisabled(JOE), false);
+
+        // ~ Execute disableRebase for Joe ~
+
+        vm.prank(address(222));
+        basket.disableRebase(JOE, true);
+
+        // ~ Post-state check
+
+        assertEq(basket.isRebaseDisabled(JOE), true);
+    }
+
 
     // ~ sendRequestForSeed ~
 

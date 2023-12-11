@@ -91,6 +91,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Address of basket creator.
     address public deployer;
 
+    /// @notice Address of rebase manager.
+    address public rebaseIndexManager;
+
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint16 public depositFee; // 0.5% by default
 
@@ -359,6 +362,14 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice This setter allows the factory owner to update the `rebaseIndexManager` state variable.
+     * @param _rebaseIndexManager Address of rebase manager.
+     */
+    function updateRebaseIndexManager(address _rebaseIndexManager) external onlyFactoryOwner {
+        rebaseIndexManager = _rebaseIndexManager;
+    }
+
+    /**
      * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
      * @param _withdrawAmount Amount of rent to withdraw. note: Should input with basis points == `primaryRentToken.decimals()`.
      */
@@ -422,6 +433,26 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // Get shares required
         sharesRequired = _quoteShares(usdValue);
+    }
+
+    /**
+     * @notice Enables or disables rebasing for a specific account.
+     * @dev This function can be called by either the account itself or the rebase index manager.
+     * @param account The address of the account for which rebasing is to be enabled or disabled.
+     * @param disable A boolean flag indicating whether to disable (true) or enable (false) rebasing for the account.
+     */
+    function disableRebase(address account, bool disable) external {
+        require(msg.sender == account || msg.sender == rebaseIndexManager, "Not authorized");
+        require(_isRebaseDisabled(account) != disable, "Already set");
+        _disableRebase(account, disable);
+    }
+
+    /**
+     * @notice View method that returns whether `account` has rebase disabled or enabled.
+     * @param account Address of account we want to query is or is not receiving rebase.
+     */
+    function isRebaseDisabled(address account) external returns (bool) {
+        return _isRebaseDisabled(account);
     }
 
     /**
@@ -850,10 +881,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param usdValue $USD value of token being quoted.
      */
     function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
+        //uint256 value = (usdValue * 10_00) / 100_00; // take 10% of home value
+        uint256 value = usdValue; // take 10% of home value
         if (totalSupply() == 0) {
-            shares = usdValue;
+            shares = value;
         } else {
-            shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
+            shares = ((value * totalSupply()) / getTotalValueOfBasket());
         }
     }
 
