@@ -155,7 +155,7 @@ contract StressTests is Utility {
 
         // set revenueShare address on basketManager
         vm.prank(factoryOwner);
-        basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
+        basketManager.setRevenueDistributor(REV_SHARE); // NOTE: Should be replaced with real rev share contract
 
         vm.prank(TANGIBLE_LABS); // category owner
         notificationDispatcher.addWhitelister(address(basketManager));
@@ -1545,7 +1545,7 @@ contract StressTests is Utility {
 
         assertGt(basket.getRentBal(), 0);
         assertEq(basket.primaryRentToken().balanceOf(factoryOwner), 0);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), 0);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
 
         // ~ Rebase ~
 
@@ -1557,8 +1557,8 @@ contract StressTests is Utility {
 
         assertEq(basket.getRentBal(), withdrawable);
         assertEq(basket.totalRentValue(), withdrawable);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), (rentBal * basket.rentFee()) / 100_00);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()) + basket.totalRentValue(), rentBal);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (rentBal * basket.rentFee()) / 100_00);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), rentBal);
 
         // ~ Execute withdrawRent ~
 

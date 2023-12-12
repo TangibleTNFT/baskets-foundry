@@ -75,8 +75,8 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /// @notice Contract address of basketsVrfConsumer contract.
     address public basketsVrfConsumer;
 
-    /// @notice This stores the contract address of the revenue share contract.
-    address public revenueShare;
+    /// @notice This stores the contract address of the revenue distributor contract.
+    address public revenueDistributor;
 
 
     // ------
@@ -273,12 +273,12 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     }
 
     /**
-     * @notice This method allows the factory owner to update the `revenueShare` contract address.
-     * @param _revenueShare New contract address.
+     * @notice This method allows the factory owner to update the `revenueDistributor` contract address.
+     * @param _revenueDistributor New contract address.
      */
-    function setRevenueShare(address _revenueShare) external onlyFactoryOwner {
-        require(_revenueShare != address(0), "_revenueShare == address(0)");
-        revenueShare = _revenueShare;
+    function setRevenueDistributor(address _revenueDistributor) external onlyFactoryOwner {
+        require(_revenueDistributor != address(0), "_revenueDistributor == address(0)");
+        revenueDistributor = _revenueDistributor;
     }
 
     /**

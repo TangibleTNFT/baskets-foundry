@@ -138,7 +138,7 @@ contract BasketsIntegrationTest is Utility {
 
         // set revenueShare address on basketManager
         vm.prank(factoryOwner);
-        basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
+        basketManager.setRevenueDistributor(REV_SHARE); // NOTE: Should be replaced with real rev share contract
 
         // updateDepositor for rent manager
         vm.prank(factoryV2.categoryOwner(ITangibleNFT(realEstateTnft)));
@@ -1794,7 +1794,7 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.getRentBal(), amount * 2);
         assertEq(basket.primaryRentToken().balanceOf(factoryOwner), 0);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), 0);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
 
         uint256 revSharePortion = (fullRentAmount * basket.rentFee()) / 100_00;
         uint256 withdrawable = fullRentAmount - revSharePortion;
@@ -1807,8 +1807,8 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.getRentBal(), withdrawable);
         assertEq(basket.totalRentValue(), withdrawable);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), revSharePortion);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()) + basket.totalRentValue(), fullRentAmount);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), revSharePortion);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), fullRentAmount);
 
         // ~ Execute withdrawRent ~
 
@@ -1879,7 +1879,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(rentClaimable, amountRent);
         assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
         assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), 0);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
 
         // ~ Pre-state check ~
 
@@ -1911,8 +1911,8 @@ contract BasketsIntegrationTest is Utility {
             1e16
         ); // deviation of .01 or lower is acceptable
         assertEq(basket.getRentBal(), basket.totalRentValue());
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()), (amountRent * basket.rentFee()) / 100_00);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueShare()) + basket.totalRentValue(), amountRent);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), amountRent);
  
         emit log_named_uint("decimals diff", basket.decimalsDiff());
         emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
@@ -1999,5 +1999,145 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(address(basket.primaryRentToken()), address(MUMBAI_USTB));
+    }
+
+    /// @notice Verifies proper state changes during rebase after rent token change
+    function test_baskets_updateRent_thenRebase() public {
+
+        // ~ Config ~
+
+        uint256 amountRent = 10_000 * WAD;
+        uint256 amountRentUSDC = 10_000 * USD;
+
+        // create token of certain value
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, //100k gbp
+            1,
+            1,
+            1, // fingerprint
+            ALICE
+        );
+        uint256 tokenId = tokenIds[0];
+
+        // deposit into basket
+        vm.startPrank(ALICE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // deposit rent for that TNFT (no vesting)
+        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+
+        vm.startPrank(TANGIBLE_LABS);
+        MUMBAI_DAI.approve(address(rentManager), amountRent);
+        rentManager.deposit(
+            tokenId,
+            address(MUMBAI_DAI),
+            amountRent,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+
+        // skip to end of vesting period
+        skip(1);
+
+
+        // ~ Sanity check ~
+
+        uint256 rentClaimable = rentManager.claimableRentForToken(tokenId);
+        assertEq(rentClaimable, amountRent);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
+        assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
+
+        // ~ Pre-state check ~
+
+        uint256 increaseRatio = (amountRent * 1e18) / basket.getTotalValueOfBasket();
+        emit log_named_uint("% increase post-rebase", increaseRatio); // 76923 == 7.6923%
+
+        uint256 preTotalValue = basket.getTotalValueOfBasket();
+        uint256 preTotalSupply = basket.totalSupply();
+
+        assertEq(preTotalSupply, basket.balanceOf(ALICE));
+
+        emit log_named_uint("total supply", basket.totalSupply());     // 129350000000000000000000
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 130000000000000000000000
+
+        // ~ rebase ~
+
+        basket.rebase(); // Index -> 1.069230769230769230
+
+        // fee taken: 1000.000000000000000000
+        // total rent val: 9000.000000000000000000
+
+        // ~ Post-state check ~
+
+        uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * (amountRent - ((amountRent * basket.rentFee()) / 100_00))) / preTotalValue);
+
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertGt(basket.totalSupply(), preTotalSupply);
+        assertGt(basket.getTotalValueOfBasket(), preTotalValue);
+        assertWithinDiff(
+            basket.totalSupply(),
+            postRebaseSupply,
+            1e16
+        ); // deviation of .01 or lower is acceptable
+        uint256 totalRentValue = basket.totalRentValue();
+        assertEq(basket.getRentBal(), totalRentValue);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent);
+ 
+        emit log_named_uint("decimals diff", basket.decimalsDiff());
+        emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
+        emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 139000000000000000000000
+
+        // ~ Withdraw all rent from basket ~
+
+        vm.startPrank(factoryOwner);
+        basket.withdrawRent(basket.totalRentValue());
+        vm.stopPrank();
+
+        assertEq(basket.getRentBal(), 0); // rent value is 0
+        assertEq(basket.totalRentValue(), 0); // but `totalRentValue` is unchanged
+
+        // ~ Admin changes primaryRentToken ~
+
+        vm.prank(factoryOwner);
+        basket.updatePrimaryRentToken(address(MUMBAI_USDC));
+
+        // ~ Exchange previous primaryRentToken ~
+
+        // exchange USTB for USDC
+        // Transfer all USDC into basket
+        deal(address(MUMBAI_USDC), address(basket), amountRentUSDC);
+
+        // ~ Rebase ~
+
+        basket.rebase(); // Index -> 1.138461538461538460
+
+        // fee taken: 1000.000000
+        // total rent val: 9000.000000
+
+        // ~ Post-state check ~
+
+        postRebaseSupply = preTotalSupply + ((preTotalSupply * (amountRentUSDC - ((amountRentUSDC * basket.rentFee()) / 100_00))) / preTotalValue);
+
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertGt(basket.totalSupply(), preTotalSupply);
+        assertGt(basket.getTotalValueOfBasket(), preTotalValue);
+
+        totalRentValue = basket.totalRentValue();
+        assertEq(basket.getRentBal(), totalRentValue);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRentUSDC * basket.rentFee()) / 100_00);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRentUSDC);
+ 
+        emit log_named_uint("decimals diff", basket.decimalsDiff());
+        emit log_named_uint("total supply", basket.totalSupply());     // 1472599999999999998010
+        emit log_named_uint("total supply prediction", postRebaseSupply);     // 1383050000000000000000
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 139000000000000000000000
     }
 }

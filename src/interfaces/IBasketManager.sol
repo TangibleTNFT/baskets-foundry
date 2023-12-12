@@ -31,5 +31,5 @@ interface IBasketManager {
 
     function basketsVrfConsumer() external returns (address);
 
-    function revenueShare() external returns (address);
+    function revenueDistributor() external returns (address);
 }

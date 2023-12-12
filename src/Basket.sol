@@ -68,6 +68,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Mapping used to check whether a specified feature (key) is supported. If true, feature is required.
     mapping(uint256 => bool) public featureSupported;
 
+    /// @notice Mapping used to store address that can withdraw rent from this contract.
+    mapping(address => bool) public canWithdraw;
+
     /// @notice Array of all features required by a TNFT token to be deposited into this basket.
     /// @dev These features (aka "subcategories") are OPTIONAL.
     uint256[] public supportedFeatures;
@@ -82,7 +85,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice This value stores the amount of rent claimable by this contract. Updated upon rebase.
     uint256 public totalRentValue;
 
-    /// @notice If there is a pending, unfulfilled, Chainlink vrf request, the requestId will be stored here.
+    /// @notice If there is a pending, unfulfilled, Gelato vrf request, the requestId will be stored here.
     uint256 public pendingSeedRequestId;
 
     /// @notice This stores a reference to the primary ERC-20 token used for paying out rent.
@@ -103,7 +106,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores the ISO country code for location this basket supports.
     uint16 public location;
 
-    /// @notice If true, there is an outstanding request to Chainlink vrf that has yet to be fulfilled.
+    /// @notice If true, there is an outstanding request to Gelato vrf that has yet to be fulfilled.
     bool public seedRequestInFlight;
 
 
@@ -138,7 +141,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /**
      * @notice This event is emitted when a successful request to vrf has been made.
-     * @param requestId Request identifier returned by Chainlink's Vrf Coordinator contract.
+     * @param requestId Request identifier returned by Gelato's Vrf Coordinator contract.
      */
     event RequestSentToVrf(uint256 requestId);
 
@@ -216,7 +219,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         depositFee = 50; // 0.5%
-        rentFee = 1000; // 10.0%
+        rentFee = 10_00; // 10.0%
 
         location = _location;
 
@@ -228,7 +231,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         tnftType = _tnftType;
         deployer = _deployer;
 
-        primaryRentToken = IERC20Metadata(_rentToken);
+        _updatePrimaryRentToken(_rentToken);
+        canWithdraw[IOwnable(factory()).owner()] = true;
     }
 
 
@@ -357,8 +361,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _primaryRentToken New address for `primaryRentToken`.
      */
     function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
-        require(_primaryRentToken != address(0), "Cannot be == address(0)");
-        primaryRentToken = IERC20Metadata(_primaryRentToken);
+        _updatePrimaryRentToken(_primaryRentToken);
     }
 
     /**
@@ -370,10 +373,30 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice This onlyFactoryOwner method allows a factory owner to withdraw a specified amount of claimable rent from this basket.
-     * @param _withdrawAmount Amount of rent to withdraw. note: Should input with basis points == `primaryRentToken.decimals()`.
+     * @notice This method allows the factory owner to manipulate the rent fee taken during rebase.
+     * @dev This fee is defaulted to 10_00 == 10%.
+     *      Should only be used in serious cases when updating rent tokens and resetting rebaseIndex.
+     * @param _rentFee New rent fee.
      */
-    function withdrawRent(uint256 _withdrawAmount) external onlyFactoryOwner {
+    function updateRentFee(uint16 _rentFee) external onlyFactoryOwner {
+        rentFee = _rentFee;
+    }
+
+    /**
+     * @notice This method allows the factory owner to give permission to another address to withdraw rent.
+     * @param _address Address being granted or not granted permission to withdraw
+     * @param _canWithdraw If true, address can call `withdrawRent`.
+     */
+    function setWithdrawRole(address _address, bool _canWithdraw) external onlyFactoryOwner {
+        canWithdraw[_address] = _canWithdraw;
+    }
+
+    /**
+     * @notice This method allows a permissioned address to withdraw a specified amount of claimable rent from this basket.
+     * @param _withdrawAmount Amount of rent to withdraw.
+     */
+    function withdrawRent(uint256 _withdrawAmount) external {
+        require(canWithdraw[msg.sender], "Not authorized");
         _transferRent(msg.sender, _withdrawAmount);
     }
 
@@ -445,6 +468,15 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         require(msg.sender == account || msg.sender == rebaseIndexManager, "Not authorized");
         require(_isRebaseDisabled(account) != disable, "Already set");
         _disableRebase(account, disable);
+    }
+
+    function reinvestRent(address target, bytes memory data) external onlyFactoryOwner {
+        //uint256 basketValueBefore = basketValue();
+        //primaryRentToken.safeIncreaseAllowance(target, rentBalance);
+        // target.functionCall(data);
+        // totalRentalIncome = rentToken.balanceOf(address(this));
+        // previousRentalIncome = totalRentalIncome;
+        // require(basketValue() >= basketValueBefore); // todo: slippage protection
     }
 
     /**
@@ -526,7 +558,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         rebaseIndex += rebaseIndexDelta;
         totalRentValue = totalRentalIncome;
 
-        _transferRent(_getRevenueShare(), rentDistribution);
+        _transferRent(_getRevenueDistributor(), rentDistribution);
         _setRebaseIndex(rebaseIndex);
 
         emit RebaseExecuted(msg.sender, totalRentValue, rebaseIndex);
@@ -857,7 +889,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return totalRent -> Amount of claimable rent by from all TNFTs in this basket + rent in basket balance.
      */
     function _getRentBal() internal view returns (uint256 totalRent) {
-        // iterate through all supported tnfts and tokenIds deposited for each tnft.
+        // iterate through all claimable rent for each tokenId in the contract.
         for (uint256 i; i < tnftsSupported.length;) {
             address tnft = tnftsSupported[i];
 
@@ -975,11 +1007,16 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice Internal method for returning the address of RevenueShare contract.
-     * @return Address of RevenueShare.
+     * @notice Internal method for returning the address of RevenueDistributor contract.
+     * @return Address of RevenueDistributor.
      */
-    function _getRevenueShare() internal returns (address) {
-        return IBasketManager(IFactory(factory()).basketsManager()).revenueShare();
+    function _getRevenueDistributor() internal returns (address) {
+        return IBasketManager(IFactory(factory()).basketsManager()).revenueDistributor();
+    }
+
+    function _updatePrimaryRentToken(address _primaryRentToken) internal {
+        require(_primaryRentToken != address(0), "Cannot be == address(0)");
+        primaryRentToken = IERC20Metadata(_primaryRentToken);
     }
 
     /**
