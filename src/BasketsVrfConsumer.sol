@@ -2,29 +2,24 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
-
-// gelato imports 
-import { GelatoVRFConsumerBase } from "@vrf/contracts/GelatoVRFConsumerBase.sol";
 
 // tangible imports
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 
 // local imports
+import { GelatoVRFConsumerBase } from "./abstract/GelatoVRFConsumerBase.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketManager.sol";
-
-// Note: VRF Consumer Network Info = https://docs.chain.link/vrf/v2/subscription/supported-networks/#configurations
 
 /**
  * @title BasketVrfConsumer
  * @author Chase Brown
  * @notice This contract handles all vrf requests from all basket contracts.
  */
-contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSUpgradeable, FactoryModifiers {
+contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSUpgradeable, FactoryModifiers {
 
     // ---------------
     // State Variables
@@ -90,7 +85,7 @@ contract BasketsVrfConsumer is Initializable, IBasketsVrfConsumer, GelatoVRFCons
     // -------
 
     /**
-     * @notice This method is used to trigger a request to chainlink's vrf coordinator contract.
+     * @notice This method is used to trigger a request to Gelato's vrf coordinator contract.
      * @dev This contract is only callable by a valid basket contract.
      * @return requestId -> the request identifier given to us by the vrf coordinator.
      */

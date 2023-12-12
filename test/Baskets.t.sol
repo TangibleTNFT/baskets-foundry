@@ -40,7 +40,6 @@ import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 // local helper contracts
-import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
@@ -140,9 +139,6 @@ contract BasketsIntegrationTest is Utility {
         // set revenueShare address on basketManager
         vm.prank(factoryOwner);
         basketManager.setRevenueShare(REV_SHARE); // NOTE: Should be replaced with real rev share contract
-
-        // add consumer on vrf coordinator 
-        //vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumer));
 
         // updateDepositor for rent manager
         vm.prank(factoryV2.categoryOwner(ITangibleNFT(realEstateTnft)));
@@ -1977,7 +1973,8 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Vrf responds with callback ~
 
-        _mockVrfCoordinatorResponse(address(basket), 10);
+        //_mockVrfCoordinatorResponse(address(basket), 10);
+        basketVrfConsumer.fulfillRandomnessTestnet(10, requestId);
 
         // ~ Post-state check 1 ~
 

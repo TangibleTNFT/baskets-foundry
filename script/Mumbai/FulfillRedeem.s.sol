@@ -3,9 +3,6 @@ pragma solidity ^0.8.13;
 
 import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 
-// local contracts
-import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol";
-
 // helper contracts
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
@@ -27,7 +24,7 @@ contract FulfillRedeem is Script {
     // ~ Script Configure ~
 
     // baskets
-    VRFCoordinatorV2Mock public vrfCoordinator = VRFCoordinatorV2Mock(Mumbai_MockVrfCoordinator);
+    //VRFCoordinatorV2Mock public vrfCoordinator = VRFCoordinatorV2Mock(Mumbai_MockVrfCoordinator);
     address public vrfConsumer = Mumbai_BasketVrfConsumer;
 
     // wallets
@@ -48,7 +45,7 @@ contract FulfillRedeem is Script {
         vm.startBroadcast(deployerPrivKey);
 
         // 1. redeem from Basket
-        vrfCoordinator.fulfillRandomWords(requestId, vrfConsumer);
+        //vrfCoordinator.fulfillRandomWords(requestId, vrfConsumer);
 
         vm.stopBroadcast();
     }

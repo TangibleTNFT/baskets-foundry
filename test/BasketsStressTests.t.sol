@@ -48,7 +48,6 @@ import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 // local helper contracts
-import { VRFCoordinatorV2Mock } from "./utils/VRFCoordinatorV2Mock.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
 
