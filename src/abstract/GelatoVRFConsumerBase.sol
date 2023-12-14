@@ -16,6 +16,7 @@ abstract contract GelatoVRFConsumerBase is IGelatoVRFConsumer {
     bool[] public requestPending;
     mapping(uint256 => bytes32) public requestedHash;
     mapping(uint256 => bytes) private rawRequestedHash;
+    uint256 public testnetChainId;
 
     /// @notice Returns the address of the dedicated msg.sender.
     /// @dev The operator can be found on the Gelato dashboard after a VRF is deployed.
@@ -64,7 +65,7 @@ abstract contract GelatoVRFConsumerBase is IGelatoVRFConsumer {
         uint256 randomness,
         uint256 requestId
     ) external {
-        require(block.chainid == 80001, "Method only accessible on testnet");
+        require(block.chainid == testnetChainId, "Method only accessible on testnet");
 
         bytes storage dataWithRound = rawRequestedHash[requestId];
 

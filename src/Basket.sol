@@ -470,13 +470,25 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _disableRebase(account, disable);
     }
 
-    function reinvestRent(address target, bytes memory data) external onlyFactoryOwner {
-        //uint256 basketValueBefore = basketValue();
-        //primaryRentToken.safeIncreaseAllowance(target, rentBalance);
-        // target.functionCall(data);
-        // totalRentalIncome = rentToken.balanceOf(address(this));
-        // previousRentalIncome = totalRentalIncome;
-        // require(basketValue() >= basketValueBefore); // todo: slippage protection
+    /**
+     * @notice This method allows thew factory owner to reinvest accrued rent.
+     * @dev Ideally `target` would be a contract and `data` would be a method that allows us to purchase another
+     *      property and deposits it into the basket to yield more rent.
+     * @param target Address of contract with reinvest mechanism.
+     * @param rentBalance Amount of rent balance being allocated for reinvestment.
+     * @param data calldata payload for function call.
+     */
+    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external {
+        require(canWithdraw[msg.sender], "Not authorized");
+
+        uint256 basketValueBefore = getTotalValueOfBasket();
+        primaryRentToken.approve(target, rentBalance);
+
+        (bool success,) = target.call(data);
+        require(success);
+        
+        totalRentValue -= rentBalance;
+        require(getTotalValueOfBasket() >= basketValueBefore);
     }
 
     /**
@@ -537,6 +549,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     // Public Methods
     // --------------
 
+
     /**
      * @notice This function allows for the Basket token to "rebase" and will update the multiplier based
      * on the amount of rent accrued by the basket tokens.
@@ -544,7 +557,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function rebase() public {
         uint256 previousRentalIncome = totalRentValue;
         uint256 totalRentalIncome = _getRentBal();
-    
+
         uint256 collectedRent = totalRentalIncome - previousRentalIncome;
 
         // Take 10% off collectedRent and send to revenue contract

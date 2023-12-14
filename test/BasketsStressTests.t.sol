@@ -144,7 +144,8 @@ contract StressTests is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                GELATO_OPERATOR
+                GELATO_OPERATOR,
+                80001
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));

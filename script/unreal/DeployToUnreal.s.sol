@@ -17,17 +17,17 @@ import { BasketManager } from "../../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 
 // helper contracts
-import "../../test/utils/MumbaiAddresses.sol";
+import "../../test/utils/UnrealAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --fork-url <RPC_URL> --broadcast --verify
+/// @dev To run: forge script script/mumbai/DeployToUnreal.s.sol:DeployToUnreal --fork-url <RPC_URL> --broadcast --verify
 
 /**
- * @title DeployBasketsToMumbai
+ * @title DeployBasketsToUnreal
  * @author Chase Brown
- * @notice This script deploys a new instance of the baskets protocol (in full) to the Mumbai Testnet.
+ * @notice This script deploys a new instance of the baskets protocol (in full) to the Unreal Testnet.
  */
-contract DeployToMumbai is Script {
+contract DeployToUnreal is Script {
 
     // ~ Script Configure ~
 
@@ -61,7 +61,7 @@ contract DeployToMumbai is Script {
 
         vm.startBroadcast(deployerPrivKey);
 
-        factoryOwner = IOwnable(Mumbai_FactoryV2).owner();
+        factoryOwner = IOwnable(Unreal_FactoryV2).owner();
 
         // 1. deploy basket
         basket = new Basket();
@@ -74,7 +74,7 @@ contract DeployToMumbai is Script {
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                Mumbai_FactoryV2
+                Unreal_FactoryV2
             )
         );
 
@@ -85,9 +85,9 @@ contract DeployToMumbai is Script {
         basketVrfConsumerProxy = new ERC1967Proxy(
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                Mumbai_FactoryV2,
+                Unreal_FactoryV2,
                 GELATO_VRF_OPERATOR,
-                80001 // mumbai chain Id
+                18231 // unreal chainId
             )
         );
 
@@ -112,10 +112,10 @@ contract DeployToMumbai is Script {
 
     /**
         == Logs ==
-        1. BasketManager (proxy)            = 0x7B6bb198e637073089214a46cC95430ACe572C0A
-        2. BasketManager Implementation     = 0x08c2a8c0A86A125cfAD0a2De3F50651237E4dE87
-        3. BasketVrfConsumer (proxy)        = 0xa0e1eDED3Bfe0D5A19ba83e0bC66DE267D7BAE32
-        4. BasketVrfConsumer Implementation = 0xDFA3E667E30F0b086a368F8bAA28602783746eE7
-        5. Basket Implementation            = 0xC19895627fB8e480Dc97732522e12E6e0A1770ec
+        1. BasketManager (proxy)            = 
+        2. BasketManager Implementation     = 
+        3. BasketVrfConsumer (proxy)        = 
+        4. BasketVrfConsumer Implementation = 
+        5. Basket Implementation            = 
     */
 }

@@ -127,7 +127,8 @@ contract BasketsIntegrationTest is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                GELATO_OPERATOR
+                GELATO_OPERATOR,
+                80001
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
@@ -489,6 +490,16 @@ contract BasketsIntegrationTest is Utility {
         uint256 currentRound = (elapsedFromGenesis / 3) + 1;
 
         round = block.chainid == 1 ? currentRound + 4 : currentRound + 1;
+    }
+
+    /// @notice Helper method for calling Basket::reinvestRent method.
+    function reinvest(address basket, address rentToken, uint256 amount, uint256 tokenId) external {
+        // transfer tokens here
+        IERC20(rentToken).transferFrom(basket, address(this), amount);
+
+        // deposit into basket
+        realEstateTnft.approve(address(basket), tokenId);
+        Basket(basket).depositTNFT(address(realEstateTnft), tokenId);
     }
 
 
@@ -1985,6 +1996,7 @@ contract BasketsIntegrationTest is Utility {
 
     // ~ updatePrimaryRentToken ~
 
+    /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed
     function test_baskets_updatePrimaryRentToken() public {
 
         // ~ Pre-state check ~
@@ -2139,5 +2151,124 @@ contract BasketsIntegrationTest is Utility {
         emit log_named_uint("total supply", basket.totalSupply());     // 1472599999999999998010
         emit log_named_uint("total supply prediction", postRebaseSupply);     // 1383050000000000000000
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 139000000000000000000000
+    }
+
+    /// @notice Verifies state when Basket::reinvestRent is executed.
+    function test_baskets_reinvestRent() public {
+        // ~ Config ~
+
+        uint256 amountRent = 10_000 * WAD;
+        uint256 amountRentUSDC = 10_000 * USD;
+
+        // create token of certain value
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, //100k gbp
+            1,
+            1,
+            1, // fingerprint
+            ALICE
+        );
+        uint256 tokenId = tokenIds[0];
+
+        // deposit into basket
+        vm.startPrank(ALICE);
+        realEstateTnft.approve(address(basket), tokenId);
+        basket.depositTNFT(address(realEstateTnft), tokenId);
+        vm.stopPrank();
+
+        // deposit rent for that TNFT (no vesting)
+        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+
+        vm.startPrank(TANGIBLE_LABS);
+        MUMBAI_DAI.approve(address(rentManager), amountRent);
+        rentManager.deposit(
+            tokenId,
+            address(MUMBAI_DAI),
+            amountRent,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+
+        // skip to end of vesting period
+        skip(1);
+
+
+        // ~ Sanity check ~
+
+        uint256 rentClaimable = rentManager.claimableRentForToken(tokenId);
+        assertEq(rentClaimable, amountRent);
+        assertEq(basket.tokenDeposited(address(realEstateTnft), tokenId), true);
+        assertEq(realEstateTnft.ownerOf(tokenId), address(basket));
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
+
+        // ~ Pre-state check ~
+
+        uint256 increaseRatio = (amountRent * 1e18) / basket.getTotalValueOfBasket();
+        emit log_named_uint("% increase post-rebase", increaseRatio); // 76923 == 7.6923%
+
+        uint256 preTotalValue = basket.getTotalValueOfBasket();
+        uint256 preTotalSupply = basket.totalSupply();
+
+        assertEq(preTotalSupply, basket.balanceOf(ALICE));
+
+        // ~ rebase ~
+
+        basket.rebase(); // Index -> 1.069230769230769230
+
+        // fee taken: 1000.000000000000000000
+        // total rent val: 9000.000000000000000000
+
+        // ~ Post-state check ~
+
+        uint256 postRebaseSupply = preTotalSupply + ((preTotalSupply * (amountRent - ((amountRent * basket.rentFee()) / 100_00))) / preTotalValue);
+
+        assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
+        assertGt(basket.totalSupply(), preTotalSupply);
+        assertGt(basket.getTotalValueOfBasket(), preTotalValue);
+        assertWithinDiff(
+            basket.totalSupply(),
+            postRebaseSupply,
+            1e16
+        ); // deviation of .01 or lower is acceptable
+        uint256 totalRentValue = basket.totalRentValue();
+        assertEq(basket.getRentBal(), totalRentValue);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
+        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent);
+
+        // ~ Owner calls reinvestRent ~
+
+        // create new NFT
+        tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, //100k gbp
+            1,
+            1,
+            2, // fingerprint
+            address(this)
+        );
+        tokenId = tokenIds[0];
+
+        address target = address(this);
+        uint256 rentBalance = 1_000 * WAD;
+        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(MUMBAI_DAI), rentBalance, tokenId);
+
+        vm.prank(factoryOwner);
+        basket.reinvestRent(target, rentBalance, data); // Index -> 1.069230769230769230
+
+        // ~ Post-state check ~
+
+        assertEq(basket.getRentBal(), totalRentValue - rentBalance);
+
+        // ~ Deal rent to basket and rebase ~
+
+        deal(address(MUMBAI_DAI), address(this), 100 * WAD);
+        MUMBAI_DAI.transfer(address(basket), 100 * WAD);
+
+        assertEq(basket.getRentBal(), (totalRentValue - rentBalance) + (100 * WAD));
+
+        basket.rebase(); // Index -> 1.069566590126291618
     }
 }

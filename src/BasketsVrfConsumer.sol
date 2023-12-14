@@ -74,9 +74,10 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      * @param _factory Contract address of Factory contract.
      * @param _operator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
      */
-    function initialize(address _factory, address _operator) external initializer {
+    function initialize(address _factory, address _operator, uint256 chainId) external initializer {
         __FactoryModifiers_init(_factory);
         operator = _operator;
+        testnetChainId = chainId;
     }
 
     

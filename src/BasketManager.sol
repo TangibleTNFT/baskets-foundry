@@ -305,35 +305,6 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    /**
-     * @notice This method allows the factory owner to delete baskets from the basketManager.
-     * @dev This method is for testing purposes only. NOT available on mainnet.
-     * @param _basket Address of basket trying to delete.
-     */
-    function destroyBasket(address _basket) external onlyFactoryOwner {
-        require(block.chainid == 80001, "mumbai only");
-        require(isBasket[_basket], "basket doesnt exist");
-
-        for(uint256 i; i < baskets.length;) {
-            if (baskets[i] == _basket) {
-                baskets[i] = baskets[baskets.length - 1];
-                baskets.pop();
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        delete fetchBasketByHash[hashedFeaturesForBasket[_basket]];
-        delete hashedFeaturesForBasket[_basket];
-        delete isBasket[_basket];
-        delete nameHashTaken[basketNames[_basket]];
-        delete basketNames[_basket];
-        delete symbolHashTaken[basketSymbols[_basket]];
-        delete basketSymbols[_basket];
-    }
-
 
     // --------------
     // Public Methods
