@@ -36,11 +36,11 @@ address constant Unreal_TangibleReaderHelper           = 0x4e12BbCEC2BaD4F4bE6a6
 // ~ Baskets ~
 
 // proxies
-address constant Unreal_BasketManager          = address(0);
-address constant Unreal_BasketVrfConsumer      = address(0);
+address constant Unreal_BasketManager          = 0x6ece6fE77AFbC7c47aBcCDF138ff2B09fA66a871;
+address constant Unreal_BasketVrfConsumer      = 0x3786761A23E5a10Ff69d53278f42CE548C912152;
 // implementation
-address constant Unreal_BasketManager_base     = address(0);
-address constant Unreal_BasketVrfConsumer_base = address(0);
-address constant Unreal_Basket_base            = address(0);
+address constant Unreal_BasketManager_base     = 0x1625f135740Ef1C8720F6102b016335F6bD06914;
+address constant Unreal_BasketVrfConsumer_base = 0xbF9f0A9ccC52906caBb2264dB5ac30da33f91064;
+address constant Unreal_Basket_base            = 0xE79E3479b897cd626b6BBb58d158C6AAE928047e;
 
 // ~ Deployed Baskets ~
