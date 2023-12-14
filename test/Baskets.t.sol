@@ -40,15 +40,15 @@ import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 // local helper contracts
-import "./utils/MumbaiAddresses.sol";
+import "./utils/UnrealAddresses.sol";
 import "./utils/Utility.sol";
 
 
 /**
  * @title BasketsIntegrationTest
  * @author Chase Brown
- * @notice This test file contains integration tests for the baskets protocol. We import real mumbai addresses of the underlying layer
- *         of smart contracts via MumbaiAddresses.sol.
+ * @notice This test file contains integration tests for the baskets protocol. We import unreal addresses of the underlying layer
+ *         of smart contracts via UnrealAddresses.sol.
  */
 contract BasketsIntegrationTest is Utility {
 
@@ -59,17 +59,17 @@ contract BasketsIntegrationTest is Utility {
     BasketManager public basketManager;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // tangible mumbai contracts
-    FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
-    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
-    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Mumbai_RealtyOracleTangibleV2);
-    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Mumbai_MockMatrix);
-    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Mumbai_Marketplace);
-    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Mumbai_PriceManager);
-    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Mumbai_CurrencyFeedV2);
-    TNFTMetadata public metadata = TNFTMetadata(Mumbai_TNFTMetadata);
-    RentManager public rentManager = RentManager(Mumbai_RentManagerTnft);
-    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
+    // tangible unreal contracts
+    FactoryV2 public factoryV2 = FactoryV2(Unreal_FactoryV2);
+    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Unreal_TangibleREstateTnft);
+    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Unreal_RealtyOracleTangibleV2);
+    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Unreal_MockMatrix);
+    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Unreal_Marketplace);
+    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Unreal_PriceManager);
+    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Unreal_CurrencyFeedV2);
+    TNFTMetadata public metadata = TNFTMetadata(Unreal_TNFTMetadata);
+    RentManager public rentManager = RentManager(Unreal_RentManagerTnft);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);
 
     // proxies
     ERC1967Proxy public basketManagerProxy;
@@ -95,7 +95,7 @@ contract BasketsIntegrationTest is Utility {
     /// @notice Config function for test cases.
     function setUp() public {
 
-        vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(UNREAL_RPC_URL);
         emit log_uint(block.chainid);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
@@ -128,7 +128,7 @@ contract BasketsIntegrationTest is Utility {
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
                 GELATO_OPERATOR,
-                80001
+                block.chainid // must be testnet
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
@@ -314,7 +314,7 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -722,7 +722,7 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -805,7 +805,7 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             0,
             featuresToAdd,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -1227,7 +1227,7 @@ contract BasketsIntegrationTest is Utility {
         // deal category owner USDC to deposit into rentManager
         uint256 aliceRentBal = 10 * WAD;
         uint256 bobRentBal = 5 * WAD;
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, aliceRentBal + bobRentBal);
 
         // Mint Alice token worth $100
         uint256[] memory tokenIds = _createItemAndMint(
@@ -1277,10 +1277,10 @@ contract BasketsIntegrationTest is Utility {
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for alice's tnft
-        MUMBAI_DAI.approve(address(rentManager), aliceRentBal);
+        UNREAL_DAI.approve(address(rentManager), aliceRentBal);
         rentManager.deposit(
             aliceToken,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             aliceRentBal,
             0,
             block.timestamp + 1,
@@ -1298,10 +1298,10 @@ contract BasketsIntegrationTest is Utility {
         vm.startPrank(TANGIBLE_LABS);
         
         // deposit rent for bob's tnft
-        MUMBAI_DAI.approve(address(rentManager), bobRentBal);
+        UNREAL_DAI.approve(address(rentManager), bobRentBal);
         rentManager.deposit(
             bobToken,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             bobRentBal,
             0,
             block.timestamp + 1,
@@ -1315,10 +1315,10 @@ contract BasketsIntegrationTest is Utility {
         assertEq(rentManager.claimableRentForToken(aliceToken), 10 * WAD);
         assertEq(rentManager.claimableRentForToken(bobToken), 5 * WAD);
 
-        assertEq(MUMBAI_DAI.balanceOf(address(rentManager)), 15 * WAD);
-        assertEq(MUMBAI_DAI.balanceOf(address(basket)), 0);
-        assertEq(MUMBAI_DAI.balanceOf(ALICE), 0);
-        assertEq(MUMBAI_DAI.balanceOf(BOB), 0);
+        assertEq(UNREAL_DAI.balanceOf(address(rentManager)), 15 * WAD);
+        assertEq(UNREAL_DAI.balanceOf(address(basket)), 0);
+        assertEq(UNREAL_DAI.balanceOf(ALICE), 0);
+        assertEq(UNREAL_DAI.balanceOf(BOB), 0);
 
         (,uint256 tokenIdRedeemable) = basket.nextToRedeem();
 
@@ -1339,10 +1339,10 @@ contract BasketsIntegrationTest is Utility {
         assertEq(rentManager.claimableRentForToken(aliceToken), 0);
         assertEq(rentManager.claimableRentForToken(bobToken), 5 * WAD);
 
-        assertEq(MUMBAI_DAI.balanceOf(address(rentManager)), 5 * WAD);
-        assertEq(MUMBAI_DAI.balanceOf(address(basket)), 10 * WAD);
-        assertEq(MUMBAI_DAI.balanceOf(ALICE), 0);
-        assertEq(MUMBAI_DAI.balanceOf(BOB), 0);
+        assertEq(UNREAL_DAI.balanceOf(address(rentManager)), 5 * WAD);
+        assertEq(UNREAL_DAI.balanceOf(address(basket)), 10 * WAD);
+        assertEq(UNREAL_DAI.balanceOf(ALICE), 0);
+        assertEq(UNREAL_DAI.balanceOf(BOB), 0);
 
         assertEq(realEstateTnft.balanceOf(ALICE), 1);
         assertEq(realEstateTnft.balanceOf(BOB), 0);
@@ -1467,11 +1467,11 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
         // deal rent to basket
-        deal(address(MUMBAI_DAI), address(basket), _rent);
+        deal(address(UNREAL_DAI), address(basket), _rent);
 
         // sanity check
-        assertEq(MUMBAI_DAI.balanceOf(address(basket)), _rent);
-        assertEq(MUMBAI_DAI.balanceOf(JOE), 0);
+        assertEq(UNREAL_DAI.balanceOf(address(basket)), _rent);
+        assertEq(UNREAL_DAI.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(),  0);
@@ -1498,8 +1498,8 @@ contract BasketsIntegrationTest is Utility {
             2
         );
 
-        assertEq(MUMBAI_DAI.balanceOf(address(basket)), _rent);
-        assertEq(MUMBAI_DAI.balanceOf(JOE), 0);
+        assertEq(UNREAL_DAI.balanceOf(address(basket)), _rent);
+        assertEq(UNREAL_DAI.balanceOf(JOE), 0);
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
@@ -1522,8 +1522,8 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
-        assertEq(MUMBAI_DAI.balanceOf(address(basket)), _rent);
-        assertEq(MUMBAI_DAI.balanceOf(JOE), 0);
+        assertEq(UNREAL_DAI.balanceOf(address(basket)), _rent);
+        assertEq(UNREAL_DAI.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), preBasketBalJoe - quoteOut);
         assertEq(basket.totalSupply(),  basket.balanceOf(JOE));
@@ -1551,18 +1551,18 @@ contract BasketsIntegrationTest is Utility {
         uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         assertEq(usdValue1, 650_000 ether);
 
-        emit log_uint(MUMBAI_DAI.balanceOf(TANGIBLE_LABS));
+        emit log_uint(UNREAL_DAI.balanceOf(TANGIBLE_LABS));
 
         // deal category owner USTB to deposit into rentManager
         uint256 amount = 10_000 * WAD;
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amount);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amount);
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_DAI.approve(address(rentManager), amount);
+        UNREAL_DAI.approve(address(rentManager), amount);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amount,
             0,
             block.timestamp + 1,
@@ -1619,25 +1619,25 @@ contract BasketsIntegrationTest is Utility {
         // deal category owner USDC to deposit into rentManager for tnft 1 and tnft 2
         uint256 amount1 = 10_000 * WAD;
         uint256 amount2 = 14_000 * WAD;
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amount1 + amount2);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amount1 + amount2);
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for tnft 1
-        MUMBAI_DAI.approve(address(rentManager), amount1);
+        UNREAL_DAI.approve(address(rentManager), amount1);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amount1,
             0,
             block.timestamp + 1,
             true
         );
         // deposit rent for tnft 2
-        MUMBAI_DAI.approve(address(rentManager), amount2);
+        UNREAL_DAI.approve(address(rentManager), amount2);
         rentManager.deposit(
             NIK_TOKEN_ID,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amount2,
             0,
             block.timestamp + 1,
@@ -1780,14 +1780,14 @@ contract BasketsIntegrationTest is Utility {
         uint256 amount = 10_000 * WAD;
         uint256 fullRentAmount = amount * 2;
 
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amount);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amount);
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_DAI.approve(address(rentManager), amount);
+        UNREAL_DAI.approve(address(rentManager), amount);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amount,
             0,
             block.timestamp + 1,
@@ -1799,7 +1799,7 @@ contract BasketsIntegrationTest is Utility {
         skip(1);
 
         // also deal USDC straight into the basket
-        deal(address(MUMBAI_DAI), address(basket), amount);
+        deal(address(UNREAL_DAI), address(basket), amount);
 
         // ~ Sanity check ~
 
@@ -1865,13 +1865,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_DAI.approve(address(rentManager), amountRent);
+        UNREAL_DAI.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2001,16 +2001,16 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(address(basket.primaryRentToken()), address(MUMBAI_DAI));
+        assertEq(address(basket.primaryRentToken()), address(UNREAL_DAI));
 
         // ~ Execute updatePrimaryRentToken ~
 
         vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(MUMBAI_USTB));
+        basket.updatePrimaryRentToken(address(UNREAL_USDC));
 
         // ~ Post-state check ~
 
-        assertEq(address(basket.primaryRentToken()), address(MUMBAI_USTB));
+        assertEq(address(basket.primaryRentToken()), address(UNREAL_USDC));
     }
 
     /// @notice Verifies proper state changes during rebase after rent token change
@@ -2039,13 +2039,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_DAI.approve(address(rentManager), amountRent);
+        UNREAL_DAI.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2119,13 +2119,13 @@ contract BasketsIntegrationTest is Utility {
         // ~ Admin changes primaryRentToken ~
 
         vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(MUMBAI_USDC));
+        basket.updatePrimaryRentToken(address(UNREAL_USDC));
 
         // ~ Exchange previous primaryRentToken ~
 
         // exchange USTB for USDC
         // Transfer all USDC into basket
-        deal(address(MUMBAI_USDC), address(basket), amountRentUSDC);
+        deal(address(UNREAL_USDC), address(basket), amountRentUSDC);
 
         // ~ Rebase ~
 
@@ -2178,13 +2178,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+        deal(address(UNREAL_DAI), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        MUMBAI_DAI.approve(address(rentManager), amountRent);
+        UNREAL_DAI.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(MUMBAI_DAI),
+            address(UNREAL_DAI),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2253,7 +2253,7 @@ contract BasketsIntegrationTest is Utility {
 
         address target = address(this);
         uint256 rentBalance = 1_000 * WAD;
-        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(MUMBAI_DAI), rentBalance, tokenId);
+        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(UNREAL_DAI), rentBalance, tokenId);
 
         vm.prank(factoryOwner);
         basket.reinvestRent(target, rentBalance, data); // Index -> 1.069230769230769230
@@ -2264,8 +2264,8 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Deal rent to basket and rebase ~
 
-        deal(address(MUMBAI_DAI), address(this), 100 * WAD);
-        MUMBAI_DAI.transfer(address(basket), 100 * WAD);
+        deal(address(UNREAL_DAI), address(this), 100 * WAD);
+        UNREAL_DAI.transfer(address(basket), 100 * WAD);
 
         assertEq(basket.getRentBal(), (totalRentValue - rentBalance) + (100 * WAD));
 

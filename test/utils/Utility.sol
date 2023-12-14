@@ -16,6 +16,7 @@ contract Utility is Test{
     // ~ RPCs ~
 
     string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
 
     // ~ Actors ~
@@ -34,9 +35,14 @@ contract Utility is Test{
     // ~ Constants ~
 
     IERC20Metadata public constant MUMBAI_USTB = IERC20Metadata(0xbFB1dB179d9710Ed05F6dfCEd279205156EA3684);
-
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x667269618f67f543d3121DE3DF169747950Deb13); // 0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636
     IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0xf46c460F5B2D33aC5c4cE2aA015c8B5c430231C5); // 0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F
+
+    IERC20Metadata public constant UNREAL_USDC = IERC20Metadata(0xabAa4C39cf3dF55480292BBDd471E88de8Cc3C97);
+    IERC20Metadata public constant UNREAL_DAI  = IERC20Metadata(0x665D4921fe931C0eA1390Ca4e0C422ba34d26169);
+
+    uint256 public constant MUMBAI_CHAIN_ID = 80001;
+    uint256 public constant UNREAL_CHAIN_ID = 18231;
 
     VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
     VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);

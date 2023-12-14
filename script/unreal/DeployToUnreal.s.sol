@@ -20,10 +20,10 @@ import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 import "../../test/utils/UnrealAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/mumbai/DeployToUnreal.s.sol:DeployToUnreal --fork-url <RPC_URL> --broadcast --verify
+/// @dev To run: forge script script/unreal/DeployToUnreal.s.sol:DeployToUnreal --fork-url <RPC_URL> --broadcast --verify
 
 /**
- * @title DeployBasketsToUnreal
+ * @title DeployToUnreal
  * @author Chase Brown
  * @notice This script deploys a new instance of the baskets protocol (in full) to the Unreal Testnet.
  */
@@ -41,10 +41,12 @@ contract DeployToUnreal is Script {
     ERC1967Proxy public basketVrfConsumerProxy;
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
     address public constant GELATO_VRF_OPERATOR = address(0); // TODO If necessary. Testnet has fulfillRandomnessTestnet which is permissionless
+
+    uint256 public constant UNREAL_CHAIN_ID = 18231;
 
     address deployerAddress;
     uint256 deployerPrivKey;
@@ -52,44 +54,44 @@ contract DeployToUnreal is Script {
     address public factoryOwner;
 
     function setUp() public {
-
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerAddress = DEPLOYER_ADDRESS;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {
 
         vm.startBroadcast(deployerPrivKey);
 
-        factoryOwner = IOwnable(Unreal_FactoryV2).owner();
+        //factoryOwner = IOwnable(Unreal_FactoryV2).owner();
+        //console2.log("factory owner", factoryOwner);
 
         // 1. deploy basket
         basket = new Basket();
 
         // 2. Deploy basketManager
-        basketManager = new BasketManager();
+        // basketManager = new BasketManager();
 
-        // 3. Deploy proxy for basketManager & initialize
-        basketManagerProxy = new ERC1967Proxy(
-            address(basketManager),
-            abi.encodeWithSelector(BasketManager.initialize.selector,
-                address(basket),
-                Unreal_FactoryV2
-            )
-        );
+        // // 3. Deploy proxy for basketManager & initialize
+        // basketManagerProxy = new ERC1967Proxy(
+        //     address(basketManager),
+        //     abi.encodeWithSelector(BasketManager.initialize.selector,
+        //         address(basket),
+        //         Unreal_FactoryV2
+        //     )
+        // );
 
-        // 4. Deploy BasketsVrfConsumer
-        basketVrfConsumer = new BasketsVrfConsumer();
+        // // 4. Deploy BasketsVrfConsumer
+        // basketVrfConsumer = new BasketsVrfConsumer();
 
-        // 5. Initialize BasketsVrfConsumer with proxy
-        basketVrfConsumerProxy = new ERC1967Proxy(
-            address(basketVrfConsumer),
-            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                Unreal_FactoryV2,
-                GELATO_VRF_OPERATOR,
-                18231 // unreal chainId
-            )
-        );
+        // // 5. Initialize BasketsVrfConsumer with proxy
+        // basketVrfConsumerProxy = new ERC1967Proxy(
+        //     address(basketVrfConsumer),
+        //     abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+        //         Unreal_FactoryV2,
+        //         GELATO_VRF_OPERATOR,
+        //         UNREAL_CHAIN_ID
+        //     )
+        // );
 
         // 6. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
 
@@ -99,13 +101,13 @@ contract DeployToUnreal is Script {
         
 
         // log addresses
-        console2.log("1. BasketManager (proxy)            =", address(basketManagerProxy));
-        console2.log("2. BasketManager Implementation     =", address(basketManager));
+        // console2.log("1. BasketManager (proxy)            =", address(basketManagerProxy));
+        // console2.log("2. BasketManager Implementation     =", address(basketManager));
         
-        console2.log("3. BasketVrfConsumer (proxy)        =", address(basketVrfConsumerProxy));
-        console2.log("4. BasketVrfConsumer Implementation =", address(basketVrfConsumer));
+        // console2.log("3. BasketVrfConsumer (proxy)        =", address(basketVrfConsumerProxy));
+        // console2.log("4. BasketVrfConsumer Implementation =", address(basketVrfConsumer));
         
-        console2.log("5. Basket Implementation            =", address(basket));
+        // console2.log("5. Basket Implementation            =", address(basket));
         
         vm.stopBroadcast();
     }
