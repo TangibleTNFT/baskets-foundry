@@ -20,7 +20,7 @@ import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --fork-url <RPC_URL> --broadcast --verify
+/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --broadcast --verify
 
 /**
  * @title DeployBasketsToMumbai
@@ -41,20 +41,18 @@ contract DeployToMumbai is Script {
     ERC1967Proxy public basketVrfConsumerProxy;
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
-
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
     address public constant GELATO_VRF_OPERATOR = address(0); // TODO If necessary. Testnet has fulfillRandomnessTestnet which is permissionless
 
-    address deployerAddress;
     uint256 deployerPrivKey;
 
     address public factoryOwner;
 
     function setUp() public {
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {

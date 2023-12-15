@@ -25,16 +25,16 @@ contract RedeemFromBasket is Script {
     Basket public basket = Basket(Mumbai_Basket_1);
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
     address deployerAddress;
     uint256 deployerPrivKey;
 
     function setUp() public {
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerAddress = DEPLOYER_ADDRESS;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {

@@ -35,20 +35,19 @@ contract CreateBasketMumbai is Script {
     TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
 
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636);
 
     uint256 public constant RE_TNFTTYPE = 2;
 
-    address deployerAddress;
     uint256 deployerPrivKey;
 
     function setUp() public {
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {

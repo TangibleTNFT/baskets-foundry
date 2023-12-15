@@ -28,16 +28,15 @@ contract FulfillRedeem is Script {
     address public vrfConsumer = Mumbai_BasketVrfConsumer;
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
 
-    address deployerAddress;
     uint256 deployerPrivKey;
 
     function setUp() public {
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {
