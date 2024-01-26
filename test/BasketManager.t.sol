@@ -14,6 +14,7 @@ import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
+import { ArrayUtils } from "../src/libraries/ArrayUtils.sol";
 
 // tangible interface imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -40,6 +41,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
  * @notice This test file contains integration unit tests for the BasketManager contract. 
  */
 contract BasketManagerTest is Utility {
+    using ArrayUtils for uint256[];
 
     Basket public basket;
     BasketManager public basketManager;
@@ -279,7 +281,7 @@ contract BasketManagerTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_DAI),
             0,
-            features,
+            features.sort(),
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_1)
         );
@@ -326,9 +328,47 @@ contract BasketManagerTest is Utility {
         assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
+        // ensure elements arent sorted
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        // deploy same basket without sorting -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("features not sorted or duplicates");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            address(MUMBAI_DAI),
+            0,
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
+
+        // ensure duplicates
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_2;
+
+        // deploy same basket with duplicates -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("features not sorted or duplicates");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            address(MUMBAI_DAI),
+            0,
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
 
         // create new features array with same features in different order
-        features = new uint256[](2);
         features[0] = RE_FEATURE_1;
         features[1] = RE_FEATURE_2;
 
@@ -452,7 +492,7 @@ contract BasketManagerTest is Utility {
             RE_TNFTTYPE,
             address(MUMBAI_DAI),
             0,
-            features,
+            features.sort(),
             tnfts,
             tokenIds
         );

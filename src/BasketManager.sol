@@ -21,7 +21,6 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 // local imports
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
-import { ArrayUtils } from "./libraries/ArrayUtils.sol";
 import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
@@ -31,7 +30,6 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
  * @notice This contract manages all Basket contracts.
  */
 contract BasketManager is UUPSUpgradeable, FactoryModifiers {
-    using ArrayUtils for uint256[];
 
     // ---------------
     // State Variables
@@ -170,6 +168,11 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
 
         // verify _symbol is unique and available
         require(!symbolHashTaken[_symbol], "Symbol not available");
+
+        // if features array contains more than 1 element, verify no duplicates and is sorted
+        if (_features.length > 1) {
+            require(_verifySortedNoDuplicates(_features), "features not sorted or duplicates");
+        }
 
         // create unique hash for new basket
         _hashCache = createHash(_tnftType, _location, _features);
@@ -321,13 +324,28 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _features List of subcategories.
      */
     function createHash(uint256 _tnftType, uint16 _location, uint256[] memory _features) public pure returns (bytes32 hashedFeatures) {
-        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _location, _features.sort()));
+        hashedFeatures = keccak256(abi.encodePacked(_tnftType, _location, _features));
     }
 
 
     // ----------------
     // Internal Methods
     // ----------------
+
+    function _verifySortedNoDuplicates(uint256[] memory _features) internal view returns (bool isSorted) {
+        uint256 length = _features.length - 1;
+        for (uint256 i; i < length;) {
+
+            // if greater-than => not sorted
+            // if equal-to => duplicates
+            if (_features[i] >= _features[i+1]) return false;
+
+            unchecked {
+                ++i;
+            }
+        }
+        return true;
+    }
 
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the factory owner to upgrade this contract's implementation.
