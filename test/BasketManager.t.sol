@@ -292,8 +292,10 @@ contract BasketManagerTest is Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
+        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
+
         assertNotEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
+            basketHash,
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
         );
 
@@ -310,7 +312,7 @@ contract BasketManagerTest is Utility {
         );
 
         assertEq(
-            basketManager.fetchBasketByHash(basketManager.hashedFeaturesForBasket(address(_basket))),
+            basketManager.fetchBasketByHash(basketHash),
             address(_basket)
         );
 
@@ -463,11 +465,6 @@ contract BasketManagerTest is Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
-        // assertEq(
-        //     basketManager.hashedFeaturesForBasket(address(_basket)),
-        //     keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
-        // );
-
         assertEq(basketManager.isBasket(address(_basket)), true);
 
         uint256 sharePrice = IBasket(_basket).getSharePrice();
@@ -529,16 +526,12 @@ contract BasketManagerTest is Utility {
 
         assertEq(_basket.location(), location);
 
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, location))
-        );
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, location, features))
-        );
+        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
 
-        emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
+        assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location)));
+        assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location, features)));
+
+        emit log_named_bytes32("Features hash", basketHash);
     }
 
     /// @notice Verifies proper state changes when a basket is deployed with a specific location

@@ -476,7 +476,7 @@ contract BasketsIntegrationTest is Utility {
         uint256 requestId = Basket(_basket).pendingSeedRequestId();
         uint256 roundId = _round();
 
-        bytes memory data = abi.encode(0);
+        bytes memory data = "";
         bytes memory dataWithRound = abi.encode(roundId, abi.encode(requestId, data));
 
         vm.prank(GELATO_OPERATOR);
@@ -1104,6 +1104,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
 
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), JOE_TOKEN_ID), 0);
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), NIK_TOKEN_ID), 1);
+
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 2);
         assertEq(deposited[0].tnft, address(realEstateTnft));
@@ -1158,6 +1161,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
 
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), JOE_TOKEN_ID), 0);
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), NIK_TOKEN_ID), 0);
+
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 1);
         assertEq(deposited[0].tnft, address(realEstateTnft));
@@ -1208,6 +1214,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), false);
+
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), JOE_TOKEN_ID), 0);
+        assertEq(basket.indexInDepositedTnfts(address(realEstateTnft), NIK_TOKEN_ID), 0);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -2252,6 +2261,10 @@ contract BasketsIntegrationTest is Utility {
         tokenId = tokenIds[0];
 
         address target = address(this);
+
+        vm.prank(factoryOwner);
+        basket.addTrustedTarget(target, true);
+
         uint256 rentBalance = 1_000 * WAD;
         bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(UNREAL_DAI), rentBalance, tokenId);
 

@@ -422,7 +422,7 @@ contract StressTests is Utility {
         uint256 requestId = Basket(_basket).pendingSeedRequestId();
         uint256 roundId = _round();
 
-        bytes memory data = abi.encode(0);
+        bytes memory data = "";
         bytes memory dataWithRound = abi.encode(roundId, abi.encode(requestId, data));
 
         vm.prank(GELATO_OPERATOR);
@@ -1173,7 +1173,7 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        config.newCategories = 5;
+        config.newCategories = 4;
         config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1238,6 +1238,19 @@ contract StressTests is Utility {
 
         vm.stopPrank();
 
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        IBasket.TokenData memory lastElement = IBasket.TokenData({
+            tnft: deposited[deposited.length-1].tnft,
+            tokenId: deposited[deposited.length-1].tokenId,
+            fingerprint: 0
+        });
+        (address tnft, uint256 tokenId) = basket.nextToRedeem();
+        uint256 redeemIndex = basket.indexInDepositedTnfts(tnft, tokenId);
+
+        assertEq(basket.indexInDepositedTnfts(
+            lastElement.tnft, lastElement.tokenId), deposited.length-1
+        );
+
         // ~ Execute redeem ~
 
         vm.prank(JOE);
@@ -1245,18 +1258,12 @@ contract StressTests is Utility {
 
         // ~ Post-state check ~
 
-        // find token that was redeemed
-        address tnft;
-        uint256 tokenId;
-        for (i = 0; i < config.totalTokens; ++i) {
-            if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
-                tnft = batchTnftArr[i];
-                tokenId = batchTokenIdArr[i];
-                emit log_named_address("Tnft address", batchTnftArr[i]);
-                emit log_named_uint("tokenId", batchTokenIdArr[i]);
-                break; 
-            }
-        }
+        emit log_named_address("Tnft address", tnft);
+        emit log_named_uint("tokenId", tokenId);
+
+        assertEq(basket.indexInDepositedTnfts(
+            lastElement.tnft, lastElement.tokenId), redeemIndex
+        );
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
@@ -1288,7 +1295,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 25;
+        config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT

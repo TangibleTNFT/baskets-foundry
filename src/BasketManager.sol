@@ -37,23 +37,26 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     // State Variables
     // ---------------
 
-    /// @notice Mapping that stores the unique `featureHash` for each basket.
-    mapping(address => bytes32) public hashedFeaturesForBasket;
+    /**
+     * @notice Data structure for storing basket information
+     * @param hashedFeatures stores the unique feature combination hash for each basket.
+     * @param basketName stores the name of the basket basket.
+     * @param basketSymbol stores the symbol of the basket.
+     */
+    struct BasketInfo {
+        bytes32 hashedFeatures;
+        string basketName;
+        string basketSymbol;
+    }
 
-    /// @notice Mapping that stores whether a specified address is a basket.
-    mapping(address => bool) public isBasket;
-
-    /// @notice Mapping that stores each name (as a hash) for each basket.
-    mapping(address => bytes32) public basketNames;
-
-    /// @notice Mapping that stores each symbol (as a hash) for each basket.
-    mapping(address => bytes32) public basketSymbols;
+    /// @notice Mapping that stores a baskets's information, given it's address as a key.
+    mapping(address => BasketInfo) public getBasketInfo;
 
     /// @notice This mapping provides a low-gas method to checking the availability of a name for a new basket.
-    mapping(bytes32 => bool) public nameHashTaken;
+    mapping(string => bool) public nameHashTaken;
 
     /// @notice This mapping provides a low-gas method to checking the availability of a symbol for a new basket.
-    mapping(bytes32 => bool) public symbolHashTaken;
+    mapping(string => bool) public symbolHashTaken;
 
     /// @notice Returns the address of the basket, given it's unique hash.
     /// @dev Mainly implemented for the front end.
@@ -64,7 +67,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
 
     /// @notice This variable caches the most recent hash created for a new basket.
     /// @dev Created primarily in response to stack-too-deep errors when calling `deployBasket`.
-    bytes32 internal hashCache;
+    bytes32 internal _hashCache;
 
     /// @notice Array of all baskets deployed.
     address[] public baskets;
@@ -91,17 +94,6 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     event BasketCreated(address indexed creator, address indexed basket);
 
 
-    // ---------
-    // Modifiers
-    // ---------
-
-    /// @notice Modifier verifying msg.sender is a valid Basket contract.
-    modifier onlyBasket() {
-        require(isBasket[msg.sender], "Caller is not valid basket");
-        _;
-    }
-
-
     // -----------
     // Constructor
     // -----------
@@ -121,6 +113,9 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _factory Contract address of Factory contract.
      */
     function initialize(address _initBasketImplementation, address _factory) external initializer {
+        require(_initBasketImplementation != address(0), "Cannot init with address(0)");
+        require(_factory != address(0), "Cannot init with address(0)");
+
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
@@ -171,16 +166,16 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         require(added, "Invalid tnftType");
 
         // verify _name is unique and available
-        require(!nameHashTaken[keccak256(abi.encodePacked(_name))], "Name not available");
+        require(!nameHashTaken[_name], "Name not available");
 
         // verify _symbol is unique and available
-        require(!symbolHashTaken[keccak256(abi.encodePacked(_symbol))], "Symbol not available");
+        require(!symbolHashTaken[_symbol], "Symbol not available");
 
         // create unique hash for new basket
-        hashCache = createHash(_tnftType, _location, _features);
+        _hashCache = createHash(_tnftType, _location, _features);
 
-        // might not be necessary -> hash is checked when Basket is initialized
-        require(checkBasketAvailability(hashCache), "Basket already exists");
+        // check basket availability
+        require(fetchBasketByHash[_hashCache] == address(0), "Basket already exists");
 
         // check features are valid.
         for (uint256 i; i < _features.length;) {
@@ -208,16 +203,16 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         // store hash and new newBasketBeacon
         baskets.push(address(newBasketBeacon));
 
-        hashedFeaturesForBasket[address(newBasketBeacon)] = hashCache;
-        isBasket[address(newBasketBeacon)] = true;
+        getBasketInfo[address(newBasketBeacon)] = BasketInfo({
+            hashedFeatures: _hashCache,
+            basketName: _name,
+            basketSymbol: _symbol
+        });
 
-        basketNames[address(newBasketBeacon)] = keccak256(abi.encodePacked(_name));
-        basketSymbols[address(newBasketBeacon)] = keccak256(abi.encodePacked(_symbol));
+        nameHashTaken[_name] = true;
+        symbolHashTaken[_symbol] = true;
 
-        nameHashTaken[keccak256(abi.encodePacked(_name))] = true;
-        symbolHashTaken[keccak256(abi.encodePacked(_symbol))] = true;
-
-        fetchBasketByHash[hashCache] = address(newBasketBeacon);
+        fetchBasketByHash[_hashCache] = address(newBasketBeacon);
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
         for (uint256 i; i < _tokenIdDeposit.length;) {
@@ -311,20 +306,12 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     // --------------
 
     /**
-     * @notice This method checks whether a basket with featuresHash can be created or is taken.
-     * @dev A featuresHash is a unique hash assigned each basket contract and is created based on the unique
-     *      combination of features that basket supports. No 2 baskets that support same combo can co-exist.
-     * @param _featuresHash unique bytes32 hash created from combination of features
-     * @return If true, features combo is available to be created. If false, already exists.
+     * @notice This method is used for querying whether a provided address is one of a basket.
+     * @param _basket Address of basket.
+     * @return isBasket -> If true, `_basket` is a basket.
      */
-    function checkBasketAvailability(bytes32 _featuresHash) public view returns (bool) {
-        for (uint256 i; i < baskets.length;) {
-            if (hashedFeaturesForBasket[baskets[i]] == _featuresHash) return false;
-            unchecked {
-                ++i;
-            }
-        }
-        return true;
+    function isBasket(address _basket) public view returns (bool isBasket) {
+        getBasketInfo[_basket].hashedFeatures != bytes32(0) ? isBasket = true : isBasket = false;
     }
 
     /**
