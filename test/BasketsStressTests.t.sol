@@ -412,11 +412,6 @@ contract StressTests is Utility {
         return (_amount * basket.depositFee()) / 100_00;
     }
 
-    /// @notice This helper method is used to fetch amount received after deposit post fee.
-    function _calculateAmountAfterFee(uint256 _amount) internal view returns (uint256) {
-        return (_amount - _calculateFeeAmount(_amount));
-    }
-
     /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
     function _mockVrfCoordinatorResponse(address _basket, uint256 _randomWord) internal {
         uint256 requestId = Basket(_basket).pendingSeedRequestId();
@@ -533,9 +528,6 @@ contract StressTests is Utility {
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
                 uint256 feeTaken = _calculateFeeAmount(quote);
-                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
-
-                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -556,7 +548,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
+                assertEq(basket.balanceOf(JOE), basketPreBal + quote);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify notificationDispatcher state
@@ -668,9 +660,6 @@ contract StressTests is Utility {
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
                 uint256 feeTaken = _calculateFeeAmount(quote);
-                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
-
-                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -691,7 +680,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
+                assertEq(basket.balanceOf(JOE), basketPreBal + quote);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify share price is gt $100 per share

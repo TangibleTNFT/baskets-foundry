@@ -7,6 +7,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // tangible imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -30,6 +31,7 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
  * @notice This contract manages all Basket contracts.
  */
 contract BasketManager is UUPSUpgradeable, FactoryModifiers {
+    using SafeERC20 for IERC20;
 
     // ---------------
     // State Variables
@@ -250,7 +252,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         uint256 balance = IERC20(_contract).balanceOf(address(this));
         require(balance > 0, "Insufficient token balance");
 
-        require(IERC20(_contract).transfer(msg.sender, balance), "Transfer failed on ERC20 contract");
+        IERC20(_contract).safeTransfer(msg.sender, balance);
     }
 
     /**

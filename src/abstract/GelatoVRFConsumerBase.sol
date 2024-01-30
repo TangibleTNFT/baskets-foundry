@@ -92,8 +92,8 @@ abstract contract GelatoVRFConsumerBase is IGelatoVRFConsumer {
                 )
             );
 
-            _fulfillRandomness(randomness, requestId, extraData);
             requestPending[requestId] = false;
+            _fulfillRandomness(randomness, requestId, extraData);
         }
     }
 
@@ -130,8 +130,8 @@ abstract contract GelatoVRFConsumerBase is IGelatoVRFConsumer {
                 )
             );
 
-            _fulfillRandomness(randomness, requestId, extraData);
             requestPending[requestId] = false;
+            _fulfillRandomness(randomness, requestId, extraData);
         }
     }
 

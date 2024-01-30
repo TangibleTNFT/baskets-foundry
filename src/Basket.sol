@@ -3,11 +3,11 @@ pragma solidity ^0.8.19;
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-//import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -42,6 +42,7 @@ import { RebaseTokenUpgradeable } from "@tangible-foundation-contracts/tokens/Re
  * @notice ERC-20 token that represents a basket of ERC-721 TangibleNFTs that are categorized into "baskets".
  */
 contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNotificationReceiver, ReentrancyGuardUpgradeable, FactoryModifiers {
+    using SafeERC20 for IERC20Metadata;
 
     // ---------------
     // State Variables
@@ -294,9 +295,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param randomWord Random uint seed received from vrf.
      */
     function fulfillRandomSeed(uint256 randomWord) external onlyBasketVrfConsumer {
+        // if there is already an NFT to be redeemed, do not re-roll
+        seedRequestInFlight = false;
+        pendingSeedRequestId = 0;
+
+        if(nextToRedeem.tnft != address(0)) return;
 
         // choose a nft to be next redeemable
-
         uint256 index;
         index = randomWord % depositedTnfts.length;
 
@@ -305,9 +310,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         nextToRedeem = RedeemData(tnft, tokenId);
         emit RedeemableChosen(tnft, tokenId);
-        
-        seedRequestInFlight = false;
-        pendingSeedRequestId = 0;
     }
 
     /**
@@ -317,21 +319,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function sendRequestForSeed() external onlyFactoryOwner returns (uint256 requestId) {
         return _sendRequestForSeed();
-    }
-
-    /**
-     * @notice Internal method that handles making requests to vrf through the BasketsVrfConsumer contract.
-     * @return requestId -> request identifier created by vrf coordinator.
-     */
-    function _sendRequestForSeed() internal returns (uint256 requestId) {
-        if (depositedTnfts.length != 0) {
-            seedRequestInFlight = true;
-
-            requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
-
-            pendingSeedRequestId = requestId;
-            emit RequestSentToVrf(requestId);
-        }
     }
 
     /**
@@ -386,6 +373,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _rentFee New rent fee.
      */
     function updateRentFee(uint16 _rentFee) external onlyFactoryOwner {
+        require(_rentFee <= 20_00, "rent fee cannot exceed 20%");
         rentFee = _rentFee;
     }
 
@@ -458,6 +446,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // calculate shares for depositor
         shares = _quoteShares(usdValue);
+
+        uint256 fee = (shares * uint256(depositFee)) / 100_00;
+        shares -= fee;
     }
 
     /**
@@ -671,6 +662,21 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     // ----------------
 
     /**
+     * @notice Internal method that handles making requests to vrf through the BasketsVrfConsumer contract.
+     * @return requestId -> request identifier created by vrf coordinator.
+     */
+    function _sendRequestForSeed() internal returns (uint256 requestId) {
+        if (depositedTnfts.length != 0) {
+            seedRequestInFlight = true;
+
+            requestId = IBasketsVrfConsumer(_getBasketVrfConsumer()).makeRequestForRandomWords();
+
+            pendingSeedRequestId = requestId;
+            emit RequestSentToVrf(requestId);
+        }
+    }
+
+    /**
      * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
      *         The deposit will be minted a sufficient amount of basket tokens in return.
      * @dev Any unclaimed rent claimable from the rent manager is claimed and transferred to the depositor.
@@ -743,7 +749,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // verify claimed balance, send rent to depositor.
             require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "claiming error");
-            assert(primaryRentToken.transfer(address(_depositor), receivedRent));
+            primaryRentToken.safeTransfer(address(_depositor), receivedRent);
         }
 
         // ~ Mint tokens to depositor ~
@@ -761,6 +767,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             if (depositedTnfts.length == 1) {
                 // if first deposit, just assign first in to next redeem
                 nextToRedeem = RedeemData(_tangibleNFT, _tokenId);
+                emit RedeemableChosen(_tangibleNFT, _tokenId);
             }
             else {
                 // if no request was made or fulfilled, but contract has more than 1 token in basket, send request.
@@ -807,13 +814,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
         depositedTnfts.pop();
 
-        //index = _isTokenIdLibrary(_tangibleNFT, _tokenId);
         index = indexInTokenIdLibrary[_tangibleNFT][_tokenId];
         len = tokenIdLibrary[_tangibleNFT].length - 1;
         delete indexInTokenIdLibrary[_tangibleNFT][_tokenId];
         if (index != len) {
             tokenIdLibrary[_tangibleNFT][index] = tokenIdLibrary[_tangibleNFT][len];
-            indexInTokenIdLibrary[_tangibleNFT][tokenIdLibrary[_tangibleNFT][index]] = index; // TODO: Test
+            indexInTokenIdLibrary[_tangibleNFT][tokenIdLibrary[_tangibleNFT][index]] = index;
         }
         tokenIdLibrary[_tangibleNFT].pop();
 
@@ -911,7 +917,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         // transfer rent to msg.sender (factory owner)
-        assert(primaryRentToken.transfer(_recipient, _withdrawAmount));
+        primaryRentToken.safeTransfer(_recipient, _withdrawAmount);
         totalRentValue -= _withdrawAmount;
     }
 
