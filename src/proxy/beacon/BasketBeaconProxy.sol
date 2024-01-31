@@ -23,18 +23,4 @@ contract BasketBeaconProxy is BeaconProxy {
      * - If `data` is empty, `msg.value` must be zero.
      */
     constructor(address beacon, bytes memory data) BeaconProxy(beacon, data) payable {}
-
-    /**
-     * @dev This method is mainly for testing purposes. Allows us to fetch externally the implementation address from beacon.
-     */
-    function implementation() external view returns (address) {
-        return IBeacon(_getBeacon()).implementation();
-    }
-
-    /**
-     * @dev This method is mainly for testing purposes. Allows us to fetch externally the beacon address for this beacon proxy.
-     */
-    function getBeacon() external view returns (address) {
-        return _getBeacon();
-    }
 }

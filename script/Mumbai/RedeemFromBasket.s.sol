@@ -46,7 +46,7 @@ contract RedeemFromBasket is Script {
         console2.log("balance of basket tokens", balance);
 
         // 1. redeem from Basket
-        basket.redeemTNFT(balance);
+        basket.redeemTNFT(balance, keccak256(abi.encodePacked(address(0), uint256(1)))); // TODO: Find nextToRedeem args
 
         vm.stopBroadcast();
     }

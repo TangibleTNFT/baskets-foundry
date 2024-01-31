@@ -4,7 +4,6 @@ pragma solidity ^0.8.19;
 // oz imports
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -81,6 +80,9 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /// @notice This stores the contract address of the revenue distributor contract.
     address public revenueDistributor;
 
+    /// @notice This stores the ERC20 contract address of the primary rent token for baskets.
+    address public primaryRentToken;
+
 
     // ------
     // Events
@@ -92,6 +94,16 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param basket Address of basket deployed.
      */
     event BasketCreated(address indexed creator, address indexed basket);
+
+
+    // ------
+    // Errors
+    // ------
+
+    /**
+     * @notice This error is emitted when an invalid address(0) input is caught.
+     */
+    error ZeroAddress();
 
 
     // -----------
@@ -111,10 +123,10 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @notice Initializes BasketManager contract.
      * @param _initBasketImplementation Contract address of Basket implementation contract.
      * @param _factory Contract address of Factory contract.
+     * @param _rentToken Primary rent token address.
      */
-    function initialize(address _initBasketImplementation, address _factory) external initializer {
-        require(_initBasketImplementation != address(0), "Cannot init with address(0)");
-        require(_factory != address(0), "Cannot init with address(0)");
+    function initialize(address _initBasketImplementation, address _factory, address _rentToken) external initializer {
+        if (_initBasketImplementation == address(0) || _factory == address(0) || _rentToken == address(0)) revert ZeroAddress();
 
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
@@ -122,6 +134,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
             address(this)
         );
 
+        primaryRentToken = _rentToken;
         featureLimit = 10;
     }
 
@@ -136,7 +149,6 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _name Name of new basket.
      * @param _symbol Symbol of new basket.
      * @param _tnftType Tnft category supported by basket.
-     * @param _rentToken ERC-20 token being used for rent. USDC by default.
      * @param _location ISO country code for supported location of basket.
      * @param _features Array of uint feature identifiers (subcategories) supported by basket.
      * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
@@ -146,7 +158,6 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         string memory _name,
         string memory _symbol,
         uint256 _tnftType,
-        address _rentToken,
         uint16 _location,
         uint256[] memory _features,
         address[] memory _tangibleNFTDeposit,
@@ -198,7 +209,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
                 _symbol,
                 factory(),
                 _tnftType,
-                _rentToken,
+                primaryRentToken,
                 _features,
                 _location,
                 msg.sender
@@ -228,7 +239,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
                 INotificationWhitelister(address(notificationDispatcher)).whitelistAddressAndReceiver(address(newBasketBeacon));
             }
 
-            IERC721(_tangibleNFTDeposit[i]).safeTransferFrom(msg.sender, address(this), _tokenIdDeposit[i]);
+            IERC721(_tangibleNFTDeposit[i]).transferFrom(msg.sender, address(this), _tokenIdDeposit[i]);
             IERC721(_tangibleNFTDeposit[i]).approve(address(newBasketBeacon), _tokenIdDeposit[i]);
             unchecked {
                 ++i;
@@ -243,11 +254,22 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     }
 
     /**
+     * @notice This method allows the factory owner to update the `primaryRentToken` state variable.
+     * @dev If the rent token is being changed indefinitely, make sure to change the address of the rent token being used
+     *      to initialize new baskets on the BasketManager.
+     * @param _primaryRentToken New address for `primaryRentToken`.
+     */
+    function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
+        if (_primaryRentToken == address(0)) revert ZeroAddress();
+        primaryRentToken = _primaryRentToken;
+    }
+
+    /**
      * @notice Withdraws any ERC20 token balance of this contract into the multisig wallet.
      * @param _contract Address of an ERC20 compliant token.
      */
     function withdrawERC20(address _contract) external onlyFactoryOwner {
-        require(_contract != address(0), "Address cannot be zero address");
+        if (_contract == address(0)) revert ZeroAddress();
 
         uint256 balance = IERC20(_contract).balanceOf(address(this));
         require(balance > 0, "Insufficient token balance");
@@ -268,7 +290,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _basketsVrfConsumer New contract address.
      */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
-        require(_basketsVrfConsumer != address(0), "_basketsVrfConsumer == address(0)");
+        if (_basketsVrfConsumer == address(0)) revert ZeroAddress();
         basketsVrfConsumer = _basketsVrfConsumer;
     }
 
@@ -277,7 +299,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _revenueDistributor New contract address.
      */
     function setRevenueDistributor(address _revenueDistributor) external onlyFactoryOwner {
-        require(_revenueDistributor != address(0), "_revenueDistributor == address(0)");
+        if (_revenueDistributor == address(0)) revert ZeroAddress();
         revenueDistributor = _revenueDistributor;
     }
 
@@ -296,13 +318,6 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      */
     function getBasketsArray() external view returns (address[] memory) {
         return baskets;
-    }
-
-    /**
-     * @notice Allows address(this) to receive ERC721 tokens.
-     */
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
     }
 
 

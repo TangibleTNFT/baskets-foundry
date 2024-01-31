@@ -285,8 +285,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
      * @param _budget Amount of basket tokens being submitted to redeem method.
      */
-    function redeemTNFT(uint256 _budget) external {
-        _redeemTNFT(msg.sender, _budget);
+    function redeemTNFT(uint256 _budget, bytes32 _desiredToken) external {
+        _redeemTNFT(msg.sender, _budget, _desiredToken);
     }
 
     /**
@@ -373,7 +373,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _rentFee New rent fee.
      */
     function updateRentFee(uint16 _rentFee) external onlyFactoryOwner {
-        require(_rentFee <= 20_00, "rent fee cannot exceed 20%");
+        require(_rentFee <= 50_00, "rent fee cannot exceed 50%");
         rentFee = _rentFee;
     }
 
@@ -482,23 +482,28 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This method allows thew factory owner to reinvest accrued rent.
      * @dev Ideally `target` would be a contract and `data` would be a method that allows us to purchase another
      *      property and deposits it into the basket to yield more rent.
+     *      It is recommended to rebase before calling this method so `totalRentValue` is up to date.
      * @param target Address of contract with reinvest mechanism.
      * @param rentBalance Amount of rent balance being allocated for reinvestment.
      * @param data calldata payload for function call.
      */
-    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external {
+    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external returns (uint256 amountUsed) {
         require(canWithdraw[msg.sender], "Not authorized");
         require(trustedTarget[target], "target not trusted");
 
+        uint256 preBal = primaryRentToken.balanceOf(address(this));
         uint256 basketValueBefore = getTotalValueOfBasket();
         primaryRentToken.approve(target, rentBalance);
 
         (bool success,) = target.call(data);
         require(success, "call unsuccessful");
 
+        uint256 postBal = primaryRentToken.balanceOf(address(this));
         primaryRentToken.approve(target, 0);
-        
-        totalRentValue -= rentBalance;
+
+        amountUsed = preBal - postBal;
+        totalRentValue -= amountUsed;
+
         require(getTotalValueOfBasket() >= basketValueBefore, "value decreased");
     }
 
@@ -558,7 +563,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This function allows for the Basket token to "rebase" and will update the multiplier based
      * on the amount of rent accrued by the basket tokens.
      */
-    function rebase() public {
+    function rebase() public nonReentrant {
         uint256 previousRentalIncome = totalRentValue;
         uint256 totalRentalIncome = _getRentBal();
 
@@ -732,11 +737,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (msg.sender == IFactory(factory()).basketsManager()) {
             _depositor = deployer;
         }
-        else {
-            // if deposit isn't initial deposit from deployer (which will be most cases), charge a deposit fee.
-            uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
-            basketShare -= feeShare;
-        }
+
+        // charge deposit fee.
+        uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
+        basketShare -= feeShare;
 
         // ~ Handle rent ~
 
@@ -786,7 +790,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function _redeemTNFT(
         address _redeemer,
-        uint256 _budget
+        uint256 _budget,
+        bytes32 _token
     ) internal nonReentrant {
         require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
         require(!seedRequestInFlight, "new seed is being generated");
@@ -796,6 +801,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 _tokenId = nextToRedeem.tokenId;
         uint256 _usdValue = valueTracker[_tangibleNFT][_tokenId];
         uint256 _sharesRequired = _quoteShares(_usdValue);
+
+        require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "specified token is not redeemable");
 
         delete nextToRedeem;
 
@@ -842,11 +849,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
         INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
 
-        // Transfer tokenId to user
-        IERC721(_tangibleNFT).transferFrom(address(this), _redeemer, _tokenId);
-
         totalNftValue -= _usdValue;
         _burn(_redeemer, _sharesRequired);
+
+        // Transfer tokenId to user
+        IERC721(_tangibleNFT).transferFrom(address(this), _redeemer, _tokenId);
 
         // fetch new seed
         _sendRequestForSeed();
@@ -900,20 +907,20 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // start iterating through the master claimable rent array claiming rent for each token.
             uint256 index;
+            uint256 preBal = primaryRentToken.balanceOf(address(this));
+            uint256 claimedRent;
             while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
 
                 IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
                 uint256 tokenId = claimableRent[index].tokenId;
 
-                uint256 preBal = primaryRentToken.balanceOf(address(this));
-                uint256 claimedRent = rentManager.claimRentForToken(tokenId);
-
-                require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "claiming error");
+                claimedRent += rentManager.claimRentForToken(tokenId);
 
                 unchecked {
                     ++index;
                 }
             }
+            require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "claiming error");
         }
 
         // transfer rent to msg.sender (factory owner)

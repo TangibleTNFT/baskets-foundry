@@ -114,7 +114,8 @@ contract BasketsIntegrationTest is Utility {
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryV2)
+                address(factoryV2),
+                address(UNREAL_DAI)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -314,7 +315,6 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(UNREAL_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -326,7 +326,7 @@ contract BasketsIntegrationTest is Utility {
 
         // creator redeems token to isolate test.
         vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
+        basket.redeemTNFT(basket.balanceOf(CREATOR), keccak256(abi.encodePacked(address(realEstateTnft), CREATOR_TOKEN_ID)));
         vm.stopPrank();
 
         // labels
@@ -714,7 +714,6 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(UNREAL_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -797,7 +796,6 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(UNREAL_DAI),
             0,
             featuresToAdd,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -977,6 +975,8 @@ contract BasketsIntegrationTest is Utility {
         basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
 
+        bytes32 token = keccak256(abi.encodePacked(address(realEstateTnft), JOE_TOKEN_ID));
+
         // ~ Pre-state check ~
 
         uint256 feeTaken = _calculateFeeAmount(quote);
@@ -1011,16 +1011,21 @@ contract BasketsIntegrationTest is Utility {
         // Joe performs a redeem with 0 budget -> revert
         vm.prank(JOE);
         vm.expectRevert("Insufficient budget");
-        basket.redeemTNFT(0);
+        basket.redeemTNFT(0, token);
 
         // Joe performs a redeem with over balance -> revert
         vm.prank(JOE);
         vm.expectRevert("Insufficient balance");
-        basket.redeemTNFT(quote + 1);
+        basket.redeemTNFT(quote + 1, token);
+
+        // Joe performs a redeem with 0 budget -> revert
+        vm.prank(JOE);
+        vm.expectRevert("specified token is not redeemable");
+        basket.redeemTNFT(quote, keccak256(abi.encodePacked(address(realEstateTnft), JOE_TOKEN_ID + 1)));
 
         // Joe performs a redeem -> success
         vm.prank(JOE);
-        basket.redeemTNFT(quote);
+        basket.redeemTNFT(quote, token);
 
         // ~ Post-state check ~
 
@@ -1118,7 +1123,7 @@ contract BasketsIntegrationTest is Utility {
 
         // NOTE: cheaper budget, redeems cheaper token first which is Joe's token
         vm.startPrank(JOE);
-        basket.redeemTNFT(basket.balanceOf(JOE));
+        basket.redeemTNFT(basket.balanceOf(JOE), keccak256(abi.encodePacked(address(realEstateTnft), JOE_TOKEN_ID)));
         vm.stopPrank();
 
         // This redeem generates a request to vrf. Mock response.
@@ -1178,7 +1183,7 @@ contract BasketsIntegrationTest is Utility {
         emit log_string("REDEEM 2");
 
         vm.startPrank(NIK);
-        basket.redeemTNFT(basket.balanceOf(NIK));
+        basket.redeemTNFT(basket.balanceOf(NIK), keccak256(abi.encodePacked(address(realEstateTnft), NIK_TOKEN_ID)));
         vm.stopPrank();
 
         // ~ Post-state check 2 ~
@@ -1323,7 +1328,7 @@ contract BasketsIntegrationTest is Utility {
 
         // Bob executes a redeem of bobToken
         vm.startPrank(ALICE);
-        basket.redeemTNFT(basket.balanceOf(ALICE));
+        basket.redeemTNFT(basket.balanceOf(ALICE), keccak256(abi.encodePacked(address(realEstateTnft), aliceToken)));
         vm.stopPrank();
 
         _mockVrfCoordinatorResponse(
@@ -1421,7 +1426,7 @@ contract BasketsIntegrationTest is Utility {
         // ~ Joe redeems ~
 
         vm.startPrank(JOE);
-        basket.redeemTNFT(basket.balanceOf(JOE));
+        basket.redeemTNFT(basket.balanceOf(JOE), keccak256(abi.encodePacked(address(realEstateTnft), tokenId)));
         vm.stopPrank();
 
         // state check -> verify totalSup is 0. SharesRequired == total balance of actor
@@ -1504,7 +1509,7 @@ contract BasketsIntegrationTest is Utility {
         // ~ Joe redeems ~
 
         vm.startPrank(JOE);
-        basket.redeemTNFT(basket.balanceOf(JOE));
+        basket.redeemTNFT(basket.balanceOf(JOE), keccak256(abi.encodePacked(address(realEstateTnft), tokenId)));
         vm.stopPrank();
 
         // state check -> verify totalSup is 0. SharesRequired == total balance of actor
