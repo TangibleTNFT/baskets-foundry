@@ -94,11 +94,11 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Config function for test cases.
     function setUp() public {
-
-        vm.createSelectFork(UNREAL_RPC_URL);
+        vm.createSelectFork(UNREAL_RPC_URL, 17160);
         emit log_uint(block.chainid);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
+        //factoryOwner = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));

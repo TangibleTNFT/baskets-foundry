@@ -51,6 +51,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Ledger of all TNFT tokens stored in this basket.
     TokenData[] public depositedTnfts;
 
+    /// @notice Tracks the index of each tokenId in the `depositedTnfts` array.
     mapping(address tnft => mapping(uint256 tokenId => uint256 index)) public indexInDepositedTnfts;
 
     /// @notice This stores the data for the next NFT that is elgible for redemption.
@@ -66,6 +67,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Mapping of TNFT contract address => array of tokenIds in this basket from each TNFT contract.
     mapping(address => uint256[]) public tokenIdLibrary;
 
+    /// @notice Tracks index of where the tokenId for the tnft exists in `tokenIdLibrary` array.
     mapping(address tnft => mapping(uint256 tokenId => uint256 index)) public indexInTokenIdLibrary;
 
     /// @notice Mapping used to track the usdValue of each TNFT token in this contract.
