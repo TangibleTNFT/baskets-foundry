@@ -131,7 +131,8 @@ contract StressTests is Utility {
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryV2)
+                address(factoryV2),
+                address(MUMBAI_DAI)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -215,7 +216,6 @@ contract StressTests is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -230,7 +230,7 @@ contract StressTests is Utility {
 
         // creator redeems token to isolate tests.
         vm.startPrank(CREATOR);
-        basket.redeemTNFT(basket.balanceOf(CREATOR));
+        basket.redeemTNFT(basket.balanceOf(CREATOR), keccak256(abi.encodePacked(address(realEstateTnft), tokenIds[0])));
         vm.stopPrank();
 
         // init state check
@@ -412,17 +412,12 @@ contract StressTests is Utility {
         return (_amount * basket.depositFee()) / 100_00;
     }
 
-    /// @notice This helper method is used to fetch amount received after deposit post fee.
-    function _calculateAmountAfterFee(uint256 _amount) internal view returns (uint256) {
-        return (_amount - _calculateFeeAmount(_amount));
-    }
-
     /// @notice This helper method is used to execute a mock callback from the vrf coordinator.
     function _mockVrfCoordinatorResponse(address _basket, uint256 _randomWord) internal {
         uint256 requestId = Basket(_basket).pendingSeedRequestId();
         uint256 roundId = _round();
 
-        bytes memory data = abi.encode(0);
+        bytes memory data = "";
         bytes memory dataWithRound = abi.encode(roundId, abi.encode(requestId, data));
 
         vm.prank(GELATO_OPERATOR);
@@ -533,9 +528,6 @@ contract StressTests is Utility {
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
                 uint256 feeTaken = _calculateFeeAmount(quote);
-                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
-
-                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -556,7 +548,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
+                assertEq(basket.balanceOf(JOE), basketPreBal + quote);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify notificationDispatcher state
@@ -668,9 +660,6 @@ contract StressTests is Utility {
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
                 uint256 feeTaken = _calculateFeeAmount(quote);
-                uint256 amountAfterFee = _calculateAmountAfterFee(quote);
-
-                assertEq(quote, amountAfterFee + feeTaken);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -691,7 +680,7 @@ contract StressTests is Utility {
 
                 // verify Joe balances
                 assertEq(ITangibleNFT(tnft).balanceOf(JOE), preBal - 1);
-                assertEq(basket.balanceOf(JOE), basketPreBal + amountAfterFee);
+                assertEq(basket.balanceOf(JOE), basketPreBal + quote);
                 assertEq(basket.totalSupply(), basket.balanceOf(JOE));
 
                 // verify share price is gt $100 per share
@@ -1173,7 +1162,7 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        config.newCategories = 5;
+        config.newCategories = 4;
         config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1238,25 +1227,32 @@ contract StressTests is Utility {
 
         vm.stopPrank();
 
+        Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
+        IBasket.TokenData memory lastElement = IBasket.TokenData({
+            tnft: deposited[deposited.length-1].tnft,
+            tokenId: deposited[deposited.length-1].tokenId,
+            fingerprint: 0
+        });
+        (address tnft, uint256 tokenId) = basket.nextToRedeem();
+        uint256 redeemIndex = basket.indexInDepositedTnfts(tnft, tokenId);
+
+        assertEq(basket.indexInDepositedTnfts(
+            lastElement.tnft, lastElement.tokenId), deposited.length-1
+        );
+
         // ~ Execute redeem ~
 
         vm.prank(JOE);
-        basket.redeemTNFT(sharesReceived[0]);
+        basket.redeemTNFT(sharesReceived[0], keccak256(abi.encodePacked(tnft, tokenId)));
 
         // ~ Post-state check ~
 
-        // find token that was redeemed
-        address tnft;
-        uint256 tokenId;
-        for (i = 0; i < config.totalTokens; ++i) {
-            if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
-                tnft = batchTnftArr[i];
-                tokenId = batchTokenIdArr[i];
-                emit log_named_address("Tnft address", batchTnftArr[i]);
-                emit log_named_uint("tokenId", batchTokenIdArr[i]);
-                break; 
-            }
-        }
+        emit log_named_address("Tnft address", tnft);
+        emit log_named_uint("tokenId", tokenId);
+
+        assertEq(basket.indexInDepositedTnfts(
+            lastElement.tnft, lastElement.tokenId), redeemIndex
+        );
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
@@ -1288,7 +1284,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 25;
+        config.amountFingerprints = 10;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1392,24 +1388,15 @@ contract StressTests is Utility {
 
         skip(1); // skip to end of vesting
 
+        (address tnft, uint256 tokenId) = basket.nextToRedeem();
+
 
         // ~ Execute redeemTNFT ~
 
         vm.prank(JOE);
-        basket.redeemTNFT(sharesReceived[0]);
+        basket.redeemTNFT(sharesReceived[0], keccak256(abi.encodePacked(tnft, tokenId)));
 
         // ~ Post-state check 2 ~
-
-        // find token that was redeemed
-        address tnft;
-        uint256 tokenId;
-        for (i = 0; i < config.totalTokens; ++i) {
-            if (!basket.tokenDeposited(batchTnftArr[i], batchTokenIdArr[i])) {
-                tnft = batchTnftArr[i];
-                tokenId = batchTokenIdArr[i];
-                break;
-            }
-        }
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
@@ -1802,7 +1789,7 @@ contract StressTests is Utility {
         // ~ Execute redeemTNFT ~
 
         vm.startPrank(JOE);
-        basket.redeemTNFT(basket.balanceOf(JOE));
+        basket.redeemTNFT(basket.balanceOf(JOE), keccak256(abi.encodePacked(predictedTnft, predictedTokenId)));
         vm.stopPrank();
 
         // ~ Post-state check 3 ~

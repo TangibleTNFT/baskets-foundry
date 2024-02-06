@@ -75,6 +75,7 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      * @param _operator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
      */
     function initialize(address _factory, address _operator, uint256 chainId) external initializer {
+        require(_operator != address(0), "Cannot init with address(0)");
         __FactoryModifiers_init(_factory);
         operator = _operator;
         testnetChainId = chainId;
@@ -94,7 +95,7 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
         address basket = msg.sender;
 
         // make request to vrfCoordinator contract requesting entropy.
-        requestId = _requestRandomness(abi.encode(0));
+        requestId = _requestRandomness("");
 
         // store the basket requesting entropy in requestTracker using the requestId as the key value.
         requestTracker[requestId] = basket;
@@ -119,11 +120,12 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      */
     function _fulfillRandomness(uint256 _randomness, uint256 _requestId, bytes memory) internal override {
         address basket = requestTracker[_requestId];
-        // respond to the basket contract requesting entropy with it's random number.
-        IBasket(basket).fulfillRandomSeed(_randomness);
 
         delete requestTracker[_requestId];
         delete outstandingRequest[basket];
+
+        // respond to the basket contract requesting entropy with it's random number.
+        IBasket(basket).fulfillRandomSeed(_randomness);
         
         emit RequestFulfilled(_requestId, basket);
     }

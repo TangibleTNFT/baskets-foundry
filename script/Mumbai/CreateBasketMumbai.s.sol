@@ -68,7 +68,6 @@ contract CreateBasketMumbai is Script {
             "Tangible Basket Token ft 1",
             "TBT1",
             RE_TNFTTYPE,
-            address(0xe08e7009C2c4ae13C45852876f45913c47eF07Cc), // Note: Mumbai Tangible DAI Mock
             826, // UK_ISO
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),

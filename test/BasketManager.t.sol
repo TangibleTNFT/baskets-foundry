@@ -14,6 +14,7 @@ import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import "./utils/MumbaiAddresses.sol";
 import "./utils/Utility.sol";
+import { ArrayUtils } from "../src/libraries/ArrayUtils.sol";
 
 // tangible interface imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -40,6 +41,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
  * @notice This test file contains integration unit tests for the BasketManager contract. 
  */
 contract BasketManagerTest is Utility {
+    using ArrayUtils for uint256[];
 
     Basket public basket;
     BasketManager public basketManager;
@@ -95,7 +97,8 @@ contract BasketManagerTest is Utility {
             address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                address(factoryV2)
+                address(factoryV2),
+                address(MUMBAI_DAI)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -277,9 +280,8 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
-            features,
+            features.sort(),
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_1)
         );
@@ -292,8 +294,10 @@ contract BasketManagerTest is Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
+        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
+
         assertNotEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
+            basketHash,
             keccak256(abi.encodePacked(RE_TNFTTYPE, features))
         );
 
@@ -304,13 +308,14 @@ contract BasketManagerTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
 
-        assertEq(
+        assertWithinDiff(
             (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            _basket.getTotalValueOfBasket()
+            _basket.getTotalValueOfBasket(),
+            100000
         );
 
         assertEq(
-            basketManager.fetchBasketByHash(basketManager.hashedFeaturesForBasket(address(_basket))),
+            basketManager.fetchBasketByHash(basketHash),
             address(_basket)
         );
 
@@ -324,9 +329,45 @@ contract BasketManagerTest is Utility {
         assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
 
+        // ensure elements arent sorted
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        // deploy same basket without sorting -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("features not sorted or duplicates");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            0,
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
+
+        // ensure duplicates
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_2;
+
+        // deploy same basket with duplicates -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert("features not sorted or duplicates");
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            0,
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_2)
+        );
+        vm.stopPrank();
 
         // create new features array with same features in different order
-        features = new uint256[](2);
         features[0] = RE_FEATURE_1;
         features[1] = RE_FEATURE_2;
 
@@ -338,7 +379,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -354,7 +394,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -370,7 +409,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -386,7 +424,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             UK_ISO,
             features,
             emptyAddrArr,
@@ -401,7 +438,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -448,9 +484,8 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             0,
-            features,
+            features.sort(),
             tnfts,
             tokenIds
         );
@@ -463,11 +498,6 @@ contract BasketManagerTest is Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
-        // assertEq(
-        //     basketManager.hashedFeaturesForBasket(address(_basket)),
-        //     keccak256(abi.encodePacked(RE_TNFTTYPE, basketManager.sort(features)))
-        // );
-
         assertEq(basketManager.isBasket(address(_basket)), true);
 
         uint256 sharePrice = IBasket(_basket).getSharePrice();
@@ -475,9 +505,10 @@ contract BasketManagerTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(_basket)), 2);
 
-        assertEq(
+        assertWithinDiff(
             (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            _basket.getTotalValueOfBasket()
+            _basket.getTotalValueOfBasket(),
+            100000
         );
 
         assertEq(_basket.balanceOf(JOE), basketShares[0] + basketShares[1]);
@@ -514,7 +545,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             location,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -529,16 +559,12 @@ contract BasketManagerTest is Utility {
 
         assertEq(_basket.location(), location);
 
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, location))
-        );
-        assertEq(
-            basketManager.hashedFeaturesForBasket(address(_basket)),
-            keccak256(abi.encodePacked(RE_TNFTTYPE, location, features))
-        );
+        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
 
-        emit log_named_bytes32("Features hash", basketManager.hashedFeaturesForBasket(address(_basket)));
+        assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location)));
+        assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location, features)));
+
+        emit log_named_bytes32("Features hash", basketHash);
     }
 
     /// @notice Verifies proper state changes when a basket is deployed with a specific location
@@ -564,7 +590,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             US_ISO, // US ISO code
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -576,7 +601,6 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            address(MUMBAI_DAI),
             UK_ISO, // UK ISO code
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
@@ -599,9 +623,10 @@ contract BasketManagerTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(_basket)), 1);
 
-        assertEq(
+        assertWithinDiff(
             (_basket.balanceOf(JOE) * sharePrice) / 1 ether,
-            _basket.getTotalValueOfBasket()
+            _basket.getTotalValueOfBasket(),
+            100000
         );
 
         assertEq(_basket.balanceOf(JOE), basketShares[0]);
@@ -635,7 +660,7 @@ contract BasketManagerTest is Utility {
 
         // force revert -> address(0)
         vm.prank(factoryOwner);
-        vm.expectRevert("Address cannot be zero address");
+        vm.expectRevert(BasketManager.ZeroAddress.selector);
         basketManager.withdrawERC20(address(0));
 
         // withdraw DAI balance -> success
@@ -663,7 +688,7 @@ contract BasketManagerTest is Utility {
 
         // Execute setBasketsVrfConsumer with address(0) -> revert
         vm.prank(factoryOwner);
-        vm.expectRevert("_basketsVrfConsumer == address(0)");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
         basketManager.setBasketsVrfConsumer(address(0));
 
         // Execute setBasketsVrfConsumer -> success

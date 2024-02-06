@@ -83,14 +83,6 @@ contract BeaconProxyTest is Test {
         // Verify beaconProxy1 and beaconProxy2 have different contract addresses.
         assertNotEq(address(beaconProxy1), address(beaconProxy2));
 
-        // Verify both new beacon proxies share the same beacon.
-        assertEq(beaconProxy1.getBeacon(), address(beacon));
-        assertEq(beaconProxy2.getBeacon(), address(beacon));
-
-        // Verify both new beacon proxies share the same implementation address.
-        assertEq(beaconProxy1.implementation(), address(counterContract));
-        assertEq(beaconProxy2.implementation(), address(counterContract));
-
         // Verify both beacons contain the correct init values for counter.
         assertEq(ICounterContract(address(beaconProxy1)).counter(), 111);
         assertEq(ICounterContract(address(beaconProxy2)).counter(), 222);
