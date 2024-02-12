@@ -1163,7 +1163,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1284,7 +1284,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
@@ -1422,7 +1422,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT

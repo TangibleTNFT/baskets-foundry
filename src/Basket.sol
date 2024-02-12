@@ -418,6 +418,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function getBatchQuoteIn(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external view returns (uint256[] memory shares) {
         uint256 len = _tangibleNFTs.length;
+        uint256 depFee = uint256(depositFee);
         shares = new uint256[](len);
         for (uint i; i < len;) {
 
@@ -427,6 +428,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // calculate shares for depositor
             shares[i] = _quoteShares(usdValue);
+
+            uint256 fee = (shares[i] * depFee) / 100_00;
+            shares[i] -= fee;
 
             unchecked {
                 ++i;
@@ -764,9 +768,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _mint(_depositor, basketShare);
 
         // Update total nft value in this contract
-        unchecked {
-            totalNftValue += usdValue;
-        }
+        totalNftValue += usdValue;
 
         // if there is no seed request in flight and no nextToRedeem, make request
         if (nextToRedeem.tnft == address(0) && !seedRequestInFlight) {
@@ -833,8 +835,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         tokenIdLibrary[_tangibleNFT].pop();
 
         if (tokenIdLibrary[_tangibleNFT].length == 0) {
+            len = tnftsSupported.length - 1;
             (index,) = _isSupportedTnft(_tangibleNFT);
-            tnftsSupported[index] = tnftsSupported[tnftsSupported.length - 1];
+            if (index != len) {
+                tnftsSupported[index] = tnftsSupported[len];
+            }
             tnftsSupported.pop();
         }
 

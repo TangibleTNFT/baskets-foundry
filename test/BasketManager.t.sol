@@ -242,6 +242,7 @@ contract BasketManagerTest is Utility {
         assertEq(basketManager.featureLimit(), 10);
         assertEq(basketManager.beacon().implementation(), address(basket));
         assertEq(basketManager.factory(), address(factoryV2));
+        assertEq(basketManager.isBasket(address(0)), false);
     }
 
 
@@ -294,7 +295,7 @@ contract BasketManagerTest is Utility {
         assertEq(basketsArray.length, 1);
         assertEq(basketsArray[0], address(_basket));
 
-        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
+        (bytes32 basketHash,,,) = basketManager.getBasketInfo(address(_basket));
 
         assertNotEq(
             basketHash,
@@ -559,7 +560,7 @@ contract BasketManagerTest is Utility {
 
         assertEq(_basket.location(), location);
 
-        (bytes32 basketHash,,) = basketManager.getBasketInfo(address(_basket));
+        (bytes32 basketHash,,,) = basketManager.getBasketInfo(address(_basket));
 
         assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location)));
         assertEq(basketHash, keccak256(abi.encodePacked(RE_TNFTTYPE, location, features)));

@@ -46,6 +46,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         bytes32 hashedFeatures;
         string basketName;
         string basketSymbol;
+        bool isBasket;
     }
 
     /// @notice Mapping that stores a baskets's information, given it's address as a key.
@@ -222,7 +223,8 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         getBasketInfo[address(newBasketBeacon)] = BasketInfo({
             hashedFeatures: _hashCache,
             basketName: _name,
-            basketSymbol: _symbol
+            basketSymbol: _symbol,
+            isBasket: true
         });
 
         nameHashTaken[_name] = true;
@@ -328,10 +330,10 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /**
      * @notice This method is used for querying whether a provided address is one of a basket.
      * @param _basket Address of basket.
-     * @return isBasket -> If true, `_basket` is a basket.
+     * @dev If true, `_basket` is a basket.
      */
-    function isBasket(address _basket) public view returns (bool isBasket) {
-        getBasketInfo[_basket].hashedFeatures != bytes32(0) ? isBasket = true : isBasket = false;
+    function isBasket(address _basket) public view returns (bool) {
+        return getBasketInfo[_basket].isBasket;
     }
 
     /**
