@@ -31,6 +31,9 @@ contract Utility is Test{
     address public constant REV_SHARE = address(bytes20(bytes("Revenue Share"))); // NOTE: temporary
     address public constant GELATO_OPERATOR = address(bytes20(bytes("Gelato Vrf Operator")));
 
+    address public constant REBASE_INDEX_MANAGER = address(bytes20(bytes("Rebase Index Manager")));
+    address public constant REBASE_CONTROLLER = address(bytes20(bytes("Rebase Controller")));
+
 
     // ~ Constants ~
 

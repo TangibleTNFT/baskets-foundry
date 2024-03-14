@@ -174,6 +174,9 @@ contract StressTests is Utility {
         vm.prank(factoryOwner);
         IFactoryExt(address(factoryV2)).setContract(IFactoryExt.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
+        // set rebase controller
+        vm.prank(factoryOwner);
+        basketManager.setRebaseController(REBASE_CONTROLLER);
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -232,6 +235,10 @@ contract StressTests is Utility {
         vm.startPrank(CREATOR);
         basket.redeemTNFT(basket.balanceOf(CREATOR), keccak256(abi.encodePacked(address(realEstateTnft), tokenIds[0])));
         vm.stopPrank();
+
+        // rebase controller sets the rebase manager.
+        vm.prank(REBASE_CONTROLLER);
+        basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
 
         // init state check
         assertEq(basket.totalSupply(), 0);
@@ -1537,6 +1544,7 @@ contract StressTests is Utility {
 
         // ~ Rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
         
         // ~ Pre-state check ~
@@ -1627,6 +1635,7 @@ contract StressTests is Utility {
 
             // ~ rebase ~
 
+            vm.prank(REBASE_INDEX_MANAGER);
             basket.rebase();
 
             // ~ Post-state check ~

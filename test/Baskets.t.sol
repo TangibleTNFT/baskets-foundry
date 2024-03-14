@@ -142,6 +142,10 @@ contract BasketsIntegrationTest is Utility {
         vm.prank(factoryOwner);
         basketManager.setRevenueDistributor(REV_SHARE); // NOTE: Should be replaced with real rev share contract
 
+        // set rebase controller
+        vm.prank(factoryOwner);
+        basketManager.setRebaseController(REBASE_CONTROLLER);
+
         // updateDepositor for rent manager
         vm.prank(factoryV2.categoryOwner(ITangibleNFT(realEstateTnft)));
         rentManager.updateDepositor(TANGIBLE_LABS);
@@ -150,14 +154,14 @@ contract BasketsIntegrationTest is Utility {
         vm.prank(factoryOwner);
         factoryV2.setContract(FactoryV2.FACT_ADDRESSES.BASKETS_MANAGER, address(basketManager));
 
+        // set currencyFeed
+        vm.prank(factoryOwner);
+        factoryV2.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
+
         // whitelist basketManager on NotificationDispatcher
         vm.prank(TANGIBLE_LABS); // category owner
         notificationDispatcher.addWhitelister(address(basketManager));
         assertEq(notificationDispatcher.approvedWhitelisters(address(basketManager)), true);
-
-        // set currencyFeed
-        vm.prank(factoryOwner);
-        factoryV2.setContract(FactoryV2.FACT_ADDRESSES.CURRENCY_FEED, address(currencyFeed));
 
         vm.startPrank(ORACLE_OWNER);
         // set tangibleWrapper to be real estate oracle on chainlink oracle.
@@ -328,6 +332,10 @@ contract BasketsIntegrationTest is Utility {
         vm.startPrank(CREATOR);
         basket.redeemTNFT(basket.balanceOf(CREATOR), keccak256(abi.encodePacked(address(realEstateTnft), CREATOR_TOKEN_ID)));
         vm.stopPrank();
+
+        // rebase controller sets the rebase manager.
+        vm.prank(REBASE_CONTROLLER);
+        basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
 
         // labels
         vm.label(address(factoryV2), "FACTORY");
@@ -1572,6 +1580,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(rentClaimable, 10_000 * WAD);
 
         // grab rent value
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
 
         emit log_uint(basket.getRentBal());
@@ -1653,6 +1662,7 @@ contract BasketsIntegrationTest is Utility {
         uint256 totalRent = rentClaimable1 + rentClaimable2;
 
         // grab rent value
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
 
         // call getTotalValueOfBasket
@@ -1807,6 +1817,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
 
         // ~ Pre-state check ~
@@ -1902,6 +1913,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
 
         // ~ Post-state check ~
@@ -2075,6 +2087,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069230769230769230
 
         // fee taken: 1000.000000000000000000
@@ -2124,6 +2137,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.138461538461538460
 
         // fee taken: 1000.000000
@@ -2211,6 +2225,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ rebase ~
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069230769230769230
 
         // fee taken: 1000.000000000000000000
@@ -2268,6 +2283,7 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(basket.getRentBal(), (totalRentValue - rentBalance) + (100 * WAD));
 
+        vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069566590126291618
     }
 }

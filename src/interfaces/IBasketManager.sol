@@ -32,4 +32,6 @@ interface IBasketManager {
     function basketsVrfConsumer() external returns (address);
 
     function revenueDistributor() external returns (address);
+
+    function rebaseController() external returns (address);
 }

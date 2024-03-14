@@ -84,6 +84,9 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /// @notice This stores the ERC20 contract address of the primary rent token for baskets.
     address public primaryRentToken;
 
+    /// @notice Rebase controller address stored here.
+    address public rebaseController;
+
 
     // ------
     // Events
@@ -264,6 +267,15 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
         if (_primaryRentToken == address(0)) revert ZeroAddress();
         primaryRentToken = _primaryRentToken;
+    }
+
+    /**
+     * @notice This method allows the factory owner to update the `rebaseController` state variable.
+     * @param _controller New address for `rebaseController`.
+     */
+    function setRebaseController(address _controller) external onlyFactoryOwner {
+        if (_controller == address(0)) revert ZeroAddress();
+        rebaseController = _controller;
     }
 
     /**

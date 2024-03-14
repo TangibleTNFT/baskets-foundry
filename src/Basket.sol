@@ -216,7 +216,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint16 _location,
         address _deployer
     ) external initializer {   
-        require(_factoryProvider != address(0), "FactoryProvider == address(0)");
+        require(_factoryProvider != address(0), "address(0)");
         
         // If _features is not empty, add features
         for (uint256 i; i < _features.length;) {
@@ -364,7 +364,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This setter allows the factory owner to update the `rebaseIndexManager` state variable.
      * @param _rebaseIndexManager Address of rebase manager.
      */
-    function updateRebaseIndexManager(address _rebaseIndexManager) external onlyFactoryOwner {
+    function updateRebaseIndexManager(address _rebaseIndexManager) external {
+        require(
+            msg.sender == IOwnable(factory()).owner() || 
+            msg.sender == IBasketManager(IFactory(factory()).basketsManager()).rebaseController(), 
+            "NA"
+        );
         rebaseIndexManager = _rebaseIndexManager;
     }
 
@@ -375,7 +380,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _rentFee New rent fee.
      */
     function updateRentFee(uint16 _rentFee) external onlyFactoryOwner {
-        require(_rentFee <= 50_00, "rent fee cannot exceed 50%");
+        require(_rentFee <= 50_00, "cannot exceed 50%");
         rentFee = _rentFee;
     }
 
@@ -559,7 +564,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         return supportedFeatures;
     }
 
-    
+
     // --------------
     // Public Methods
     // --------------
@@ -570,6 +575,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * on the amount of rent accrued by the basket tokens.
      */
     function rebase() public nonReentrant {
+        require(msg.sender == rebaseIndexManager, "NA");
+
         uint256 previousRentalIncome = totalRentValue;
         uint256 totalRentalIncome = _getRentBal();
 
