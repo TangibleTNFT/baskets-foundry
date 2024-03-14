@@ -22,7 +22,7 @@ import "../../test/utils/Utility.sol";
 
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/BasketManager.sol:BasketManager --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    src/BasketManager.sol:BasketManager --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 */
 
 /**
@@ -59,3 +59,5 @@ contract UpgradeBasketManager is Script {
         vm.stopBroadcast();
     }
 }
+
+// 0x655171B068E842C42348509370c0dCcBE65198D8
