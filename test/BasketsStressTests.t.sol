@@ -25,7 +25,7 @@ import { RentManager } from "@tangible/RentManager.sol";
 import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
 import { TNFTMarketplaceV2 } from "@tangible/MarketplaceV2.sol";
 import { TangiblePriceManagerV2 } from "@tangible/TangiblePriceManagerV2.sol";
-import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
+import { MockMatrixOracle } from "@tangible/tests/mocks/MockMatrixOracle.sol";
 import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
 import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
 

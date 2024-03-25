@@ -177,7 +177,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
     modifier onlyBasketVrfConsumer() {
-        require(msg.sender == _getBasketVrfConsumer(), "not authorized");
+        require(msg.sender == _getBasketVrfConsumer(), "NA");
         _;
     }
 
@@ -408,7 +408,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _withdrawAmount Amount of rent to withdraw.
      */
     function withdrawRent(uint256 _withdrawAmount) external {
-        require(canWithdraw[msg.sender], "Not authorized");
+        require(canWithdraw[msg.sender], "NA");
         _transferRent(msg.sender, _withdrawAmount);
     }
 
@@ -484,7 +484,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param disable A boolean flag indicating whether to disable (true) or enable (false) rebasing for the account.
      */
     function disableRebase(address account, bool disable) external {
-        require(msg.sender == account || msg.sender == rebaseIndexManager, "Not authorized");
+        require(msg.sender == account || msg.sender == rebaseIndexManager, "NA");
         require(_isRebaseDisabled(account) != disable, "Already set");
         _disableRebase(account, disable);
     }
@@ -499,7 +499,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param data calldata payload for function call.
      */
     function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external returns (uint256 amountUsed) {
-        require(canWithdraw[msg.sender], "Not authorized");
+        require(canWithdraw[msg.sender], "NA");
         require(trustedTarget[target], "target not trusted");
 
         uint256 preBal = primaryRentToken.balanceOf(address(this));
@@ -805,7 +805,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         bytes32 _token
     ) internal nonReentrant {
         require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
-        require(!seedRequestInFlight, "new seed is being generated");
+        require(!seedRequestInFlight, "seed is being generated");
         require(nextToRedeem.tnft != address(0), "None redeemable");
 
         address _tangibleNFT = nextToRedeem.tnft;
@@ -813,7 +813,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 _usdValue = valueTracker[_tangibleNFT][_tokenId];
         uint256 _sharesRequired = _quoteShares(_usdValue);
 
-        require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "specified token is not redeemable");
+        require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "token not redeemable");
 
         delete nextToRedeem;
 
@@ -1016,17 +1016,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /**
      * @dev Get USD Price of given currency from ChainLink.
      * @param _currency Currency ISO code.
-     * @return exchange rate.
+     * @return exchangeRate rate.
      * @return decimals used for precision on priceFeed.
      */
-    function _getUsdExchangeRate(string memory _currency) internal view returns (uint256, uint256) {
+    function _getUsdExchangeRate(string memory _currency) internal view returns (uint256 exchangeRate, uint256 decimals) {
         ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
         AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
-        
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        if (price < 0) price = 0;
 
-        return (uint256(price), priceFeed.decimals());
+        decimals = priceFeed.decimals();
+        (, int256 price, , , ) = priceFeed.latestRoundData();
+
+        if (price > 0) exchangeRate = uint256(price) + currencyFeed.conversionPremiums(_currency);
     }
 
     /**

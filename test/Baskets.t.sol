@@ -24,7 +24,7 @@ import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
 import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
 import { RentManager } from "@tangible/RentManager.sol";
 import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPriceNotificationDispatcher.sol";
-import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
+import { MockMatrixOracle } from "@tangible/tests/mocks/MockMatrixOracle.sol";
 
 // tangible interface imports
 import { IVoucher } from "@tangible/interfaces/IVoucher.sol";
@@ -94,14 +94,14 @@ contract BasketsIntegrationTest is Utility {
 
     /// @notice Config function for test cases.
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL, 17160);
+        vm.createSelectFork(UNREAL_RPC_URL);
         emit log_uint(block.chainid);
 
-        factoryOwner = IOwnable(address(factoryV2)).owner();
-        //factoryOwner = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
+        //factoryOwner = IOwnable(address(factoryV2)).owner();
+        factoryOwner = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
         // new category owner
-        TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
+        TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(address(realEstateTnft)));
 
         // Deploy Basket implementation
         basket = new Basket();
@@ -170,57 +170,57 @@ contract BasketsIntegrationTest is Utility {
         );
 
         // create new item with fingerprint.
-        chainlinkRWAOracle.createItem(
-            RE_FINGERPRINT_1,  // fingerprint
-            200_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // chainlinkRWAOracle.createItem(
+        //     RE_FINGERPRINT_1,  // fingerprint
+        //     200_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        // chainlinkRWAOracle.createItem(
+        //     RE_FINGERPRINT_2,  // fingerprint
+        //     500_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        // chainlinkRWAOracle.createItem(
+        //     RE_FINGERPRINT_3,  // fingerprint
+        //     600_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        chainlinkRWAOracle.updateItem( // 1
+            RE_FINGERPRINT_1,
+            200_000_000,
+            0
         );
-        chainlinkRWAOracle.createItem(
-            RE_FINGERPRINT_2,  // fingerprint
-            500_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        chainlinkRWAOracle.updateStock(
+            RE_FINGERPRINT_1,
+            10
         );
-        chainlinkRWAOracle.createItem(
-            RE_FINGERPRINT_3,  // fingerprint
-            600_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        chainlinkRWAOracle.updateItem( // 2
+            RE_FINGERPRINT_2,
+            500_000_000,
+            0
         );
-        // chainlinkRWAOracle.updateItem( // 1
-        //     RE_FINGERPRINT_1,
-        //     200_000_000,
-        //     0
-        // );
-        // chainlinkRWAOracle.updateStock(
-        //     RE_FINGERPRINT_1,
-        //     10
-        // );
-        // chainlinkRWAOracle.updateItem( // 2
-        //     RE_FINGERPRINT_2,
-        //     500_000_000,
-        //     0
-        // );
-        // chainlinkRWAOracle.updateStock(
-        //     RE_FINGERPRINT_2,
-        //     10
-        // );
-        // chainlinkRWAOracle.updateItem( // 3
-        //     RE_FINGERPRINT_3,
-        //     600_000_000,
-        //     0
-        // );
-        // chainlinkRWAOracle.updateStock(
-        //     RE_FINGERPRINT_3,
-        //     10
-        // );
+        chainlinkRWAOracle.updateStock(
+            RE_FINGERPRINT_2,
+            10
+        );
+        chainlinkRWAOracle.updateItem( // 3
+            RE_FINGERPRINT_3,
+            600_000_000,
+            0
+        );
+        chainlinkRWAOracle.updateStock(
+            RE_FINGERPRINT_3,
+            10
+        );
         vm.stopPrank();
 
         vm.startPrank(factoryOwner);

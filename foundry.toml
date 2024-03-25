@@ -4,6 +4,8 @@ out = "out"
 libs = ["lib"]
 optimizer = true
 optimizer_runs = 100
+solc = "0.8.23"
+evm_version = "shanghai"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 

@@ -35,18 +35,15 @@ contract UpgradeBasket is Script {
     // wallets
     address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-
-    //string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
+        vm.createSelectFork(UNREAL_RPC_URL);
     }
 
     function run() public {
 
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
-
-        //factoryOwner = IOwnable(UNREAL_FACTORY).owner();
 
         // 1. deploy basket
         Basket basket = new Basket();
@@ -56,10 +53,8 @@ contract UpgradeBasket is Script {
     
 
         // log addresses
-        console2.log("basket imlpementatino address =", address(basket));
+        console2.log("new basket imlpementation address =", address(basket));
     
         vm.stopBroadcast();
     }
 }
-
-// 0x561fdDe2e05C7EFf63823b223575B0CA230aDbd6
