@@ -70,7 +70,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Tracks index of where the tokenId for the tnft exists in `tokenIdLibrary` array.
     mapping(address tnft => mapping(uint256 tokenId => uint256 index)) public indexInTokenIdLibrary;
 
-    /// @notice Mapping used to track the usdValue of each TNFT token in this contract.
+    /// @notice Mapping used to track the raw value (GBP) of each TNFT token in this contract.
     mapping(address => mapping(uint256 => uint256)) public valueTracker;
 
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
@@ -89,7 +89,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @dev This TnftType (aka "category") is REQUIRED upon basket creation.
     uint256 public tnftType;
 
-    /// @notice This value is used to track the total USD value of all TNFT tokens inside this contract.
+    /// @notice This value is used to track the total raw value (i.e. GBP) of all TNFT tokens inside this contract.
     uint256 public totalNftValue;
 
     /// @notice This value stores the amount of rent claimable by this contract. Updated upon rebase.
@@ -328,26 +328,26 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev Defined on interface IRWAPriceNotificationReceiver::notify
      * @param _tnft TNFT contract address of token being updated.
      * @param _tokenId TNFT tokenId of token being updated.
+     * @param _oldNativePrice Old price of the token, native currency.
+     * @param _newNativePrice Old price of the token, native currency.
+     * @param _currency Currency ISO.
      */
     function notify(
         address _tnft,
         uint256 _tokenId,
         uint256, // fingerprint
-        uint256, // oldNativePrice
-        uint256, // newNativePrice
-        uint16   // currency
+        uint256 _oldNativePrice,
+        uint256 _newNativePrice,
+        uint16  _currency
     ) external {
         require(msg.sender == address(_getNotificationDispatcher(_tnft)),
             "msg.sender != ND"
         );
 
-        uint256 oldPriceUsd = valueTracker[_tnft][_tokenId];
-        uint256 newPriceUsd = _getUSDValue(_tnft, _tokenId);
+        valueTracker[_tnft][_tokenId] = _newNativePrice;
+        totalNftValue = (totalNftValue - _oldNativePrice) + _newNativePrice;
 
-        valueTracker[_tnft][_tokenId] = newPriceUsd;
-        totalNftValue = (totalNftValue - oldPriceUsd) + newPriceUsd;
-
-        emit PriceNotificationReceived(_tnft, _tokenId, oldPriceUsd, newPriceUsd);
+        emit PriceNotificationReceived(_tnft, _tokenId, _oldNativePrice, _newNativePrice);
     }
 
     /**
@@ -428,7 +428,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         for (uint i; i < len;) {
 
             // calculate usd value of TNFT with 18 decimals
-            uint256 usdValue = _getUSDValue(_tangibleNFTs[i], _tokenIds[i]);
+            uint256 usdValue = getUSDValue(_tangibleNFTs[i], _tokenIds[i]);
             require(usdValue > 0, "Unsupported TNFT");
 
             // calculate shares for depositor
@@ -452,7 +452,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function getQuoteIn(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 shares) {
         // calculate usd value of TNFT with 18 decimals
-        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
+        uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue > 0, "Unsupported TNFT");
 
         // calculate shares for depositor
@@ -470,7 +470,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) {
         // fetch usd value of tnft
-        uint256 usdValue = valueTracker[_tangibleNFT][_tokenId];
+        uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue != 0, "Unsupported TNFT");
 
         // Get shares required
@@ -569,7 +569,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     // Public Methods
     // --------------
 
-
     /**
      * @notice This function allows for the Basket token to "rebase" and will update the multiplier based
      * on the amount of rent accrued by the basket tokens.
@@ -613,12 +612,35 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @dev Get $USD Value of specified token.
+     * @param _tangibleNFT TNFT contract address.
+     * @param _tokenId TokenId of token.
+     * @return $USD value of token, note: base 1e18
+     */
+    function getUSDValue(address _tangibleNFT, uint256 _tokenId) public view returns (uint256) {
+        (string memory currency, uint256 amount, uint8 nativeDecimals) = _getTnftNativeValue(
+            _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
+        );
+        (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
+        return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
+    }
+
+    /**
      * @notice This method returns the total value of NFTs and claimable rent in this basket contract.
      * @return totalValue -> total value in 18 decimals.
      */
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
+        if (totalNftValue != 0) {
+            ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
+            string memory currency = currencyFeed.ISOcurrencyNumToCode(location);
+
+            // get total value of nfts in basket.
+            (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
+            totalValue = (price * totalNftValue * 10 ** 18) / 10 ** priceDecimals / 10 ** 3; // TODO
+        }
+
         // get total value of nfts in basket.
-        totalValue = totalNftValue;
+        //totalValue = totalNftValue;
         // get value of rent accrued by this contract.
         totalValue += totalRentValue * decimalsDiff();
     }
@@ -713,13 +735,15 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
 
         // calculate usd value of TNFT with 18 decimals
-        uint256 usdValue = _getUSDValue(_tangibleNFT, _tokenId);
+        uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
         require(usdValue > 0, "Unsupported TNFT");
 
         // ~ Update contract state ~
 
+        (, uint256 amount,) = _getTnftNativeValue(_tangibleNFT, fingerprint);
+
         tokenDeposited[_tangibleNFT][_tokenId] = true;
-        valueTracker[_tangibleNFT][_tokenId] = usdValue;
+        valueTracker[_tangibleNFT][_tokenId] = amount;
 
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
         indexInDepositedTnfts[_tangibleNFT][_tokenId] = depositedTnfts.length - 1;
@@ -775,7 +799,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _mint(_depositor, basketShare);
 
         // Update total nft value in this contract
-        totalNftValue += usdValue;
+        totalNftValue += amount;
 
         // if there is no seed request in flight and no nextToRedeem, make request
         if (nextToRedeem.tnft == address(0) && !seedRequestInFlight) {
@@ -810,8 +834,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         address _tangibleNFT = nextToRedeem.tnft;
         uint256 _tokenId = nextToRedeem.tokenId;
-        uint256 _usdValue = valueTracker[_tangibleNFT][_tokenId];
-        uint256 _sharesRequired = _quoteShares(_usdValue);
+        //uint256 _gbpValue = valueTracker[_tangibleNFT][_tokenId];
+        uint256 _sharesRequired = _quoteShares(getUSDValue(_tangibleNFT, _tokenId));
 
         require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "token not redeemable");
 
@@ -863,7 +887,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
         INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
 
-        totalNftValue -= _usdValue;
+        (/*string memory currency*/, uint256 amount, /*uint8 nativeDecimals*/) = _getTnftNativeValue(
+            _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
+        );
+        totalNftValue -= amount;
+        //totalNftValue -= _usdValue;
         _burn(_redeemer, _sharesRequired);
 
         // Transfer tokenId to user
@@ -973,7 +1001,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
         if (totalSupply() == 0) {
-            shares = usdValue / 100; // set initial price -> $100.xx
+            shares = usdValue / 100; // set initial price -> $100
         } else {
             shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
         }
@@ -997,20 +1025,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
 
         decimals = oracle.decimals();
-    }
-
-    /**
-     * @dev Get $USD Value of specified token.
-     * @param _tangibleNFT TNFT contract address.
-     * @param _tokenId TokenId of token.
-     * @return $USD value of token, note: base 1e18
-     */
-    function _getUSDValue(address _tangibleNFT, uint256 _tokenId) internal view returns (uint256) {
-        (string memory currency, uint256 amount, uint8 nativeDecimals) = _getTnftNativeValue(
-            _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
-        );
-        (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
-        return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
     }
 
     /**

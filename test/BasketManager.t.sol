@@ -281,7 +281,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features.sort(),
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_1)
@@ -342,7 +342,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_2)
@@ -361,7 +361,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_2)
@@ -410,7 +410,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_2)
@@ -439,7 +439,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token1",
             "TBT1",
             RE_TNFTTYPE,
-            UK_ISO,
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(JOE_TOKEN_2)
@@ -485,7 +485,7 @@ contract BasketManagerTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features.sort(),
             tnfts,
             tokenIds

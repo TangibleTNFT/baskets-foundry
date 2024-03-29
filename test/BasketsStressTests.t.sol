@@ -219,7 +219,7 @@ contract StressTests is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            0,
+            UK_ISO,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(tokenIds[0])
