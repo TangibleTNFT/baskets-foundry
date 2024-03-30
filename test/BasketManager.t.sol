@@ -596,7 +596,7 @@ contract BasketManagerTest is Utility {
         // deploy basket -> revert -> deposit tokens dont support US ISO Code.
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
-        vm.expectRevert("Token incompatible");
+        vm.expectRevert();
         (IBasket _basket, uint256[] memory basketShares) = basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",

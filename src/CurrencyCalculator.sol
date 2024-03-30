@@ -22,8 +22,13 @@ import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
  */
 contract CurrencyCalculator {
 
+    /// @notice Stores Factory address
     address public immutable factory;
 
+    /**
+     * @notice Initializes contract.
+     * @param _factory Address to assign to `factory`.
+     */
     constructor(address _factory) {
         factory = _factory;
     }
