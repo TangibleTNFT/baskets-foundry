@@ -35,6 +35,7 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
+import { CurrencyCalculator } from "../src/CurrencyCalculator.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
@@ -58,6 +59,7 @@ contract BasketsIntegrationTest is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    CurrencyCalculator public currencyCalculator;
     BasketsVrfConsumer public basketVrfConsumer;
 
     // tangible unreal contracts
@@ -110,6 +112,9 @@ contract BasketsIntegrationTest is Utility {
         // Deploy Basket implementation
         basket = new Basket();
 
+        // Deploy CurrencyCalculator -> not upgradeable
+        currencyCalculator = new CurrencyCalculator(address(factoryV2));
+
         // Deploy BasketManager
         basketManager = new BasketManager();
 
@@ -119,7 +124,8 @@ contract BasketsIntegrationTest is Utility {
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
-                address(DAI_MOCK)
+                address(DAI_MOCK),
+                address(currencyCalculator)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -315,7 +321,7 @@ contract BasketsIntegrationTest is Utility {
             "Tangible Basket Token",
             "TBT",
             RE_TNFTTYPE,
-            UK_ISO,
+            0,
             features,
             _asSingletonArrayAddress(address(realEstateTnft)),
             _asSingletonArrayUint(CREATOR_TOKEN_ID)
@@ -436,6 +442,28 @@ contract BasketsIntegrationTest is Utility {
         return _mintToken(tnft, _mintCount, _fingerprint, _receiver);
     }
 
+    /// @notice Helper function for creating items and minting to a designated address.
+    function _createItemAndMint(address tnft, uint256 _sellAt, uint256 _stock, uint256 _mintCount, uint256 _fingerprint, address _receiver, uint16 _currency) internal returns (uint256[] memory) {
+        require(_mintCount >= _stock, "mint count must be gt stock");
+
+        vm.startPrank(ORACLE_OWNER);
+        // create new item with fingerprint.
+        chainlinkRWAOracle.createItem(
+            _fingerprint, // fingerprint
+            _sellAt,      // weSellAt
+            0,            // lockedAmount
+            _stock,       // stock
+            _currency,    // custom currency
+            _currency     // custom country
+        );
+        vm.stopPrank();
+
+        vm.prank(TANGIBLE_LABS);
+        ITangibleNFTExt(tnft).addFingerprints(_asSingletonArrayUint(_fingerprint));
+
+        return _mintToken(tnft, _mintCount, _fingerprint, _receiver);
+    }
+
     /// @notice Helper function for minting to a designated address.
     function _mintToken(address tnft, uint256 _mintCount, uint256 _fingerprint, address _receiver) internal returns (uint256[] memory) {
         uint256 preBal = IERC721(tnft).balanceOf(TANGIBLE_LABS);
@@ -507,7 +535,7 @@ contract BasketsIntegrationTest is Utility {
     // Initial State Test
     // ------------------
 
-    /// @notice Initial state test. TODO: Add more asserts
+    /// @notice Initial state test.
     function test_baskets_init_state() public {
         // verify realEstateTnft
         assertEq(realEstateTnft.tokensFingerprint(JOE_TOKEN_ID), RE_FINGERPRINT_2); // Joe's tokenId
@@ -530,6 +558,15 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basketManager.featureLimit(), 10);
         assertNotEq(address(basketManager.beacon()), address(0));
         assertNotEq(basketManager.beacon().implementation(), address(0));
+
+        // verify basket
+        assertEq(basket.currencySupported("GBP"), true);
+        assertEq(basket.currencyDecimals("GBP"), 3);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+        
+        string[] memory supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 1);
+        assertEq(supportedCurrencies[0], "GBP");
     }
 
 
@@ -560,7 +597,6 @@ contract BasketsIntegrationTest is Utility {
         address[] memory tnftsSupported = basket.getTnftsSupported();
         assertEq(tnftsSupported.length, 0);
 
-        // emit deposit logic 
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
 
@@ -579,8 +615,13 @@ contract BasketsIntegrationTest is Utility {
         assertWithinPrecision(
             (basket.balanceOf(JOE) * basket.getSharePrice()) / 1 ether,
             basket.getTotalValueOfBasket(),
-            8
+            0
         );
+
+        uint256 fingerprint = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(JOE_TOKEN_ID);
+        (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint);
+        assertEq(basket.totalNftValueByCurrency("GBP"), nativeValue);
+        assertEq(basket.getTotalValueOfBasket(), usdValue);
 
         assertEq(realEstateTnft.balanceOf(JOE), 0);
         assertEq(realEstateTnft.balanceOf(address(basket)), 1);
@@ -623,6 +664,17 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), 0);
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), false);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), false);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+        assertEq(basket.getTotalValueOfBasket(), 0);
+
+        uint256 fingerprint1 = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(JOE_TOKEN_ID);
+        uint256 fingerprint2 = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(NIK_TOKEN_ID);
+
+        (, uint256 nativeValue1,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint1);
+        (, uint256 nativeValue2,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint2);
+
+        uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
+        uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
 
         Basket.TokenData[] memory deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 0);
@@ -672,6 +724,8 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(), basket.balanceOf(JOE) + basket.balanceOf(NIK));
         assertEq(basket.tokenDeposited(address(realEstateTnft), JOE_TOKEN_ID), true);
         assertEq(basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
+        assertEq(basket.totalNftValueByCurrency("GBP"), nativeValue1 + nativeValue2);
+        assertEq(basket.getTotalValueOfBasket(), usdValue1 + usdValue2);
 
         deposited = basket.getDepositedTnfts();
         assertEq(deposited.length, 2);
@@ -962,6 +1016,136 @@ contract BasketsIntegrationTest is Utility {
         basket.batchDepositTNFT(tnfts, tokenIds);
     }
 
+    function test_baskets_depositTNFT_diffCurrencies() public {
+
+        // ~ Config ~
+
+        // create token of XAU currency
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, // XAU is 3 decimals
+            1,
+            1,
+            9999, // fp
+            BOB,
+            959 // XAU
+        );
+        uint256 tokenIdXAU = tokenIds[0];
+
+        // create token of USD currency
+        tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, // USD is 3 decimals
+            1,
+            1,
+            9998, // fp
+            BOB,
+            840 // USD
+        );
+        uint256 tokenIdUSD = tokenIds[0];
+
+        (, uint256 nativeValueXAU,) = currencyCalculator.getTnftNativeValue(
+            address(realEstateTnft),
+            ITangibleNFT(address(realEstateTnft)).tokensFingerprint(tokenIdXAU)
+        );
+        uint256 usdValueXAU = currencyCalculator.getUSDValue(address(realEstateTnft), tokenIdXAU);
+        emit log_named_uint("usd val xau token", usdValueXAU);
+
+        (, uint256 nativeValueUSD,) = currencyCalculator.getTnftNativeValue(
+            address(realEstateTnft),
+            ITangibleNFT(address(realEstateTnft)).tokensFingerprint(tokenIdUSD)
+        );
+        uint256 usdValueUSD = currencyCalculator.getUSDValue(address(realEstateTnft), tokenIdUSD);
+        emit log_named_uint("usd val usd token", usdValueUSD);
+
+
+        // ~ Pre-state check ~
+
+        assertEq(realEstateTnft.balanceOf(BOB), 2);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 0);
+
+        assertEq(basket.getTotalValueOfBasket(), 0);
+
+        assertEq(basket.currencySupported("GBP"), true);
+        assertEq(basket.currencyDecimals("GBP"), 3);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+
+        assertEq(basket.currencySupported("XAU"), false);
+        assertEq(basket.currencyDecimals("XAU"), 0);
+        assertEq(basket.totalNftValueByCurrency("XAU"), 0);
+
+        assertEq(basket.currencySupported("USD"), false);
+        assertEq(basket.currencyDecimals("USD"), 0);
+        assertEq(basket.totalNftValueByCurrency("USD"), 0);
+        
+        string[] memory supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 1);
+        assertEq(supportedCurrencies[0], "GBP");
+
+        // ~ Deposit XAU Token ~
+
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), tokenIdXAU);
+        basket.depositTNFT(address(realEstateTnft), tokenIdXAU);
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(realEstateTnft.balanceOf(BOB), 1);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 1);
+
+        assertEq(basket.getTotalValueOfBasket(), usdValueXAU);
+
+        assertEq(basket.currencySupported("GBP"), true);
+        assertEq(basket.currencyDecimals("GBP"), 3);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+
+        assertEq(basket.currencySupported("XAU"), true);
+        assertEq(basket.currencyDecimals("XAU"), 3);
+        assertEq(basket.totalNftValueByCurrency("XAU"), nativeValueXAU);
+
+        assertEq(basket.currencySupported("USD"), false);
+        assertEq(basket.currencyDecimals("USD"), 0);
+        assertEq(basket.totalNftValueByCurrency("USD"), 0);
+        
+        supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 2);
+        assertEq(supportedCurrencies[0], "GBP");
+        assertEq(supportedCurrencies[1], "XAU");
+
+        // ~ Deposit USD Token ~
+
+        vm.startPrank(BOB);
+        realEstateTnft.approve(address(basket), tokenIdUSD);
+        basket.depositTNFT(address(realEstateTnft), tokenIdUSD);
+        vm.stopPrank();
+
+        // ~ Post-state check 2 ~
+
+        assertEq(realEstateTnft.balanceOf(BOB), 0);
+        assertEq(realEstateTnft.balanceOf(address(basket)), 2);
+
+        assertEq(basket.getTotalValueOfBasket(), usdValueXAU + usdValueUSD);
+
+        assertEq(basket.currencySupported("GBP"), true);
+        assertEq(basket.currencyDecimals("GBP"), 3);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+
+        assertEq(basket.currencySupported("XAU"), true);
+        assertEq(basket.currencyDecimals("XAU"), 3);
+        assertEq(basket.totalNftValueByCurrency("XAU"), nativeValueXAU);
+
+        assertEq(basket.currencySupported("USD"), true);
+        assertEq(basket.currencyDecimals("USD"), 3);
+        assertEq(basket.totalNftValueByCurrency("USD"), nativeValueUSD);
+        
+        supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 3);
+        assertEq(supportedCurrencies[0], "GBP");
+        assertEq(supportedCurrencies[1], "XAU");
+        assertEq(supportedCurrencies[2], "USD");
+    }
+
 
     // ~ Redeem Testing ~
 
@@ -972,6 +1156,10 @@ contract BasketsIntegrationTest is Utility {
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
 
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
+
+        uint256 fingerprint = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(JOE_TOKEN_ID);
+        (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint);
+        uint256 usdValue = currencyCalculator.getUSDValue(address(realEstateTnft), JOE_TOKEN_ID);
 
         // ~ Config ~
 
@@ -991,6 +1179,9 @@ contract BasketsIntegrationTest is Utility {
             basket.getTotalValueOfBasket(),
             8
         );
+
+        assertEq(basket.totalNftValueByCurrency("GBP"), nativeValue);
+        assertEq(basket.getTotalValueOfBasket(), usdValue);
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
@@ -1037,6 +1228,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
 
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+        assertEq(basket.getTotalValueOfBasket(), 0);
+
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), JOE_TOKEN_ID), address(0));
 
         assertEq(basket.balanceOf(JOE), 0);
@@ -1059,6 +1253,15 @@ contract BasketsIntegrationTest is Utility {
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
         uint256 preBalNik = realEstateTnft.balanceOf(NIK);
+
+        uint256 fingerprint1 = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(JOE_TOKEN_ID);
+        uint256 fingerprint2 = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(NIK_TOKEN_ID);
+
+        (, uint256 nativeValue1,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint1);
+        (, uint256 nativeValue2,) = currencyCalculator.getTnftNativeValue(address(realEstateTnft), fingerprint2);
+
+        uint256 usdValue1 = currencyCalculator.getUSDValue(address(realEstateTnft), JOE_TOKEN_ID);
+        uint256 usdValue2 = currencyCalculator.getUSDValue(address(realEstateTnft), NIK_TOKEN_ID);
 
         // ~ Config ~
 
@@ -1087,6 +1290,9 @@ contract BasketsIntegrationTest is Utility {
             basket.getTotalValueOfBasket(),
             8
         );
+
+        assertEq(basket.totalNftValueByCurrency("GBP"), nativeValue1 + nativeValue2);
+        assertEq(basket.getTotalValueOfBasket(), usdValue1 + usdValue2);
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe - 1);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik - 1);
@@ -1145,6 +1351,9 @@ contract BasketsIntegrationTest is Utility {
             8
         );
 
+        assertEq(basket.totalNftValueByCurrency("GBP"), nativeValue2);
+        assertEq(basket.getTotalValueOfBasket(), usdValue2);
+
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik - 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
@@ -1198,6 +1407,9 @@ contract BasketsIntegrationTest is Utility {
             basket.getTotalValueOfBasket(),
             8
         );
+
+        assertEq(basket.totalNftValueByCurrency("GBP"), 0);
+        assertEq(basket.getTotalValueOfBasket(), 0);
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(NIK), preBalNik);
@@ -1694,9 +1906,6 @@ contract BasketsIntegrationTest is Utility {
 
         // get fingerprint
         uint256 fingerprint = realEstateTnft.tokensFingerprint(tokenId);
-        emit log_named_uint("FP", fingerprint);
-        emit log_named_uint("JOE TOKENID", tokenId);
-        emit log_named_uint("TOKENID", realEstateTnft.fingerprintTokens(fingerprint, 0));
 
         // Joe deposits NFT
         vm.startPrank(JOE);
@@ -1710,20 +1919,19 @@ contract BasketsIntegrationTest is Utility {
         uint256 pre_sharePrice = basket.getSharePrice();
 
         assertWithinPrecision(
-            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            (basket.totalSupply() * basket.getSharePrice()) / 1e18,
             basket.getTotalValueOfBasket(),
             8
         );
-
-        assertEq(basket.totalNftValue(), 500_000_000);
-        assertEq(basket.valueTracker(address(realEstateTnft), tokenId), 500_000_000);
+        assertEq(basket.totalNftValueByCurrency("GBP"), 500_000_000);
+        assertEq(basket.getTotalValueOfBasket(), pre_usdValue);
 
         // ~ Update Token Price -> notify ~
         
         vm.prank(chainlinkRWAOracle.owner());
         chainlinkRWAOracle.updateItem(fingerprint, newNftValue, 0);
 
-        // ~ Execute a deposit ~
+        // ~ Post-state check ~
 
         uint256 post_usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
         uint256 post_sharePrice = basket.getSharePrice();
@@ -1732,14 +1940,12 @@ contract BasketsIntegrationTest is Utility {
         assertEq(notificationDispatcher.registeredForNotification(address(realEstateTnft), tokenId), address(basket));
 
         assertWithinPrecision(
-            (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
+            (basket.totalSupply() * basket.getSharePrice()) / 1e18,
             basket.getTotalValueOfBasket(),
             8
         );
-
         assertGt(post_sharePrice, pre_sharePrice);
-        assertEq(basket.totalNftValue(), newNftValue);
-        assertEq(basket.valueTracker(address(realEstateTnft), tokenId), newNftValue);
+        assertEq(basket.totalNftValueByCurrency("GBP"), newNftValue);
         assertEq(basket.getTotalValueOfBasket(), post_usdValue);
 
         // ~ logs ~
@@ -1824,7 +2030,7 @@ contract BasketsIntegrationTest is Utility {
 
         // Force revert
         vm.prank(factoryOwner);
-        vm.expectRevert("Amount exceeds withdrawable rent");
+        vm.expectRevert("Amount exceeds withdrawable");
         basket.withdrawRent((withdrawable) + 1);
 
         vm.prank(factoryOwner);
@@ -1953,6 +2159,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.isRebaseDisabled(JOE), true);
     }
 
+    /// @notice Verifies the overall value of the basket can decrease and as long as rent has increased, rebase is positive.
     function test_baskets_decreaseValue_thenRebase() public {
 
         assertEq(basket.getTotalValueOfBasket(), 0);

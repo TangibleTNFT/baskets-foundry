@@ -59,4 +59,6 @@ interface IBasket is IERC20, IERC20Metadata {
     function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) external returns (bool);
 
     function fulfillRandomSeed(uint256 randomWord) external;
+
+    function basketManager() external view returns (address);
 }

@@ -13,6 +13,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 // tangible imports
+import { RebaseTokenUpgradeable } from "@tangible-foundation-contracts/tokens/RebaseTokenUpgradeable.sol";
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -30,10 +31,10 @@ import { IChainlinkRWAOracle } from "@tangible/interfaces/IChainlinkRWAOracle.so
 // local imports
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketManager.sol";
+import { ICurrencyCalculator } from "./interfaces/ICurrencyCalculator.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 import { IGetOracle } from "./interfaces/IGetOracle.sol";
-import { RebaseTokenUpgradeable } from "@tangible-foundation-contracts/tokens/RebaseTokenUpgradeable.sol";
 
 
 /**
@@ -57,6 +58,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice This stores the data for the next NFT that is elgible for redemption.
     RedeemData public nextToRedeem;
 
+    /// @notice Array of currencies that the basket currently holds or supports.
+    string[] public supportedCurrencies;
+
     /// @notice Array of TNFT contract addresses supported by this contract.
     address[] public tnftsSupported;
 
@@ -70,9 +74,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Tracks index of where the tokenId for the tnft exists in `tokenIdLibrary` array.
     mapping(address tnft => mapping(uint256 tokenId => uint256 index)) public indexInTokenIdLibrary;
 
-    /// @notice Mapping used to track the raw value (GBP) of each TNFT token in this contract.
-    mapping(address => mapping(uint256 => uint256)) public valueTracker;
-
     /// @notice TangibleNFT contract => tokenId => if deposited into address(this).
     mapping(address => mapping(uint256 => bool)) public tokenDeposited;
 
@@ -85,12 +86,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Stores trusted targets for reinvesting rent.
     mapping(address => bool) public trustedTarget;
 
+    /// @notice If true, currency exists in `supportedCurrencies`.
+    mapping(string => bool) public currencySupported;
+
+    /// @notice Decimals oracle uses for currency.
+    mapping(string => uint8) public currencyDecimals;
+
     /// @notice TnftType that this basket supports exclusively.
     /// @dev This TnftType (aka "category") is REQUIRED upon basket creation.
     uint256 public tnftType;
 
-    /// @notice This value is used to track the total raw value (i.e. GBP) of all TNFT tokens inside this contract.
-    uint256 public totalNftValue;
+    /// @notice This value is used to track the total raw value (i.e. GBP) of all TNFT tokens inside this contract by currency.
+    mapping(string => uint256) public totalNftValueByCurrency;
 
     /// @notice This value stores the amount of rent claimable by this contract. Updated upon rebase.
     uint256 public totalRentValue;
@@ -106,6 +113,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /// @notice Address of rebase manager.
     address public rebaseIndexManager;
+
+    /// @notice Address of BasketManager
+    address public basketManager;
 
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint16 public depositFee; // 0.5% by default
@@ -181,6 +191,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _;
     }
 
+    /// @notice This modifier is to verify msg.sender has the ability to withdraw rent.
+    modifier onlyCanWithdraw() {
+        require(canWithdraw[msg.sender], "NA");
+        _;
+    }
+
 
     // -----------
     // Constructor
@@ -232,6 +248,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         rentFee = 10_00; // 10.0%
 
         location = _location;
+        basketManager = msg.sender;
 
         __RebaseToken_init(_name, _symbol);
         __FactoryModifiers_init(_factoryProvider);
@@ -241,7 +258,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         tnftType = _tnftType;
         deployer = _deployer;
 
-        _updatePrimaryRentToken(_rentToken);
+        primaryRentToken = IERC20Metadata(_rentToken);
         canWithdraw[IOwnable(factory()).owner()] = true;
     }
 
@@ -335,17 +352,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function notify(
         address _tnft,
         uint256 _tokenId,
-        uint256, // fingerprint
+        uint256 /* fingerprint */,
         uint256 _oldNativePrice,
         uint256 _newNativePrice,
         uint16  _currency
     ) external {
-        require(msg.sender == address(_getNotificationDispatcher(_tnft)),
-            "msg.sender != ND"
-        );
+        require(msg.sender == address(_getNotificationDispatcher(_tnft)), "NA");
 
-        valueTracker[_tnft][_tokenId] = _newNativePrice;
-        totalNftValue = (totalNftValue - _oldNativePrice) + _newNativePrice;
+        // get string code from num code
+        string memory currency = ICurrencyFeedV2(IFactory(factory()).currencyFeed()).ISOcurrencyNumToCode(_currency);
+        // update `totalNftValueByCurrency`
+        totalNftValueByCurrency[currency] = (totalNftValueByCurrency[currency] - _oldNativePrice) + _newNativePrice;
 
         emit PriceNotificationReceived(_tnft, _tokenId, _oldNativePrice, _newNativePrice);
     }
@@ -357,7 +374,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _primaryRentToken New address for `primaryRentToken`.
      */
     function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
-        _updatePrimaryRentToken(_primaryRentToken);
+        require(_primaryRentToken != address(0), "address(0)");
+        primaryRentToken = IERC20Metadata(_primaryRentToken);
     }
 
     /**
@@ -367,7 +385,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function updateRebaseIndexManager(address _rebaseIndexManager) external {
         require(
             msg.sender == IOwnable(factory()).owner() || 
-            msg.sender == IBasketManager(IFactory(factory()).basketsManager()).rebaseController(), 
+            msg.sender == IBasketManager(basketManager).rebaseController(), 
             "NA"
         );
         rebaseIndexManager = _rebaseIndexManager;
@@ -407,8 +425,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This method allows a permissioned address to withdraw a specified amount of claimable rent from this basket.
      * @param _withdrawAmount Amount of rent to withdraw.
      */
-    function withdrawRent(uint256 _withdrawAmount) external {
-        require(canWithdraw[msg.sender], "NA");
+    function withdrawRent(uint256 _withdrawAmount) external onlyCanWithdraw {
         _transferRent(msg.sender, _withdrawAmount);
     }
 
@@ -498,9 +515,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param rentBalance Amount of rent balance being allocated for reinvestment.
      * @param data calldata payload for function call.
      */
-    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external returns (uint256 amountUsed) {
-        require(canWithdraw[msg.sender], "NA");
-        require(trustedTarget[target], "target not trusted");
+    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external onlyCanWithdraw returns (uint256 amountUsed) {
+        require(trustedTarget[target], "Invalid target");
 
         uint256 preBal = primaryRentToken.balanceOf(address(this));
         uint256 basketValueBefore = getTotalValueOfBasket();
@@ -564,6 +580,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         return supportedFeatures;
     }
 
+    /**
+     * @notice This method returns the `supportedCurrencies` array in it's entirety.
+     */
+    function getSupportedCurrencies() external view returns (string[] memory) {
+        return supportedCurrencies;
+    }
+
 
     // --------------
     // Public Methods
@@ -618,29 +641,23 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return $USD value of token, note: base 1e18
      */
     function getUSDValue(address _tangibleNFT, uint256 _tokenId) public view returns (uint256) {
-        (string memory currency, uint256 amount, uint8 nativeDecimals) = _getTnftNativeValue(
-            _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
-        );
-        (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
-        return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
+        return IBasketManager(basketManager).currencyCalculator().getUSDValue(_tangibleNFT, _tokenId);
     }
 
     /**
      * @notice This method returns the total value of NFTs and claimable rent in this basket contract.
      * @return totalValue -> total value in 18 decimals.
      */
-    function getTotalValueOfBasket() public view returns (uint256 totalValue) {
-        if (totalNftValue != 0) {
-            ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
-            string memory currency = currencyFeed.ISOcurrencyNumToCode(location);
-
-            // get total value of nfts in basket.
-            (uint256 price, uint256 priceDecimals) = _getUsdExchangeRate(currency);
-            totalValue = (price * totalNftValue * 10 ** 18) / 10 ** priceDecimals / 10 ** 3; // TODO
+    function getTotalValueOfBasket() public view returns (uint256 totalValue) { // TODO: Test with multiple supportedCurrencies converted to total value
+        // get total value of nfts in basket by currency
+        uint256 len = supportedCurrencies.length;
+        for (uint256 i; i < len; ++i) {
+            string memory currency = supportedCurrencies[i];
+            if (totalNftValueByCurrency[currency] != 0) {
+                (uint256 price, uint256 priceDecimals) = IBasketManager(basketManager).currencyCalculator().getUsdExchangeRate(currency);
+                totalValue += (price * totalNftValueByCurrency[currency] * 10 ** 18) / 10 ** priceDecimals / 10 ** currencyDecimals[currency];
+            }
         }
-
-        // get total value of nfts in basket.
-        //totalValue = totalNftValue;
         // get value of rent accrued by this contract.
         totalValue += totalRentValue * decimalsDiff();
     }
@@ -740,10 +757,15 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // ~ Update contract state ~
 
-        (, uint256 amount,) = _getTnftNativeValue(_tangibleNFT, fingerprint);
+        (string memory currency, uint256 amount, uint8 decimals) = _getTnftNativeValue(_tangibleNFT, fingerprint);
+
+        if (!currencySupported[currency]) { // TODO Test with multiple currencies
+            currencySupported[currency] = true;
+            currencyDecimals[currency] = decimals;
+            supportedCurrencies.push(currency);
+        }
 
         tokenDeposited[_tangibleNFT][_tokenId] = true;
-        valueTracker[_tangibleNFT][_tokenId] = amount;
 
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
         indexInDepositedTnfts[_tangibleNFT][_tokenId] = depositedTnfts.length - 1;
@@ -799,7 +821,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         _mint(_depositor, basketShare);
 
         // Update total nft value in this contract
-        totalNftValue += amount;
+        totalNftValueByCurrency[currency] += amount;
 
         // if there is no seed request in flight and no nextToRedeem, make request
         if (nextToRedeem.tnft == address(0) && !seedRequestInFlight) {
@@ -829,12 +851,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         bytes32 _token
     ) internal nonReentrant {
         require(balanceOf(_redeemer) >= _budget, "Insufficient balance");
-        require(!seedRequestInFlight, "seed is being generated");
+        require(!seedRequestInFlight, "seed in flight");
         require(nextToRedeem.tnft != address(0), "None redeemable");
 
         address _tangibleNFT = nextToRedeem.tnft;
         uint256 _tokenId = nextToRedeem.tokenId;
-        //uint256 _gbpValue = valueTracker[_tangibleNFT][_tokenId];
         uint256 _sharesRequired = _quoteShares(getUSDValue(_tangibleNFT, _tokenId));
 
         require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "token not redeemable");
@@ -887,11 +908,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
         INotificationWhitelister(address(notificationDispatcher)).unregisterForNotification(_tokenId);
 
-        (/*string memory currency*/, uint256 amount, /*uint8 nativeDecimals*/) = _getTnftNativeValue(
+        (string memory currency, uint256 amount, /*uint8 nativeDecimals*/) = _getTnftNativeValue(
             _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
         );
-        totalNftValue -= amount;
-        //totalNftValue -= _usdValue;
+        totalNftValueByCurrency[currency] -= amount;
+
         _burn(_redeemer, _sharesRequired);
 
         // Transfer tokenId to user
@@ -910,7 +931,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _withdrawAmount Amount of `primaryRentToken` to transfer to `_recipient`.
      */
     function _transferRent(address _recipient, uint256 _withdrawAmount) internal {
-        require(totalRentValue >= _withdrawAmount, "Amount exceeds withdrawable rent");
+        require(totalRentValue >= _withdrawAmount, "Amount exceeds withdrawable");
 
         // if we still need more rent, start claiming rent from TNFTs in basket.
         if (_withdrawAmount > primaryRentToken.balanceOf(address(this))) {
@@ -1016,32 +1037,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return decimals -> Amount of decimals used for precision.
      */
     function _getTnftNativeValue(address _tangibleNFT, uint256 _fingerprint) internal view returns (string memory currency, uint256 value, uint8 decimals) {
-        IPriceOracle oracle = _getOracle(_tangibleNFT);
-
-        uint256 currencyNum;
-        (value, currencyNum) = oracle.marketPriceNativeCurrency(_fingerprint);
-
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
-        currency = currencyFeed.ISOcurrencyNumToCode(uint16(currencyNum));
-
-        decimals = oracle.decimals();
+        (currency, value, decimals) = IBasketManager(basketManager).currencyCalculator().getTnftNativeValue(_tangibleNFT, _fingerprint);
     }
 
-    /**
-     * @dev Get USD Price of given currency from ChainLink.
-     * @param _currency Currency ISO code.
-     * @return exchangeRate rate.
-     * @return decimals used for precision on priceFeed.
-     */
-    function _getUsdExchangeRate(string memory _currency) internal view returns (uint256 exchangeRate, uint256 decimals) {
-        ICurrencyFeedV2 currencyFeed = ICurrencyFeedV2(IFactory(factory()).currencyFeed());
-        AggregatorV3Interface priceFeed = currencyFeed.currencyPriceFeeds(_currency);
-
-        decimals = priceFeed.decimals();
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-
-        if (price > 0) exchangeRate = uint256(price) + currencyFeed.conversionPremiums(_currency);
-    }
 
     /**
      * @notice This method is an internal view method that fetches the RentManager contract for a specified TNFT contract.
@@ -1085,11 +1083,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function _getRevenueDistributor() internal returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).revenueDistributor();
-    }
-
-    function _updatePrimaryRentToken(address _primaryRentToken) internal {
-        require(_primaryRentToken != address(0), "Cannot be == address(0)");
-        primaryRentToken = IERC20Metadata(_primaryRentToken);
     }
 
     /**

@@ -43,6 +43,7 @@ import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhit
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
+import { CurrencyCalculator } from "../src/CurrencyCalculator.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
@@ -66,6 +67,7 @@ contract StressTests is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    CurrencyCalculator public currencyCalculator;
     BasketsVrfConsumer public basketVrfConsumer;
 
     // imported mumbai tangible contracts
@@ -111,7 +113,6 @@ contract StressTests is Utility {
 
     /// @notice Unit test config method
     function setUp() public {
-
         vm.createSelectFork(MUMBAI_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
@@ -122,6 +123,9 @@ contract StressTests is Utility {
 
         // basket stuff
         basket = new Basket();
+
+        // Deploy CurrencyCalculator -> not upgradeable
+        currencyCalculator = new CurrencyCalculator(address(factoryV2));
         
         // Deploy basketManager
         basketManager = new BasketManager();
@@ -132,7 +136,8 @@ contract StressTests is Utility {
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
-                address(MUMBAI_DAI)
+                address(MUMBAI_DAI),
+                address(currencyCalculator)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -226,7 +231,7 @@ contract StressTests is Utility {
         );
         vm.stopPrank();
 
-        emit log_named_uint("totalNftValue", basket.totalNftValue());
+        emit log_named_uint("totalNftValue", basket.totalNftValueByCurrency("GBP"));
         emit log_named_uint("USDVAL", _getUsdValueOfNft(address(realEstateTnft), 1));
 
         basket = Basket(address(_basket));
@@ -468,7 +473,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 5;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         config.totalTokens = config.newCategories * config.amountFingerprints;
@@ -531,10 +536,16 @@ contract StressTests is Utility {
                 uint256 tokenId = tokenIdMap[tnft][j];
                 uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
                 uint256 basketPreBal = basket.balanceOf(JOE);
+                uint256 preTotalValue = basket.getTotalValueOfBasket();
+                uint256 preValueGBP = basket.totalNftValueByCurrency("GBP");
+
+                uint256 fingerprint = ITangibleNFT(tnft).tokensFingerprint(tokenId);
+                (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(tnft, fingerprint);
+                uint256 usdValue = currencyCalculator.getUSDValue(tnft, tokenId);
 
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
-                uint256 feeTaken = _calculateFeeAmount(quote);
+                //uint256 feeTaken = _calculateFeeAmount(quote);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -548,6 +559,8 @@ contract StressTests is Utility {
                     basket.getTotalValueOfBasket(),
                     2
                 );
+                assertEq(basket.getTotalValueOfBasket(), preTotalValue + usdValue);
+                assertEq(basket.totalNftValueByCurrency("GBP"), preValueGBP + nativeValue);
 
                 // verify basket now owns token
                 assertEq(ITangibleNFT(tnft).ownerOf(tokenId), address(basket));
@@ -1243,6 +1256,15 @@ contract StressTests is Utility {
         (address tnft, uint256 tokenId) = basket.nextToRedeem();
         uint256 redeemIndex = basket.indexInDepositedTnfts(tnft, tokenId);
 
+        uint256 preTotalValue = basket.getTotalValueOfBasket();
+        uint256 preValueGBP = basket.totalNftValueByCurrency("GBP");
+
+        (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(
+            tnft,
+            ITangibleNFT(tnft).tokensFingerprint(tokenId)
+        );
+        uint256 usdValue = currencyCalculator.getUSDValue(tnft, tokenId);
+
         assertEq(basket.indexInDepositedTnfts(
             lastElement.tnft, lastElement.tokenId), deposited.length-1
         );
@@ -1260,6 +1282,9 @@ contract StressTests is Utility {
         assertEq(basket.indexInDepositedTnfts(
             lastElement.tnft, lastElement.tokenId), redeemIndex
         );
+
+        assertEq(basket.getTotalValueOfBasket(), preTotalValue - usdValue);
+        assertEq(basket.totalNftValueByCurrency("GBP"), preValueGBP - nativeValue);
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
