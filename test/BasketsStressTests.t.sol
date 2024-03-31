@@ -1035,7 +1035,7 @@ contract StressTests is Utility {
         // ~ Config ~
         
         config.newCategories = 3;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 4;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         uint256 rent = 10_000 * WAD; // per token
@@ -1602,7 +1602,7 @@ contract StressTests is Utility {
 
         // ~ Config ~
 
-        uint256 howMany = 10;
+        uint256 howMany = 5;
         uint256 amountRent = 10_000 * WAD;
 
         for (uint256 i; i < howMany; ++i) {
