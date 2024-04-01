@@ -21,6 +21,7 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 // local imports
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
+import { ICurrencyCalculator } from "./interfaces/ICurrencyCalculator.sol";
 import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
@@ -87,6 +88,9 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /// @notice Rebase controller address stored here.
     address public rebaseController;
 
+    /// @notice CurrencyCalculator contract address.
+    ICurrencyCalculator public currencyCalculator;
+
 
     // ------
     // Events
@@ -128,9 +132,18 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _initBasketImplementation Contract address of Basket implementation contract.
      * @param _factory Contract address of Factory contract.
      * @param _rentToken Primary rent token address.
+     * @param _currencyCalculator CurrencyCalculator address.
      */
-    function initialize(address _initBasketImplementation, address _factory, address _rentToken) external initializer {
-        if (_initBasketImplementation == address(0) || _factory == address(0) || _rentToken == address(0)) revert ZeroAddress();
+    function initialize(
+        address _initBasketImplementation,
+        address _factory,
+        address _rentToken,
+        address _currencyCalculator
+    ) external initializer {
+        if (_initBasketImplementation == address(0) ||
+            _factory == address(0) ||
+            _rentToken == address(0) ||
+            _currencyCalculator == address(0)) revert ZeroAddress();
 
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
@@ -138,6 +151,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
             address(this)
         );
 
+        currencyCalculator = ICurrencyCalculator(_currencyCalculator);
         primaryRentToken = _rentToken;
         featureLimit = 10;
     }
@@ -296,6 +310,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _newBasketImp Address of new Basket contract implementation.
      */
     function updateBasketImplementation(address _newBasketImp) external onlyFactoryOwner {
+        if (_newBasketImp == address(0)) revert ZeroAddress();
         beacon.upgradeTo(_newBasketImp);
     }
 
@@ -315,6 +330,15 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     function setRevenueDistributor(address _revenueDistributor) external onlyFactoryOwner {
         if (_revenueDistributor == address(0)) revert ZeroAddress();
         revenueDistributor = _revenueDistributor;
+    }
+
+    /**
+     * @notice This method allows the factory owner to update the `currencyCalculator` contract address.
+     * @param _currencyCalculator New contract address.
+     */
+    function setCurrencyCalculator(address _currencyCalculator) external onlyFactoryOwner {
+        if (_currencyCalculator == address(0)) revert ZeroAddress();
+        currencyCalculator = ICurrencyCalculator(_currencyCalculator);
     }
 
     /**

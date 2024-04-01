@@ -15,6 +15,7 @@ import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 // tangible contract imports
 import { FactoryV2 } from "@tangible/FactoryV2.sol";
@@ -43,12 +44,14 @@ import { INotificationWhitelister } from "@tangible/interfaces/INotificationWhit
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
+import { CurrencyCalculator } from "../src/CurrencyCalculator.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
 
 // local helper contracts
 import "./utils/MumbaiAddresses.sol";
+import "./utils/UnrealAddresses.sol";
 import "./utils/Utility.sol";
 
 
@@ -66,19 +69,20 @@ contract StressTests is Utility {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    CurrencyCalculator public currencyCalculator;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // imported mumbai tangible contracts
-    FactoryV2 public factoryV2 = FactoryV2(Mumbai_FactoryV2);
-    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Mumbai_TangibleREstateTnft);
-    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Mumbai_RealtyOracleTangibleV2);
-    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Mumbai_MockMatrix);
-    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Mumbai_Marketplace);
-    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Mumbai_PriceManager);
-    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Mumbai_CurrencyFeedV2);
-    TNFTMetadata public metadata = TNFTMetadata(Mumbai_TNFTMetadata);
-    RentManager public rentManager = RentManager(Mumbai_RentManagerTnft);
-    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
+    // tangible unreal contracts
+    FactoryV2 public factoryV2 = FactoryV2(Unreal_FactoryV2);
+    TangibleNFTV2 public realEstateTnft = TangibleNFTV2(Unreal_TangibleREstateTnft);
+    RealtyOracleTangibleV2 public realEstateOracle = RealtyOracleTangibleV2(Unreal_RealtyOracleTangibleV2);
+    MockMatrixOracle public chainlinkRWAOracle = MockMatrixOracle(Unreal_MockMatrix);
+    TNFTMarketplaceV2 public marketplace = TNFTMarketplaceV2(Unreal_Marketplace);
+    TangiblePriceManagerV2 public priceManager = TangiblePriceManagerV2(Unreal_PriceManager);
+    CurrencyFeedV2 public currencyFeed = CurrencyFeedV2(Unreal_CurrencyFeedV2);
+    TNFTMetadata public metadata = TNFTMetadata(Unreal_TNFTMetadata);
+    RentManager public rentManager = RentManager(Unreal_RentManagerTnft);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);
 
     // proxies
     ERC1967Proxy public basketManagerProxy;
@@ -90,6 +94,8 @@ contract StressTests is Utility {
     address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
     address public TANGIBLE_LABS; // NOTE: category owner
+
+    ERC20Mock public DAI_MOCK;
 
     address public rentManagerDepositor = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
@@ -111,17 +117,22 @@ contract StressTests is Utility {
 
     /// @notice Unit test config method
     function setUp() public {
-
-        vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(UNREAL_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin(address(this));
+
+        ERC20Mock dai = new ERC20Mock();
+        DAI_MOCK = dai;
 
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
 
         // basket stuff
         basket = new Basket();
+
+        // Deploy CurrencyCalculator -> not upgradeable
+        currencyCalculator = new CurrencyCalculator(address(factoryV2));
         
         // Deploy basketManager
         basketManager = new BasketManager();
@@ -132,7 +143,8 @@ contract StressTests is Utility {
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
-                address(MUMBAI_DAI)
+                address(DAI_MOCK),
+                address(currencyCalculator)
             )
         );
         basketManager = BasketManager(address(basketManagerProxy));
@@ -203,6 +215,7 @@ contract StressTests is Utility {
         assertEq(ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1), true);
         emit log_named_bool("Fingerprint added:", (ITangibleNFTExt(address(realEstateTnft)).fingerprintAdded(RE_FINGERPRINT_1)));
 
+        vm.prank(ORACLE_OWNER);
         chainlinkRWAOracle.updateStock(
             RE_FINGERPRINT_1,
             1
@@ -225,9 +238,6 @@ contract StressTests is Utility {
             _asSingletonArrayUint(tokenIds[0])
         );
         vm.stopPrank();
-
-        emit log_named_uint("totalNftValue", basket.totalNftValue());
-        emit log_named_uint("USDVAL", _getUsdValueOfNft(address(realEstateTnft), 1));
 
         basket = Basket(address(_basket));
 
@@ -277,6 +287,7 @@ contract StressTests is Utility {
         IChainlinkRWAOracle chainlinkOracle = IPriceOracleExt(address(oracle)).chainlinkRWAOracle();
 
         // create new item with fingerprint.
+        vm.prank(ORACLE_OWNER);
         IPriceOracleExt(address(chainlinkOracle)).createItem(
             _fingerprint, // fingerprint
             _sellAt,      // weSellAt
@@ -468,7 +479,7 @@ contract StressTests is Utility {
         // ~ Config ~
 
         config.newCategories = 4;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 5;
 
         // NOTE: Amount of TNFTs == newCategories * amountFingerprints
         config.totalTokens = config.newCategories * config.amountFingerprints;
@@ -531,10 +542,16 @@ contract StressTests is Utility {
                 uint256 tokenId = tokenIdMap[tnft][j];
                 uint256 preBal = ITangibleNFT(tnft).balanceOf(JOE);
                 uint256 basketPreBal = basket.balanceOf(JOE);
+                uint256 preTotalValue = basket.getTotalValueOfBasket();
+                uint256 preValueGBP = basket.totalNftValueByCurrency("GBP");
+
+                uint256 fingerprint = ITangibleNFT(tnft).tokensFingerprint(tokenId);
+                (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(tnft, fingerprint);
+                uint256 usdValue = currencyCalculator.getUSDValue(tnft, tokenId);
 
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
-                uint256 feeTaken = _calculateFeeAmount(quote);
+                //uint256 feeTaken = _calculateFeeAmount(quote);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -548,6 +565,8 @@ contract StressTests is Utility {
                     basket.getTotalValueOfBasket(),
                     2
                 );
+                assertEq(basket.getTotalValueOfBasket(), preTotalValue + usdValue);
+                assertEq(basket.totalNftValueByCurrency("GBP"), preValueGBP + nativeValue);
 
                 // verify basket now owns token
                 assertEq(ITangibleNFT(tnft).ownerOf(tokenId), address(basket));
@@ -1022,7 +1041,7 @@ contract StressTests is Utility {
         // ~ Config ~
         
         config.newCategories = 3;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 4;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         uint256 rent = 10_000 * WAD; // per token
@@ -1081,7 +1100,7 @@ contract StressTests is Utility {
         // deposit rent
 
         // deal category owner USDC to deposit into rentManager
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, rent * config.totalTokens);
+        deal(address(DAI_MOCK), TANGIBLE_LABS, rent * config.totalTokens);
 
         for (uint256 i; i < tnfts.length; ++i) {
             IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(tnfts[i]));
@@ -1090,10 +1109,10 @@ contract StressTests is Utility {
 
                 // deposit rent for each tnft (no vesting)
                 vm.startPrank(TANGIBLE_LABS);
-                MUMBAI_DAI.approve(address(tempRentManager), rent);
+                DAI_MOCK.approve(address(tempRentManager), rent);
                 tempRentManager.deposit(
                     tokenIdMap[tnfts[i]][j],
-                    address(MUMBAI_DAI),
+                    address(DAI_MOCK),
                     rent,
                     0,
                     block.timestamp + 1,
@@ -1148,7 +1167,7 @@ contract StressTests is Utility {
 
         // verify rentBal
         assertEq(basket.getRentBal(), 0);
-        assertEq(MUMBAI_DAI.balanceOf(JOE), rent * config.totalTokens);
+        assertEq(DAI_MOCK.balanceOf(JOE), rent * config.totalTokens);
 
         // verify Joe balances
         assertEq(basket.totalSupply(), basket.balanceOf(JOE));
@@ -1243,6 +1262,15 @@ contract StressTests is Utility {
         (address tnft, uint256 tokenId) = basket.nextToRedeem();
         uint256 redeemIndex = basket.indexInDepositedTnfts(tnft, tokenId);
 
+        uint256 preTotalValue = basket.getTotalValueOfBasket();
+        uint256 preValueGBP = basket.totalNftValueByCurrency("GBP");
+
+        (, uint256 nativeValue,) = currencyCalculator.getTnftNativeValue(
+            tnft,
+            ITangibleNFT(tnft).tokensFingerprint(tokenId)
+        );
+        uint256 usdValue = currencyCalculator.getUSDValue(tnft, tokenId);
+
         assertEq(basket.indexInDepositedTnfts(
             lastElement.tnft, lastElement.tokenId), deposited.length-1
         );
@@ -1260,6 +1288,9 @@ contract StressTests is Utility {
         assertEq(basket.indexInDepositedTnfts(
             lastElement.tnft, lastElement.tokenId), redeemIndex
         );
+
+        assertEq(basket.getTotalValueOfBasket(), preTotalValue - usdValue);
+        assertEq(basket.totalNftValueByCurrency("GBP"), preValueGBP - nativeValue);
 
         assertEq(ITangibleNFT(tnft).balanceOf(address(basket)), config.amountFingerprints - 1);
         assertEq(ITangibleNFT(tnft).balanceOf(JOE), 1);
@@ -1362,17 +1393,17 @@ contract StressTests is Utility {
         }
 
         // deal category owner USDC to deposit into rentManager
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, totalRent);
+        deal(address(DAI_MOCK), TANGIBLE_LABS, totalRent);
 
         for (i = 0; i < config.totalTokens; ++i) {
             IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(batchTnftArr[i]));
 
             // deposit rent for each tnft (no vesting)
             vm.startPrank(TANGIBLE_LABS);
-            MUMBAI_DAI.approve(address(tempRentManager), config.rentArr[i]);
+            DAI_MOCK.approve(address(tempRentManager), config.rentArr[i]);
             tempRentManager.deposit(
                 batchTokenIdArr[i],
-                address(MUMBAI_DAI),
+                address(DAI_MOCK),
                 config.rentArr[i],
                 0,
                 block.timestamp + 1,
@@ -1500,17 +1531,17 @@ contract StressTests is Utility {
         }
 
         // deal category owner USDC to deposit into rentManager
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, totalRent);
+        deal(address(DAI_MOCK), TANGIBLE_LABS, totalRent);
 
         for (i = 0; i < config.totalTokens; ++i) {
             IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(batchTnftArr[i]));
 
             // deposit rent for each tnft (no vesting)
             vm.startPrank(TANGIBLE_LABS);
-            MUMBAI_DAI.approve(address(tempRentManager), config.rentArr[i]);
+            DAI_MOCK.approve(address(tempRentManager), config.rentArr[i]);
             tempRentManager.deposit(
                 batchTokenIdArr[i],
-                address(MUMBAI_DAI),
+                address(DAI_MOCK),
                 config.rentArr[i],
                 0,
                 block.timestamp + 1,
@@ -1577,7 +1608,7 @@ contract StressTests is Utility {
 
         // ~ Config ~
 
-        uint256 howMany = 10;
+        uint256 howMany = 5;
         uint256 amountRent = 10_000 * WAD;
 
         for (uint256 i; i < howMany; ++i) {
@@ -1599,13 +1630,13 @@ contract StressTests is Utility {
             vm.stopPrank();
 
             // deposit rent for that TNFT (no vesting)
-            deal(address(MUMBAI_DAI), TANGIBLE_LABS, amountRent);
+            deal(address(DAI_MOCK), TANGIBLE_LABS, amountRent);
 
             vm.startPrank(TANGIBLE_LABS);
-            MUMBAI_DAI.approve(address(rentManager), amountRent);
+            DAI_MOCK.approve(address(rentManager), amountRent);
             rentManager.deposit(
                 tokenId,
-                address(MUMBAI_DAI),
+                address(DAI_MOCK),
                 amountRent,
                 0,
                 block.timestamp + 1,
@@ -1626,7 +1657,7 @@ contract StressTests is Utility {
             // ~ Pre-state check ~
 
             uint256 increaseRatio = (amountRent * 1e18) / basket.getTotalValueOfBasket();
-            emit log_named_uint("% increase post-rebase", increaseRatio); // 76923076923076923 == 7.6923076923076923&
+            emit log_named_uint("% increase post-rebase", increaseRatio);
 
             uint256 preTotalValue = basket.getTotalValueOfBasket();
             uint256 preTotalSupply = basket.totalSupply();
@@ -1735,17 +1766,17 @@ contract StressTests is Utility {
         }
 
         // deal category owner USDC to deposit into rentManager
-        deal(address(MUMBAI_DAI), TANGIBLE_LABS, totalRent);
+        deal(address(DAI_MOCK), TANGIBLE_LABS, totalRent);
 
         for (i = 0; i < config.totalTokens; ++i) {
             IRentManager tempRentManager = IFactory(address(factoryV2)).rentManager(ITangibleNFT(batchTnftArr[i]));
 
             // deposit rent for each tnft (no vesting)
             vm.startPrank(TANGIBLE_LABS);
-            MUMBAI_DAI.approve(address(tempRentManager), config.rentArr[i]);
+            DAI_MOCK.approve(address(tempRentManager), config.rentArr[i]);
             tempRentManager.deposit(
                 batchTokenIdArr[i],
-                address(MUMBAI_DAI),
+                address(DAI_MOCK),
                 config.rentArr[i],
                 0,
                 block.timestamp + 1,

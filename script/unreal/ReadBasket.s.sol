@@ -67,12 +67,10 @@ contract ReadBasket is Script {
         console2.log("tnft", deposited[0].tnft);
         console2.log("tokenId", deposited[0].tokenId);
         console2.log("FP", deposited[0].fingerprint);
-        console2.log("value", basket.valueTracker(deposited[0].tnft, deposited[0].tokenId));
 
         console2.log("tnft", deposited[1].tnft);
         console2.log("tokenId", deposited[1].tokenId);
         console2.log("FP", deposited[1].fingerprint);
-        console2.log("value", basket.valueTracker(deposited[1].tnft, deposited[1].tokenId));
         
         vm.stopBroadcast();
     }
