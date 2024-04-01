@@ -140,7 +140,10 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         address _rentToken,
         address _currencyCalculator
     ) external initializer {
-        if (_initBasketImplementation == address(0) || _factory == address(0) || _rentToken == address(0)) revert ZeroAddress();
+        if (_initBasketImplementation == address(0) ||
+            _factory == address(0) ||
+            _rentToken == address(0) ||
+            _currencyCalculator == address(0)) revert ZeroAddress();
 
         __FactoryModifiers_init(_factory);
         beacon = new UpgradeableBeacon(
@@ -307,6 +310,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      * @param _newBasketImp Address of new Basket contract implementation.
      */
     function updateBasketImplementation(address _newBasketImp) external onlyFactoryOwner {
+        if (_newBasketImp == address(0)) revert ZeroAddress();
         beacon.upgradeTo(_newBasketImp);
     }
 

@@ -43,8 +43,8 @@ contract CurrencyCalculator {
         (string memory currency, uint256 amount, uint8 nativeDecimals) = getTnftNativeValue(
             _tangibleNFT, ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId)
         );
-        (uint256 price, uint256 priceDecimals) = getUsdExchangeRate(currency);
-        return (price * amount * 10 ** 18) / 10 ** priceDecimals / 10 ** nativeDecimals;
+        (uint256 rate, uint256 rateDecimals) = getUsdExchangeRate(currency);
+        return (rate * amount * 10 ** 18) / 10 ** rateDecimals / 10 ** nativeDecimals;
     }
 
     /**

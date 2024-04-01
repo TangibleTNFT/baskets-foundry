@@ -362,7 +362,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // get string code from num code
         string memory currency = ICurrencyFeedV2(IFactory(factory()).currencyFeed()).ISOcurrencyNumToCode(_currency);
         // update `totalNftValueByCurrency`
-        totalNftValueByCurrency[currency] = (totalNftValueByCurrency[currency] - _oldNativePrice) + _newNativePrice;
+        uint256 nativeValue = totalNftValueByCurrency[currency];
+        nativeValue = (nativeValue - _oldNativePrice) + _newNativePrice;
+        totalNftValueByCurrency[currency] = nativeValue;
 
         emit PriceNotificationReceived(_tnft, _tokenId, _oldNativePrice, _newNativePrice);
     }
@@ -642,11 +644,15 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
         // get total value of nfts in basket by currency
         uint256 len = supportedCurrencies.length;
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i; i < len;) {
             string memory currency = supportedCurrencies[i];
-            if (totalNftValueByCurrency[currency] != 0) {
+            uint256 nativeValue = totalNftValueByCurrency[currency];
+            if (nativeValue != 0) {
                 (uint256 price, uint256 priceDecimals) = IBasketManager(basketManager).currencyCalculator().getUsdExchangeRate(currency);
-                totalValue += (price * totalNftValueByCurrency[currency] * 10 ** 18) / 10 ** priceDecimals / 10 ** currencyDecimals[currency];
+                totalValue += (price * nativeValue * 10 ** 18) / 10 ** priceDecimals / 10 ** currencyDecimals[currency];
+            }
+            unchecked {
+                ++i;
             }
         }
         // get value of rent accrued by this contract.
