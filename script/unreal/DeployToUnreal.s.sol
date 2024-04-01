@@ -20,7 +20,16 @@ import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 import "../../test/utils/UnrealAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy
+/** 
+    @dev To run: 
+    forge script script/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+    --gas-estimate-multiplier 200 \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+
+    @dev To verify manually: 
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+*/
 
 /**
  * @title DeployToUnreal
@@ -40,34 +49,33 @@ contract DeployToUnreal is Script {
     ERC1967Proxy public basketManagerProxy;
     ERC1967Proxy public basketVrfConsumerProxy;
 
+    // marketplace contracts
+    address public UNREAL_FACTORY = 0x61d595f7e7E9e08340c7B044499F5A25149b8Fca;
+
     // wallets
     address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
-    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    //string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     address public constant GELATO_VRF_OPERATOR = address(0); // TODO If necessary. Testnet has fulfillRandomnessTestnet which is permissionless
 
-    uint256 public constant UNREAL_CHAIN_ID = 18231;
+    uint256 public constant UNREAL_CHAIN_ID = 18233;
 
     address deployerAddress;
     uint256 deployerPrivKey;
 
-    address public factoryOwner;
+    address public factoryOwner = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL);
-
-        deployerAddress = DEPLOYER_ADDRESS;
-        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
+        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
     }
 
     function run() public {
 
-        vm.startBroadcast(deployerPrivKey);
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        factoryOwner = IOwnable(Unreal_FactoryV2).owner();
-        console2.log("factory owner", factoryOwner);
+        //factoryOwner = IOwnable(UNREAL_FACTORY).owner();
 
         // 1. deploy basket
         basket = new Basket();
@@ -80,7 +88,8 @@ contract DeployToUnreal is Script {
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
-                Unreal_FactoryV2
+                UNREAL_FACTORY,
+                address(222) // TODO: Update later
             )
         );
 
@@ -91,9 +100,9 @@ contract DeployToUnreal is Script {
         basketVrfConsumerProxy = new ERC1967Proxy(
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                Unreal_FactoryV2,
-                GELATO_VRF_OPERATOR,
-                UNREAL_CHAIN_ID
+                UNREAL_FACTORY,
+                DEPLOYER_ADDRESS, // TODO Update to Gelato Operator
+                UNREAL_CHAIN_ID // TODO TESTNET CHAINID ONLY
             )
         );
 
@@ -105,23 +114,15 @@ contract DeployToUnreal is Script {
     
 
         // log addresses
-        console2.log("1. BasketManager (proxy)            =", address(basketManagerProxy));
-        console2.log("2. BasketManager Implementation     =", address(basketManager));
+        console2.log("1. BasketManager =", address(basketManagerProxy));
+        console2.log("2. BasketVrfConsumer =", address(basketVrfConsumerProxy));
     
-        console2.log("3. BasketVrfConsumer (proxy)        =", address(basketVrfConsumerProxy));
-        console2.log("4. BasketVrfConsumer Implementation =", address(basketVrfConsumer));
-    
-        console2.log("5. Basket Implementation            =", address(basket));
-        
         vm.stopBroadcast();
     }
 
     /**
         == Logs ==
-        1. BasketManager (proxy)            = 0x6ece6fE77AFbC7c47aBcCDF138ff2B09fA66a871
-        2. BasketManager Implementation     = 0x1625f135740Ef1C8720F6102b016335F6bD06914 
-        3. BasketVrfConsumer (proxy)        = 0x3786761A23E5a10Ff69d53278f42CE548C912152
-        4. BasketVrfConsumer Implementation = 0xbF9f0A9ccC52906caBb2264dB5ac30da33f91064
-        5. Basket Implementation            = 0xE79E3479b897cd626b6BBb58d158C6AAE928047e
+        BasketManager = 0x085a373500d493A7C755685fEf5393d97bB62ae8
+        BasketVrfConsumer = 0xfC80C26088131029991d6c2eFb26928Bcf6ef7c5
     */
 }

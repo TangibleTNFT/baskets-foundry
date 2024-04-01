@@ -16,7 +16,7 @@ import { RentManagerDeployer } from "@tangible/RentManagerDeployer.sol";
 import { TangibleNFTV2 } from "@tangible/TangibleNFTV2.sol";
 import { TangiblePriceManagerV2 } from "@tangible/TangiblePriceManagerV2.sol";
 import { RealtyOracleTangibleV2 } from "@tangible/priceOracles/RealtyOracleV2.sol";
-import { MockMatrixOracle } from "@tangible/priceOracles/MockMatrixOracle.sol";
+import { MockMatrixOracle } from "@tangible/tests/mocks/MockMatrixOracle.sol";
 import { CurrencyFeedV2 } from "@tangible/helpers/CurrencyFeedV2.sol";
 import { TNFTMetadata } from "@tangible/TNFTMetadata.sol";
 import { TangibleNFTDeployerV2 } from "@tangible/TangibleNFTDeployerV2.sol";

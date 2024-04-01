@@ -31,6 +31,9 @@ contract Utility is Test{
     address public constant REV_SHARE = address(bytes20(bytes("Revenue Share"))); // NOTE: temporary
     address public constant GELATO_OPERATOR = address(bytes20(bytes("Gelato Vrf Operator")));
 
+    address public constant REBASE_INDEX_MANAGER = address(bytes20(bytes("Rebase Index Manager")));
+    address public constant REBASE_CONTROLLER = address(bytes20(bytes("Rebase Controller")));
+
 
     // ~ Constants ~
 
@@ -38,8 +41,9 @@ contract Utility is Test{
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x667269618f67f543d3121DE3DF169747950Deb13); // 0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636
     IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0xf46c460F5B2D33aC5c4cE2aA015c8B5c430231C5); // 0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F
 
-    IERC20Metadata public constant UNREAL_USDC = IERC20Metadata(0xabAa4C39cf3dF55480292BBDd471E88de8Cc3C97);
-    IERC20Metadata public constant UNREAL_DAI  = IERC20Metadata(0x665D4921fe931C0eA1390Ca4e0C422ba34d26169);
+    IERC20Metadata public constant UNREAL_USDC = IERC20Metadata(0x2Fab7758c3efdf392e84e89ECe376952eb00aB2A);
+    IERC20Metadata public constant UNREAL_DAI  = IERC20Metadata(0x3F93beBAd7BA4d7A5129eA8159A5829Eacb06497);
+    IERC20Metadata public constant UNREAL_USTB = IERC20Metadata(0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD);
 
     uint256 public constant MUMBAI_CHAIN_ID = 80001;
     uint256 public constant UNREAL_CHAIN_ID = 18231;
