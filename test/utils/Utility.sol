@@ -46,7 +46,7 @@ contract Utility is Test{
     IERC20Metadata public constant UNREAL_USTB = IERC20Metadata(0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD);
 
     uint256 public constant MUMBAI_CHAIN_ID = 80001;
-    uint256 public constant UNREAL_CHAIN_ID = 18231;
+    uint256 public constant UNREAL_CHAIN_ID = 18233;
 
     VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
     VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);

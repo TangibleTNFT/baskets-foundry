@@ -7,6 +7,7 @@ import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 // tangible imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -22,7 +23,6 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { Basket } from "./Basket.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { ICurrencyCalculator } from "./interfaces/ICurrencyCalculator.sol";
-import { BasketBeaconProxy } from "./proxy/beacon/BasketBeaconProxy.sol";
 import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatcher.sol";
 
 /**
@@ -220,7 +220,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         }
 
         // create new basket beacon proxy
-        BasketBeaconProxy newBasketBeacon = new BasketBeaconProxy(
+        BeaconProxy newBasketBeacon = new BeaconProxy(
             address(beacon),
             abi.encodeWithSelector(Basket.initialize.selector,
                 _name,

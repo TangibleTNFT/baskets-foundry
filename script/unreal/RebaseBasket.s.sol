@@ -34,8 +34,8 @@ contract RebaseBaskets is Script {
     // ~ Script Configure ~
 
     // baskets contracts
-    BasketManager public unrealBasketManager = BasketManager(Unreal_BasketManager);
-    BasketsVrfConsumer public unrealBasketsVrfConsumer = BasketsVrfConsumer(Unreal_BasketVrfConsumer);
+    BasketManager public unrealBasketManager = BasketManager(0x82940D045127bf73e9E71A7e6Bf78C89fB816010);
+    BasketsVrfConsumer public unrealBasketsVrfConsumer = BasketsVrfConsumer(0xc8F7229628614D5C2657E57a1242Cee99922c863);
 
     FactoryV2 public factoryV2 = FactoryV2(Unreal_FactoryV2);
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);

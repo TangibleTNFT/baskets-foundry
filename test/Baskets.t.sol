@@ -150,7 +150,7 @@ contract BasketsIntegrationTest is Utility {
 
         // set revenueShare address on basketManager
         vm.prank(factoryOwner);
-        basketManager.setRevenueDistributor(REV_SHARE); // NOTE: Should be replaced with real rev share contract
+        basketManager.setRevenueDistributor(REV_SHARE); // RevenueDistributor
 
         // set rebase controller
         vm.prank(factoryOwner);
@@ -349,7 +349,6 @@ contract BasketsIntegrationTest is Utility {
         vm.label(address(basket), "BASKET");
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
-        //vm.label(address(vrfCoordinatorMock), "MOCK_VRF_COORDINATOR");
         vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
 
         vm.label(address(this), "TEST_FILE");

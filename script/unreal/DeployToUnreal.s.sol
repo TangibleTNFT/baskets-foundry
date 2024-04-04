@@ -14,6 +14,7 @@ import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
 import { Basket } from "../../src/Basket.sol";
 import { IBasket } from "../../src/interfaces/IBasket.sol";
 import { BasketManager } from "../../src/BasketManager.sol";
+import { CurrencyCalculator } from "../../src/CurrencyCalculator.sol";
 import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 
 // helper contracts
@@ -43,6 +44,7 @@ contract DeployToUnreal is Script {
     // baskets
     Basket public basket;
     BasketManager public basketManager;
+    CurrencyCalculator public currencyCalculator;
     BasketsVrfConsumer public basketVrfConsumer;
 
     // proxies
@@ -56,7 +58,7 @@ contract DeployToUnreal is Script {
     address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
-    //string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     address public constant GELATO_VRF_OPERATOR = address(0); // TODO If necessary. Testnet has fulfillRandomnessTestnet which is permissionless
 
@@ -68,35 +70,37 @@ contract DeployToUnreal is Script {
     address public factoryOwner = 0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7;
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
+        vm.createSelectFork(UNREAL_RPC_URL);
     }
 
     function run() public {
 
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        //factoryOwner = IOwnable(UNREAL_FACTORY).owner();
-
         // 1. deploy basket
         basket = new Basket();
 
-        // 2. Deploy basketManager
+        // 2. Deploy CurrencyCalculator -> not upgradeable
+        currencyCalculator = new CurrencyCalculator(UNREAL_FACTORY);
+
+        // 3. Deploy basketManager
         basketManager = new BasketManager();
 
-        // 3. Deploy proxy for basketManager & initialize
+        // 4. Deploy proxy for basketManager & initialize
         basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 UNREAL_FACTORY,
-                address(222) // TODO: Update later
+                Unreal_USTB,
+                address(currencyCalculator)
             )
         );
 
-        // 4. Deploy BasketsVrfConsumer
+        // 5. Deploy BasketsVrfConsumer
         basketVrfConsumer = new BasketsVrfConsumer();
 
-        // 5. Initialize BasketsVrfConsumer with proxy
+        // 6. Initialize BasketsVrfConsumer with proxy
         basketVrfConsumerProxy = new ERC1967Proxy(
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
@@ -106,23 +110,20 @@ contract DeployToUnreal is Script {
             )
         );
 
-        // 6. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
+        // 7. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
 
-        // 7. TODO: set revenueShare via BasketManager::setRevenueShare -> SET REVENUE DISTRIBUTOR
+        // 8. TODO: set revenueShare via BasketManager::setRevenueShare -> SET REVENUE DISTRIBUTOR
 
-        // 8. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
+        // 9. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
+
+        // 10. TODO: Call setRebaseController on BasketManager to set controller.
     
 
         // log addresses
         console2.log("1. BasketManager =", address(basketManagerProxy));
         console2.log("2. BasketVrfConsumer =", address(basketVrfConsumerProxy));
+        console2.log("3. CurrencyCalculator =", address(currencyCalculator));
     
         vm.stopBroadcast();
     }
-
-    /**
-        == Logs ==
-        BasketManager = 0x085a373500d493A7C755685fEf5393d97bB62ae8
-        BasketVrfConsumer = 0xfC80C26088131029991d6c2eFb26928Bcf6ef7c5
-    */
 }
