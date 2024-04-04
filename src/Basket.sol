@@ -504,7 +504,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function disableRebase(address account, bool disable) external {
         require(msg.sender == account || msg.sender == rebaseIndexManager, "NA");
-        require(_isRebaseDisabled(account) != disable, "AS");
         _disableRebase(account, disable);
     }
 
