@@ -91,4 +91,6 @@ interface IUSTB {
      * @param manager The new rebase index manager address.
      */
     function setRebaseIndexManager(address manager) external;
+
+    function optedOut(address account) external view returns (bool);
 }

@@ -40,6 +40,7 @@ import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
+import { IUSTB } from "../src/interfaces/IUSTB.sol";
 
 // local helper contracts
 import "./utils/UnrealAddresses.sol";
@@ -2295,11 +2296,12 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed and the new token is a rebase token
-    function test_baskets_updatePrimaryRentToken_isRebaseToken() public {
+    function test_baskets_USTB_updatePrimaryRentToken_isRebaseToken() public {
 
         // ~ Pre-state check ~
 
         assertEq(address(basket.primaryRentToken()), address(DAI_MOCK));
+        assertEq(IUSTB(address(Unreal_USTB)).optedOut(address(basket)), false);
 
         // ~ Execute updatePrimaryRentToken ~
 
@@ -2309,6 +2311,7 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(address(basket.primaryRentToken()), address(Unreal_USTB));
+        assertEq(IUSTB(address(Unreal_USTB)).optedOut(address(basket)), true);
     }
 
     /// @notice Verifies proper state changes during rebase after rent token change
