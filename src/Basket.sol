@@ -236,8 +236,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         
         // If _features is not empty, add features
         for (uint256 i; i < _features.length;) {
-            supportedFeatures.push(_features[i]);
-            featureSupported[_features[i]] = true;
+            uint256 feature = _features[i];
+            supportedFeatures.push(feature);
+            featureSupported[feature] = true;
 
             unchecked {
                 ++i;
@@ -323,8 +324,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // choose a nft to be next redeemable
         uint256 index = randomWord % depositedTnfts.length;
 
-        address tnft = depositedTnfts[index].tnft;
-        uint256 tokenId = depositedTnfts[index].tokenId;
+        TokenData memory depositedTnft = depositedTnfts[index];
+        address tnft = depositedTnft.tnft;
+        uint256 tokenId = depositedTnft.tokenId;
 
         nextToRedeem = RedeemData(tnft, tokenId);
         emit RedeemableChosen(tnft, tokenId);
@@ -450,12 +452,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             require(usdValue > 0, "UN"); // Unsupported NFT
 
             // calculate shares for depositor
-            shares[i] = _quoteShares(usdValue);
-
-            uint256 fee = (shares[i] * depFee) / 100_00;
-            shares[i] -= fee;
+            uint256 share = _quoteShares(usdValue);
+            uint256 fee = (share * depFee) / 100_00;
 
             unchecked {
+                shares[i] = share - fee;
                 ++i;
             }
         }
@@ -538,7 +539,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice View method that returns whether `account` has rebase disabled or enabled.
      * @param account Address of account we want to query is or is not receiving rebase.
      */
-    function isRebaseDisabled(address account) external returns (bool) {
+    function isRebaseDisabled(address account) external view returns (bool) {
         return _isRebaseDisabled(account);
     }
 
@@ -617,12 +618,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev Underyling assets = TNFT + Accrued revenue
      */
     function getSharePrice() public view returns (uint256 sharePrice) {
-        if (totalSupply() == 0) {
+        uint256 ts = totalSupply();
+        if (ts == 0) {
             // initial share price is $1
             return 1e18;
         }
 
-        sharePrice = (getTotalValueOfBasket() * 10 ** decimals()) / totalSupply();
+        sharePrice = (getTotalValueOfBasket() * 10 ** decimals()) / ts;
     }
 
     /**
@@ -696,8 +698,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // b. Check supported features, if any (sub-category)
         for (uint256 i; i < length;) {
 
-            ITangibleNFT.FeatureInfo memory featureData = ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]);
-            if (!featureData.added) return false;
+            if (!ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]).added) {
+                return false;
+            }
 
             unchecked {
                 ++i;
@@ -712,7 +715,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             IChainlinkRWAOracle oracle = IGetOracle(address(_getOracle(_tangibleNFT))).chainlinkRWAOracle();
             IChainlinkRWAOracle.Data memory data = oracle.fingerprintData(fingerprint);
 
-            if (data.location != location) return false;
+            return data.location == location;
         }
 
         return true;
@@ -721,13 +724,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /**
      * @notice This method provides an easy way to fetch the decimal difference between the `primaryRentToken` and
      *         the basket's native 18 decimals.
-     * @return decimalsDiff -> If the difference of decimals is gt 0, it will return 10**x (x being the difference).
+     * @return diff -> If the difference of decimals is gt 0, it will return 10**x (x being the difference).
      *         This can make converting basis points much easier. However, if the difference is == 0, will just return 1.
      */
-    function decimalsDiff() public view returns (uint256 decimalsDiff) {
-        uint256 decimalsDiff = decimals() - primaryRentToken.decimals();
-        if (decimalsDiff != 0) {
-            return 10 ** decimalsDiff;
+    function decimalsDiff() public view returns (uint256 diff) {
+        diff = decimals() - primaryRentToken.decimals();
+        if (diff != 0) {
+            return 10 ** diff;
         }
         else return 1;
     }
@@ -818,7 +821,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         // charge deposit fee.
         uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
-        basketShare -= feeShare;
+
+        unchecked {
+            basketShare -= feeShare;
+        }
 
         // ~ Handle rent ~
 
@@ -990,7 +996,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // start iterating through the master claimable rent array claiming rent for each token.
             uint256 index;
-            uint256 preBal = primaryRentToken.balanceOf(address(this));
             while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
 
                 IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
@@ -1018,10 +1023,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param usdValue $USD value of token being quoted.
      */
     function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
-        if (totalSupply() == 0) {
+        uint256 ts = totalSupply();
+        if (ts == 0) {
             shares = usdValue / 100; // set initial price -> $100
         } else {
-            shares = ((usdValue * totalSupply()) / getTotalValueOfBasket());
+            shares = ((usdValue * ts) / getTotalValueOfBasket());
         }
     }
 
@@ -1069,7 +1075,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice Internal method for returning the address of BasketsVrfConsumer contract.
      * @return Address of BasketsVrfConsumer.
      */
-    function _getBasketVrfConsumer() internal returns (address) {
+    function _getBasketVrfConsumer() internal view returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).basketsVrfConsumer();
     }
 
@@ -1077,7 +1083,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice Internal method for returning the address of RevenueDistributor contract.
      * @return Address of RevenueDistributor.
      */
-    function _getRevenueDistributor() internal returns (address) {
+    function _getRevenueDistributor() internal view returns (address) {
         return IBasketManager(IFactory(factory()).basketsManager()).revenueDistributor();
     }
 
