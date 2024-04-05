@@ -101,7 +101,6 @@ contract RWAPriceNotificationDispatcherTest is Utility, IRWAPriceNotificationRec
 
         proxyAdmin = new ProxyAdmin(address(this));
 
-        // TODO: 
         // deploy mockMatrix for realtyOracle
         // deploy notification stuff
         // set on oracle

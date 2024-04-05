@@ -93,6 +93,7 @@ contract DeployToUnreal is Script {
                 address(basket),
                 UNREAL_FACTORY,
                 Unreal_USTB,
+                true,
                 address(currencyCalculator)
             )
         );

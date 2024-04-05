@@ -144,6 +144,7 @@ contract StressTests is Utility {
                 address(basket),
                 address(factoryV2),
                 address(DAI_MOCK),
+                false,
                 address(currencyCalculator)
             )
         );
@@ -456,8 +457,6 @@ contract StressTests is Utility {
     // Stress Tests
     // ------------
 
-
-    // TODO:
     // a. deposit testing with multiple TNFT addresses and multiple tokens for each TNFT contract
     //    - test deposit and batch deposits with fuzzing
     //    - again, but with rent accruing -> changing share price

@@ -8,6 +8,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgrade
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // tangible imports
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
@@ -30,7 +31,7 @@ import { IGetNotificationDispatcher } from "./interfaces/IGetNotificationDispatc
  * @author Chase Brown
  * @notice This contract manages all Basket contracts.
  */
-contract BasketManager is UUPSUpgradeable, FactoryModifiers {
+contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryModifiers {
     using SafeERC20 for IERC20;
 
     // ---------------
@@ -91,6 +92,12 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
     /// @notice CurrencyCalculator contract address.
     ICurrencyCalculator public currencyCalculator;
 
+    /// @notice Is used to cache the initialize data for new baskets.
+    bytes internal initData;
+
+    /// @notice If the `primaryRentToken` is a rebase token, this should be true.
+    bool public rentIsRebaseToken;
+
 
     // ------
     // Events
@@ -138,6 +145,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         address _initBasketImplementation,
         address _factory,
         address _rentToken,
+        bool _rentIsRebaseToken,
         address _currencyCalculator
     ) external initializer {
         if (_initBasketImplementation == address(0) ||
@@ -153,6 +161,7 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
 
         currencyCalculator = ICurrencyCalculator(_currencyCalculator);
         primaryRentToken = _rentToken;
+        rentIsRebaseToken = _rentIsRebaseToken;
         featureLimit = 10;
     }
 
@@ -180,12 +189,12 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
         uint256[] memory _features,
         address[] memory _tangibleNFTDeposit,
         uint256[] memory _tokenIdDeposit
-    ) external returns (IBasket, uint256[] memory basketShares) {
+    ) external nonReentrant returns (IBasket, uint256[] memory basketShares) {
         // verify _tanfibleNFTDeposit array and _tokenIdDeposit array are the same size.
         require(_tangibleNFTDeposit.length == _tokenIdDeposit.length, "Differing lengths");
 
         // verify deployer is depositing an initial token into basket.
-        require(_tangibleNFTDeposit.length !=0, "Must be an initial deposit");
+        require(_tangibleNFTDeposit.length != 0, "Must be an initial deposit");
 
         // verify _features does not have more features that what is allowed.
         require(featureLimit >= _features.length, "Too many features");
@@ -219,19 +228,23 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
             }
         }
 
+        initData = abi.encodeWithSelector(
+            Basket.initialize.selector,
+            _name,
+            _symbol,
+            factory(),
+            _tnftType,
+            primaryRentToken,
+            rentIsRebaseToken,
+            _features,
+            _location,
+            msg.sender
+        );
+
         // create new basket beacon proxy
         BeaconProxy newBasketBeacon = new BeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(Basket.initialize.selector,
-                _name,
-                _symbol,
-                factory(),
-                _tnftType,
-                primaryRentToken,
-                _features,
-                _location,
-                msg.sender
-            )
+            initData
         );
 
         // store hash and new newBasketBeacon
@@ -278,9 +291,10 @@ contract BasketManager is UUPSUpgradeable, FactoryModifiers {
      *      to initialize new baskets on the BasketManager.
      * @param _primaryRentToken New address for `primaryRentToken`.
      */
-    function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
+    function updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) external onlyFactoryOwner {
         if (_primaryRentToken == address(0)) revert ZeroAddress();
         primaryRentToken = _primaryRentToken;
+        rentIsRebaseToken = _isRebaseToken;
     }
 
     /**

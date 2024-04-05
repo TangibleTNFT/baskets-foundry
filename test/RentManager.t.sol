@@ -310,8 +310,6 @@ contract RentManagerTest is Utility {
 
     // ~ Unit Tests ~
 
-    // TODO: Test deposit, claimableRentForTokenBatch, and claimRentForTokenBatch
-
     /// @notice Verifies correct state changes when RentManager::deposit is executed
     function test_rentManager_deposit() public {
         

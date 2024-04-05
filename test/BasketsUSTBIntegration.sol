@@ -105,11 +105,6 @@ contract BasketsUSTBIntegrationTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
 
-        // ERC20Mock dai = new ERC20Mock();
-        // DAI_MOCK = dai;
-
-
-
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(address(realEstateTnft)));
 
@@ -129,6 +124,7 @@ contract BasketsUSTBIntegrationTest is Utility {
                 address(basket),
                 address(factoryV2),
                 address(USTB),
+                true,
                 address(currencyCalculator)
             )
         );
@@ -342,9 +338,6 @@ contract BasketsUSTBIntegrationTest is Utility {
         // rebase controller sets the rebase manager.
         vm.prank(REBASE_CONTROLLER);
         basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
-        
-        vm.prank(address(basket));
-        IUSTB(address(USTB)).disableRebase(address(basket), true);
 
         // labels
         vm.label(address(factoryV2), "FACTORY");
@@ -1268,23 +1261,6 @@ contract BasketsUSTBIntegrationTest is Utility {
 
     // ~ updatePrimaryRentToken ~
 
-    /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed
-    function test_baskets_USTB_updatePrimaryRentToken() public {
-
-        // ~ Pre-state check ~
-
-        assertEq(address(basket.primaryRentToken()), address(USTB));
-
-        // ~ Execute updatePrimaryRentToken ~
-
-        vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(UNREAL_USDC));
-
-        // ~ Post-state check ~
-
-        assertEq(address(basket.primaryRentToken()), address(UNREAL_USDC));
-    }
-
     /// @notice Verifies proper state changes during rebase after rent token change
     function test_baskets_USTB_updateRent_thenRebase() public {
 
@@ -1381,7 +1357,7 @@ contract BasketsUSTBIntegrationTest is Utility {
         // ~ Admin changes primaryRentToken ~
 
         vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(UNREAL_USDC));
+        basket.updatePrimaryRentToken(address(UNREAL_USDC), false);
 
         // ~ Exchange previous primaryRentToken ~
 

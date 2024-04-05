@@ -105,6 +105,7 @@ contract BasketManagerTest is Utility {
                 address(basket),
                 address(factoryV2),
                 address(MUMBAI_DAI),
+                false,
                 address(currencyCalculator)
             )
         );

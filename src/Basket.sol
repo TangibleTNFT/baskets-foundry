@@ -187,13 +187,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
     /// @notice This modifier is to verify msg.sender is the BasketVrfConsumer constract.
     modifier onlyBasketVrfConsumer() {
-        require(msg.sender == _getBasketVrfConsumer(), "NA");
+        if (msg.sender != _getBasketVrfConsumer()) revert NotAuthorized(msg.sender);
         _;
     }
 
     /// @notice This modifier is to verify msg.sender has the ability to withdraw rent.
     modifier onlyCanWithdraw() {
-        require(canWithdraw[msg.sender], "NA");
+        if (!canWithdraw[msg.sender]) revert NotAuthorized(msg.sender);
         _;
     }
 
@@ -228,11 +228,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address _factoryProvider,
         uint256 _tnftType,
         address _rentToken,
+        bool _isRebaseToken,
         uint256[] memory _features,
         uint16 _location,
         address _deployer
     ) external initializer {   
-        require(_factoryProvider != address(0), "address(0)");
+        if (_factoryProvider == address(0)) revert ZeroAddress();
         
         // If _features is not empty, add features
         for (uint256 i; i < _features.length;) {
@@ -259,7 +260,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         tnftType = _tnftType;
         deployer = _deployer;
 
-        primaryRentToken = IERC20Metadata(_rentToken);
+        _updatePrimaryRentToken(_rentToken, _isRebaseToken);
         canWithdraw[IOwnable(factory()).owner()] = true;
     }
 
@@ -277,7 +278,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function batchDepositTNFT(address[] memory _tangibleNFTs, uint256[] memory _tokenIds) external returns (uint256[] memory basketShares) {
         uint256 length = _tangibleNFTs.length;
-        require(length == _tokenIds.length, "NSZ"); // Not Same Size
+        if (length != _tokenIds.length) revert NotSameSize();
 
         basketShares = new uint256[](length);
 
@@ -358,7 +359,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 _newNativePrice,
         uint16  _currency
     ) external {
-        require(msg.sender == address(_getNotificationDispatcher(_tnft)), "NA");
+        if (msg.sender != address(_getNotificationDispatcher(_tnft))) revert NotAuthorized(msg.sender);
 
         // get string code from num code
         string memory currency = ICurrencyFeedV2(IFactory(factory()).currencyFeed()).ISOcurrencyNumToCode(_currency);
@@ -375,10 +376,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev If the rent token is being changed indefinitely, make sure to change the address of the rent token being used
      *      to initialize new baskets on the BasketManager.
      * @param _primaryRentToken New address for `primaryRentToken`.
+     * @param _isRebaseToken If `_primaryRentToken` is a rebase token, this must be true.
+     * @dev If the new rent token is a rebase token, this contract will need to opt out of rebasing. By setting
+     * `_isRebaseToken` to true, this contract will call disableRebase via a low level call.
      */
-    function updatePrimaryRentToken(address _primaryRentToken) external onlyFactoryOwner {
-        require(_primaryRentToken != address(0), "address(0)");
-        primaryRentToken = IERC20Metadata(_primaryRentToken);
+    function updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) external onlyFactoryOwner {
+        if (_primaryRentToken == address(0)) revert ZeroAddress();
+        _updatePrimaryRentToken(_primaryRentToken, _isRebaseToken);
     }
 
     /**
@@ -386,11 +390,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _rebaseIndexManager Address of rebase manager.
      */
     function updateRebaseIndexManager(address _rebaseIndexManager) external {
-        require(
-            msg.sender == IOwnable(factory()).owner() || 
-            msg.sender == IBasketManager(basketManager).rebaseController(), 
-            "NA"
-        );
+        if (
+            msg.sender != IOwnable(factory()).owner() && 
+            msg.sender != IBasketManager(basketManager).rebaseController()
+        ) revert NotAuthorized(msg.sender);
         rebaseIndexManager = _rebaseIndexManager;
     }
 
@@ -446,10 +449,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 depFee = uint256(depositFee);
         shares = new uint256[](len);
         for (uint i; i < len;) {
-
             // calculate usd value of TNFT with 18 decimals
             uint256 usdValue = getUSDValue(_tangibleNFTs[i], _tokenIds[i]);
-            require(usdValue > 0, "UN"); // Unsupported NFT
 
             // calculate shares for depositor
             uint256 share = _quoteShares(usdValue);
@@ -472,7 +473,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getQuoteIn(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 shares) {
         // calculate usd value of TNFT with 18 decimals
         uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
-        require(usdValue > 0, "UN"); // Unsupported NFT
 
         // calculate shares for depositor
         shares = _quoteShares(usdValue);
@@ -490,7 +490,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getQuoteOut(address _tangibleNFT, uint256 _tokenId) external view returns (uint256 sharesRequired) {
         // fetch usd value of tnft
         uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
-        require(usdValue != 0, "UN"); // Unsupported NFT
 
         // Get shares required
         sharesRequired = _quoteShares(usdValue);
@@ -503,7 +502,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param disable A boolean flag indicating whether to disable (true) or enable (false) rebasing for the account.
      */
     function disableRebase(address account, bool disable) external {
-        require(msg.sender == account || msg.sender == rebaseIndexManager, "NA");
+        if (msg.sender != account && msg.sender != rebaseIndexManager) revert NotAuthorized(msg.sender);
         _disableRebase(account, disable);
     }
 
@@ -517,14 +516,14 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param data calldata payload for function call.
      */
     function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external onlyCanWithdraw returns (uint256 amountUsed) {
-        require(trustedTarget[target], "IT"); // Invalid Target
+        if (!trustedTarget[target]) revert InvalidTarget(target);
 
         uint256 preBal = primaryRentToken.balanceOf(address(this));
         uint256 basketValueBefore = getTotalValueOfBasket();
         primaryRentToken.approve(target, rentBalance);
 
         (bool success,) = target.call(data);
-        require(success, "CF"); // call failed
+        if (!success) revert LowLevelCallFailed(data);
 
         uint256 postBal = primaryRentToken.balanceOf(address(this));
         primaryRentToken.approve(target, 0);
@@ -532,7 +531,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         amountUsed = preBal - postBal;
         totalRentValue -= amountUsed;
 
-        require(getTotalValueOfBasket() >= basketValueBefore, "DEC"); // decreased
+        if (basketValueBefore > getTotalValueOfBasket()) revert TotalValueDecreased();
     }
 
     /**
@@ -589,7 +588,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * on the amount of rent accrued by the basket tokens.
      */
     function rebase() public nonReentrant {
-        require(msg.sender == rebaseIndexManager, "NA");
+        if (msg.sender != rebaseIndexManager) revert NotAuthorized(msg.sender);
 
         uint256 previousRentalIncome = totalRentValue;
         uint256 totalRentalIncome = getRentBal();
@@ -628,13 +627,14 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @dev Get $USD Value of specified token.
+     * @dev Get USD Value of specified token.
      * @param _tangibleNFT TNFT contract address.
      * @param _tokenId TokenId of token.
-     * @return $USD value of token, note: base 1e18
+     * @return usdValue USD value of token, note: base 1e18
      */
-    function getUSDValue(address _tangibleNFT, uint256 _tokenId) public view returns (uint256) {
-        return IBasketManager(basketManager).currencyCalculator().getUSDValue(_tangibleNFT, _tokenId);
+    function getUSDValue(address _tangibleNFT, uint256 _tokenId) public view returns (uint256 usdValue) {
+        usdValue = IBasketManager(basketManager).currencyCalculator().getUSDValue(_tangibleNFT, _tokenId);
+        if (usdValue == 0) revert UnsupportedTNFT(_tangibleNFT, _tokenId);
     }
 
     /**
@@ -756,6 +756,20 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice Internal method for updating `primaryRentToken`.
+     * @dev If new rent token is a rebase token, `_isRebaseToken` needs to be set to true. Baskets need to opt out of rebases
+     * to keep rent redemption acounting secure and accurate.
+     */
+    function _updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) internal {
+        primaryRentToken = IERC20Metadata(_primaryRentToken);
+        if (_isRebaseToken) {
+            bytes memory data = abi.encodeWithSignature("disableRebase(address,bool)", address(this), true);
+            (bool success,) = _primaryRentToken.call(data);
+            if (!success) revert LowLevelCallFailed(data);
+        }
+    }
+
+    /**
      * @notice This internal method is used to deposit a specified TNFT from a depositor address to this basket.
      *         The deposit will be minted a sufficient amount of basket tokens in return.
      * @dev Any unclaimed rent claimable from the rent manager is claimed and transferred to the depositor.
@@ -765,17 +779,16 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return basketShare -> Amount of basket tokens being minted to redeemer.
      */
     function _depositTNFT(address _tangibleNFT, uint256 _tokenId, address _depositor) internal nonReentrant returns (uint256 basketShare) {
-        require(!tokenDeposited[_tangibleNFT][_tokenId], "TAD"); // Token Already Deposited
+        if (tokenDeposited[_tangibleNFT][_tokenId]) revert TokenAlreadyDeposited(_tangibleNFT, _tokenId);
 
         // if contract supports features, make sure tokenId has a supported feature
-        require(isCompatibleTnft(_tangibleNFT, _tokenId), "TI"); // Token Incompatible
+        if (!isCompatibleTnft(_tangibleNFT, _tokenId)) revert TokenIncompatible(_tangibleNFT, _tokenId);
 
         // get token fingerprint
         uint256 fingerprint = ITangibleNFT(_tangibleNFT).tokensFingerprint(_tokenId);
 
         // calculate usd value of TNFT with 18 decimals
         uint256 usdValue = getUSDValue(_tangibleNFT, _tokenId);
-        require(usdValue > 0, "UN"); // Unsupported NFT
 
         // ~ Update contract state ~
 
@@ -806,7 +819,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // register for price notifications
         IRWAPriceNotificationDispatcher notificationDispatcher = _getNotificationDispatcher(_tangibleNFT);
 
-        require(INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this)), "NW"); // Not Whitelisted
+        if (!INotificationWhitelister(address(notificationDispatcher)).whitelistedReceiver(address(this))) revert NotWhitelisted();
         INotificationWhitelister(address(notificationDispatcher)).registerForNotification(_tokenId);
 
         // ~ Calculate basket tokens to mint ~
@@ -837,7 +850,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             uint256 receivedRent = primaryRentToken.balanceOf(address(this)) - preBal;
 
             // verify claimed balance, send rent to depositor.
-            require(receivedRent != 0, "CE"); // Claiming Error
+            if (receivedRent == 0) revert ClaimingError();
             primaryRentToken.safeTransfer(address(_depositor), receivedRent);
         }
 
@@ -876,20 +889,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 _budget,
         bytes32 _token
     ) internal nonReentrant {
-        require(balanceOf(_redeemer) >= _budget, "IB"); // Insufficient Balance
-        require(!seedRequestInFlight, "SIF"); // Seed request in flight
-        require(nextToRedeem.tnft != address(0), "NR"); // None Redeemable
+        if (_budget > balanceOf(_redeemer)) revert InsufficientBalance(balanceOf(_redeemer));
+        if (seedRequestInFlight) revert SeedRequestPending();
+        if (nextToRedeem.tnft == address(0)) revert NoneRedeemable();
 
         address _tangibleNFT = nextToRedeem.tnft;
         uint256 _tokenId = nextToRedeem.tokenId;
         uint256 _sharesRequired = _quoteShares(getUSDValue(_tangibleNFT, _tokenId));
 
-        require(_token == keccak256(abi.encodePacked(_tangibleNFT, _tokenId)), "TNR"); // Token Not Redeemable
+        if (_token != keccak256(abi.encodePacked(_tangibleNFT, _tokenId))) revert TNFTNotRedeemable(_token);
+        if (_sharesRequired > _budget) revert InsufficientBudget(_budget, _sharesRequired);
 
         delete nextToRedeem;
-
-        require(tokenDeposited[_tangibleNFT][_tokenId], "UT"); // Unsupported Token
-        require(_budget >= _sharesRequired, "IB"); // Insufficient Budget
 
         // update contract
         tokenDeposited[_tangibleNFT][_tokenId] = false;
@@ -927,7 +938,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (rentManager.claimableRentForToken(_tokenId) > 0) {
             uint256 preBal = primaryRentToken.balanceOf(address(this));
             rentManager.claimRentForToken(_tokenId);
-            require(primaryRentToken.balanceOf(address(this)) - preBal != 0, "CE"); // Claiming Error
+            if (primaryRentToken.balanceOf(address(this)) - preBal == 0) revert ClaimingError();
         }
 
         // unregister from price notifications
@@ -957,7 +968,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _withdrawAmount Amount of `primaryRentToken` to transfer to `_recipient`.
      */
     function _transferRent(address _recipient, uint256 _withdrawAmount) internal {
-        require(totalRentValue >= _withdrawAmount, "AEW"); // Amount Exceeds Withdrawable
+        if (_withdrawAmount > totalRentValue) revert AmountExceedsWithdrawable(_withdrawAmount, totalRentValue);
 
         // if we still need more rent, start claiming rent from TNFTs in basket.
         if (_withdrawAmount > primaryRentToken.balanceOf(address(this))) {
@@ -1004,7 +1015,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
                 uint256 preClaim = primaryRentToken.balanceOf(address(this));
                 rentManager.claimRentForToken(tokenId);
                 uint256 diff = primaryRentToken.balanceOf(address(this)) - preClaim;
-                require(diff != 0, "CE"); // Claiming Error
+                if (diff == 0) revert ClaimingError();
 
                 unchecked {
                     ++index;
@@ -1020,7 +1031,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /**
      * @notice View method used to calculate amount of shares required given the usdValue of the TNFT and amount of rent needed.
      * @dev If primaryRentToken.decimals != 6, this func will fail.
-     * @param usdValue $USD value of token being quoted.
+     * @param usdValue USD value of token being quoted.
      */
     function _quoteShares(uint256 usdValue) internal view returns (uint256 shares) {
         uint256 ts = totalSupply();

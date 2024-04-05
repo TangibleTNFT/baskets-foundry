@@ -125,6 +125,7 @@ contract BasketsIntegrationTest is Utility {
                 address(basket),
                 address(factoryV2),
                 address(DAI_MOCK),
+                false,
                 address(currencyCalculator)
             )
         );
@@ -2286,11 +2287,28 @@ contract BasketsIntegrationTest is Utility {
         // ~ Execute updatePrimaryRentToken ~
 
         vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(UNREAL_USDC));
+        basket.updatePrimaryRentToken(address(UNREAL_USDC), false);
 
         // ~ Post-state check ~
 
         assertEq(address(basket.primaryRentToken()), address(UNREAL_USDC));
+    }
+
+    /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed and the new token is a rebase token
+    function test_baskets_updatePrimaryRentToken_isRebaseToken() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(basket.primaryRentToken()), address(DAI_MOCK));
+
+        // ~ Execute updatePrimaryRentToken ~
+
+        vm.prank(factoryOwner);
+        basket.updatePrimaryRentToken(address(Unreal_USTB), true);
+
+        // ~ Post-state check ~
+
+        assertEq(address(basket.primaryRentToken()), address(Unreal_USTB));
     }
 
     /// @notice Verifies proper state changes during rebase after rent token change
@@ -2400,7 +2418,7 @@ contract BasketsIntegrationTest is Utility {
         // ~ Admin changes primaryRentToken ~
 
         vm.prank(factoryOwner);
-        basket.updatePrimaryRentToken(address(UNREAL_USDC));
+        basket.updatePrimaryRentToken(address(UNREAL_USDC), false);
 
         // ~ Exchange previous primaryRentToken ~
 
