@@ -321,8 +321,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if(nextToRedeem.tnft != address(0)) return;
 
         // choose a nft to be next redeemable
-        uint256 index;
-        index = randomWord % depositedTnfts.length;
+        uint256 index = randomWord % depositedTnfts.length;
 
         address tnft = depositedTnfts[index].tnft;
         uint256 tokenId = depositedTnfts[index].tokenId;
@@ -922,8 +921,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (rentManager.claimableRentForToken(_tokenId) > 0) {
             uint256 preBal = primaryRentToken.balanceOf(address(this));
             rentManager.claimRentForToken(_tokenId);
-            uint256 received = primaryRentToken.balanceOf(address(this)) - preBal;
-            require(received != 0, "CE"); // Claiming Error
+            require(primaryRentToken.balanceOf(address(this)) - preBal != 0, "CE"); // Claiming Error
         }
 
         // unregister from price notifications
@@ -993,7 +991,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
             // start iterating through the master claimable rent array claiming rent for each token.
             uint256 index;
             uint256 preBal = primaryRentToken.balanceOf(address(this));
-            uint256 claimedRent;
             while (_withdrawAmount > primaryRentToken.balanceOf(address(this)) && index < counter) {
 
                 IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
@@ -1002,9 +999,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
                 uint256 preClaim = primaryRentToken.balanceOf(address(this));
                 rentManager.claimRentForToken(tokenId);
                 uint256 diff = primaryRentToken.balanceOf(address(this)) - preClaim;
-
                 require(diff != 0, "CE"); // Claiming Error
-                claimedRent += diff;
 
                 unchecked {
                     ++index;
@@ -1065,7 +1060,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /**
      * @notice This method is an internal view method that fetches the RWAPriceNotificationDispatcher contract for a specified TNFT contract.
      * @param _tangibleNFT TNFT contract address we want the RWAPriceNotificationDispatcher for.
-     * @return RWAPriceNotificationDispatcher contract reference.
      */
     function _getNotificationDispatcher(address _tangibleNFT) internal returns (IRWAPriceNotificationDispatcher) {
         return IGetNotificationDispatcher(address(_getOracle(_tangibleNFT))).notificationDispatcher();
