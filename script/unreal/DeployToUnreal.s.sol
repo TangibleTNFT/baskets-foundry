@@ -117,6 +117,10 @@ contract DeployToUnreal is Script {
         // 9. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
 
         // 10. TODO: Call setRebaseController on BasketManager to set controller.
+
+        // 11. TODO: If not already deployed, deploy basketManagerDeployer
+
+        // 12. TODO: Make sure basket contract is opted out of USTB reabse
     
 
         // log addresses
