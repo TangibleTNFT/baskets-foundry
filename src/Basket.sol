@@ -828,10 +828,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         if (rentManager.claimableRentForToken(_tokenId) != 0) {
             uint256 preBal = primaryRentToken.balanceOf(address(this));
-            uint256 receivedRent = rentManager.claimRentForToken(_tokenId);
+            rentManager.claimRentForToken(_tokenId);
+            uint256 receivedRent = primaryRentToken.balanceOf(address(this)) - preBal;
 
             // verify claimed balance, send rent to depositor.
-            require(primaryRentToken.balanceOf(address(this)) == (preBal + receivedRent), "CE"); // Claiming Error
+            require(receivedRent != 0, "CE"); // Claiming Error
             primaryRentToken.safeTransfer(address(_depositor), receivedRent);
         }
 
@@ -920,8 +921,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         // redeem rent from redeemed TNFT to this contract.
         if (rentManager.claimableRentForToken(_tokenId) > 0) {
             uint256 preBal = primaryRentToken.balanceOf(address(this));
-            uint256 received = rentManager.claimRentForToken(_tokenId);
-            require(primaryRentToken.balanceOf(address(this)) == (preBal + received), "CE"); // Claiming Error
+            rentManager.claimRentForToken(_tokenId);
+            uint256 received = primaryRentToken.balanceOf(address(this)) - preBal;
+            require(received != 0, "CE"); // Claiming Error
         }
 
         // unregister from price notifications
@@ -997,13 +999,17 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
                 IRentManager rentManager = _getRentManager(claimableRent[index].tnft);
                 uint256 tokenId = claimableRent[index].tokenId;
 
-                claimedRent += rentManager.claimRentForToken(tokenId);
+                uint256 preClaim = primaryRentToken.balanceOf(address(this));
+                rentManager.claimRentForToken(tokenId);
+                uint256 diff = primaryRentToken.balanceOf(address(this)) - preClaim;
+
+                require(diff != 0, "CE"); // Claiming Error
+                claimedRent += diff;
 
                 unchecked {
                     ++index;
                 }
             }
-            require(primaryRentToken.balanceOf(address(this)) == (preBal + claimedRent), "CE"); // Claiming Error
         }
 
         // transfer rent to msg.sender (factory owner)

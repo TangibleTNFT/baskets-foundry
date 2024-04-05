@@ -40,6 +40,7 @@ import { IBasket } from "../src/interfaces/IBasket.sol";
 import { BasketManager } from "../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../src/BasketsVrfConsumer.sol";
 import { IGetNotificationDispatcher } from "../src/interfaces/IGetNotificationDispatcher.sol";
+import { IUSTB } from "../src/interfaces/IUSTB.sol";
 
 // local helper contracts
 import "./utils/UnrealAddresses.sol";
@@ -52,7 +53,7 @@ import "./utils/Utility.sol";
  * @notice This test file contains integration tests for the baskets protocol. We import unreal addresses of the underlying layer
  *         of smart contracts via UnrealAddresses.sol.
  */
-contract BasketsIntegrationTest is Utility {
+contract BasketsUSTBIntegrationTest is Utility {
 
     // ~ Contracts ~
 
@@ -93,6 +94,7 @@ contract BasketsIntegrationTest is Utility {
     uint256 internal NIK_TOKEN_ID;
 
     ERC20Mock public DAI_MOCK;
+    IERC20 public USTB = IERC20(Unreal_USTB);
 
     uint256[] internal preMintedTokens;
 
@@ -103,8 +105,10 @@ contract BasketsIntegrationTest is Utility {
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
 
-        ERC20Mock dai = new ERC20Mock();
-        DAI_MOCK = dai;
+        // ERC20Mock dai = new ERC20Mock();
+        // DAI_MOCK = dai;
+
+
 
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(address(realEstateTnft)));
@@ -124,7 +128,7 @@ contract BasketsIntegrationTest is Utility {
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
-                address(DAI_MOCK),
+                address(USTB),
                 address(currencyCalculator)
             )
         );
@@ -338,6 +342,9 @@ contract BasketsIntegrationTest is Utility {
         // rebase controller sets the rebase manager.
         vm.prank(REBASE_CONTROLLER);
         basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
+        
+        vm.prank(address(basket));
+        IUSTB(address(USTB)).disableRebase(address(basket), true);
 
         // labels
         vm.label(address(factoryV2), "FACTORY");
@@ -363,6 +370,31 @@ contract BasketsIntegrationTest is Utility {
     // -------
     // Utility
     // -------
+
+    /// @dev local deal to take into account USTB's unique storage layout
+    function _deal(address token, address give, uint256 amount) internal {
+        // deal doesn't work with USTB since the storage layout is different
+        if (token == Unreal_USTB) {
+            // if address is opted out, update normal balance (basket is opted out of rebasing)
+            if (give == address(basket)) {
+                bytes32 USTBStorageLocation = 0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00;
+                uint256 mapSlot = 0;
+                bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
+                vm.store(Unreal_USTB, slot, bytes32(amount));
+            }
+            // else, update shares balance
+            else {
+                bytes32 USTBStorageLocation = 0x8a0c9d8ec1d9f8b365393c36404b40a33f47675e34246a2e186fbefd5ecd3b00;
+                uint256 mapSlot = 2;
+                bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
+                vm.store(Unreal_USTB, slot, bytes32(amount));
+            }
+        }
+        // If not rebase token, use normal deal
+        else {
+            deal(token, give, amount);
+        }
+    }
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {
@@ -535,7 +567,7 @@ contract BasketsIntegrationTest is Utility {
     // ------------------
 
     /// @notice Initial state test.
-    function test_baskets_init_state() public {
+    function test_baskets_USTB_init_state() public {
         // verify realEstateTnft
         assertEq(realEstateTnft.tokensFingerprint(JOE_TOKEN_ID), RE_FINGERPRINT_2); // Joe's tokenId
 
@@ -577,7 +609,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ Deposit Testing ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_baskets_depositTNFT_single() public {
+    function test_baskets_USTB_depositTNFT_single() public {
 
         // ~ Pre-state check ~
 
@@ -647,7 +679,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_baskets_depositTNFT_multiple() public {
+    function test_baskets_USTB_depositTNFT_multiple() public {
 
         // ~ Pre-state check ~
 
@@ -746,7 +778,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_baskets_depositTNFT_feature() public {
+    function test_baskets_USTB_depositTNFT_feature() public {
         uint256[] memory features = new uint256[](1);
         features[0] = RE_FEATURE_1;
 
@@ -809,7 +841,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
-    function test_baskets_depositTNFT_feature_multiple() public {
+    function test_baskets_USTB_depositTNFT_feature_multiple() public {
         // create initial token for deployment
         uint256[] memory tokenIds = _mintToken(
             address(realEstateTnft),
@@ -934,7 +966,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
-    function test_baskets_batchDepositTNFT() public {
+    function test_baskets_USTB_batchDepositTNFT() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1015,7 +1047,7 @@ contract BasketsIntegrationTest is Utility {
         basket.batchDepositTNFT(tnfts, tokenIds);
     }
 
-    function test_baskets_depositTNFT_diffCurrencies() public {
+    function test_baskets_USTB_depositTNFT_diffCurrencies() public {
 
         // ~ Config ~
 
@@ -1149,7 +1181,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ Redeem Testing ~
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
-    function test_baskets_redeemTNFT_single() public {
+    function test_baskets_USTB_redeemTNFT_single() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1247,7 +1279,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed for multiple TNFTs.
-    function test_baskets_redeemTNFT_multiple() public {
+    function test_baskets_USTB_redeemTNFT_multiple() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
         uint256 preBalJoe = realEstateTnft.balanceOf(JOE);
@@ -1437,14 +1469,16 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies redeem math -> proposed by Daniel.
-    function test_baskets_redeemTNFT_math() public {
+    function test_baskets_USTB_redeemTNFT_math() public {
 
         // ~ Conig ~
 
         // deal category owner USDC to deposit into rentManager
         uint256 aliceRentBal = 10 * WAD;
         uint256 bobRentBal = 5 * WAD;
-        deal(address(DAI_MOCK), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+        _deal(address(USTB), TANGIBLE_LABS, aliceRentBal + bobRentBal);
+
+        uint256 preBalRentManager = USTB.balanceOf(address(rentManager));
 
         // Mint Alice token worth $100
         uint256[] memory tokenIds = _createItemAndMint(
@@ -1494,10 +1528,10 @@ contract BasketsIntegrationTest is Utility {
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for alice's tnft
-        DAI_MOCK.approve(address(rentManager), aliceRentBal);
+        USTB.approve(address(rentManager), aliceRentBal);
         rentManager.deposit(
             aliceToken,
-            address(DAI_MOCK),
+            address(USTB),
             aliceRentBal,
             0,
             block.timestamp + 1,
@@ -1515,10 +1549,10 @@ contract BasketsIntegrationTest is Utility {
         vm.startPrank(TANGIBLE_LABS);
         
         // deposit rent for bob's tnft
-        DAI_MOCK.approve(address(rentManager), bobRentBal);
+        USTB.approve(address(rentManager), bobRentBal);
         rentManager.deposit(
             bobToken,
-            address(DAI_MOCK),
+            address(USTB),
             bobRentBal,
             0,
             block.timestamp + 1,
@@ -1530,12 +1564,12 @@ contract BasketsIntegrationTest is Utility {
 
         // Sanity rent check
         assertEq(rentManager.claimableRentForToken(aliceToken), 10 * WAD);
-        assertEq(rentManager.claimableRentForToken(bobToken), 5 * WAD);
+        assertApproxEqAbs(rentManager.claimableRentForToken(bobToken), 5 * WAD, 1);
 
-        assertEq(DAI_MOCK.balanceOf(address(rentManager)), 15 * WAD);
-        assertEq(DAI_MOCK.balanceOf(address(basket)), 0);
-        assertEq(DAI_MOCK.balanceOf(ALICE), 0);
-        assertEq(DAI_MOCK.balanceOf(BOB), 0);
+        assertEq(USTB.balanceOf(address(rentManager)), preBalRentManager + (15 * WAD));
+        assertEq(USTB.balanceOf(address(basket)), 0);
+        assertEq(USTB.balanceOf(ALICE), 0);
+        assertEq(USTB.balanceOf(BOB), 0);
 
         (,uint256 tokenIdRedeemable) = basket.nextToRedeem();
 
@@ -1554,12 +1588,12 @@ contract BasketsIntegrationTest is Utility {
 
         // Post-state check
         assertEq(rentManager.claimableRentForToken(aliceToken), 0);
-        assertEq(rentManager.claimableRentForToken(bobToken), 5 * WAD);
+        assertApproxEqAbs(rentManager.claimableRentForToken(bobToken), 5 * WAD, 1);
 
-        assertEq(DAI_MOCK.balanceOf(address(rentManager)), 5 * WAD);
-        assertEq(DAI_MOCK.balanceOf(address(basket)), 10 * WAD);
-        assertEq(DAI_MOCK.balanceOf(ALICE), 0);
-        assertEq(DAI_MOCK.balanceOf(BOB), 0);
+        assertEq(USTB.balanceOf(address(rentManager)), preBalRentManager + (5 * WAD));
+        assertEq(USTB.balanceOf(address(basket)), 10 * WAD);
+        assertEq(USTB.balanceOf(ALICE), 0);
+        assertEq(USTB.balanceOf(BOB), 0);
 
         assertEq(realEstateTnft.balanceOf(ALICE), 1);
         assertEq(realEstateTnft.balanceOf(BOB), 0);
@@ -1585,7 +1619,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ checkPrecision ~
 
     /// @notice Verifies precision calculation of shares when depositing or redeeming
-    function test_baskets_checkPrecision_noRent_fuzzing(uint256 _value) public {
+    function test_baskets_USTB_checkPrecision_noRent_fuzzing(uint256 _value) public {
         _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M)
 
         // ~ Config ~
@@ -1655,9 +1689,9 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies precision calculation of shares when depositing or redeeming
-    function test_baskets_checkPrecision_rent_fuzzing(uint256 _value, uint256 _rent) public {
-        _value = bound(_value, 10, 100_000_000_000); // range (.01 -> 100M) decimals = 3
-        _rent  = bound(_rent, 1, 1_000_000_000_000); // range (.000001 -> 1M) decimals = 6
+    function test_baskets_USTB_checkPrecision_rent_fuzzing(uint256 _value, uint256 _rent) public {
+        _value = bound(_value, 1000, 100_000_000_000); // range (1 -> 100M) decimals = 3
+        _rent  = bound(_rent, 1 * 1e18, 1_000_000 * 1e18); // range (1 -> 1M) decimals = 18
 
         // ~ Config ~
 
@@ -1680,12 +1714,13 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe + 1);
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
-        // deal rent to basket
-        deal(address(DAI_MOCK), address(basket), _rent);
+        // _deal rent to basket
+        _deal(address(USTB), address(basket), _rent);
 
         // sanity check
-        assertEq(DAI_MOCK.balanceOf(address(basket)), _rent);
-        assertEq(DAI_MOCK.balanceOf(JOE), 0);
+        assertGt(USTB.balanceOf(address(basket)), 0);
+        uint256 rentBal = USTB.balanceOf(address(basket));
+        assertEq(USTB.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), 0);
         assertEq(basket.totalSupply(),  0);
@@ -1709,8 +1744,8 @@ contract BasketsIntegrationTest is Utility {
             2
         );
 
-        assertEq(DAI_MOCK.balanceOf(address(basket)), _rent);
-        assertEq(DAI_MOCK.balanceOf(JOE), 0);
+        assertEq(USTB.balanceOf(address(basket)), rentBal);
+        assertEq(USTB.balanceOf(JOE), 0);
 
         assertEq(realEstateTnft.balanceOf(JOE), preBalJoe);
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket + 1);
@@ -1733,8 +1768,8 @@ contract BasketsIntegrationTest is Utility {
         assertEq(realEstateTnft.balanceOf(address(basket)), preBalBasket);
         assertEq(realEstateTnft.ownerOf(tokenId), JOE);
 
-        assertEq(DAI_MOCK.balanceOf(address(basket)), _rent);
-        assertEq(DAI_MOCK.balanceOf(JOE), 0);
+        assertEq(USTB.balanceOf(address(basket)), rentBal);
+        assertEq(USTB.balanceOf(JOE), 0);
 
         assertEq(basket.balanceOf(JOE), preBasketBalJoe - quoteOut);
         assertEq(basket.totalSupply(),  basket.balanceOf(JOE));
@@ -1748,7 +1783,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ getTotalValueOfBasket ~
     
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket
-    function test_baskets_getTotalValueOfBasket_single() public {
+    function test_baskets_USTB_getTotalValueOfBasket_single() public {
 
         assertEq(basket.getTotalValueOfBasket(), 0);
 
@@ -1762,18 +1797,18 @@ contract BasketsIntegrationTest is Utility {
         uint256 usdValue1 = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         assertEq(usdValue1, 655_000 ether);
 
-        emit log_uint(DAI_MOCK.balanceOf(TANGIBLE_LABS));
+        emit log_uint(USTB.balanceOf(TANGIBLE_LABS));
 
-        // deal category owner USTB to deposit into rentManager
+        // _deal category owner USTB to deposit into rentManager
         uint256 amount = 10_000 * WAD;
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amount);
+        _deal(address(USTB), TANGIBLE_LABS, amount);
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
-        DAI_MOCK.approve(address(rentManager), amount);
+        USTB.approve(address(rentManager), amount);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(DAI_MOCK),
+            address(USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -1791,20 +1826,18 @@ contract BasketsIntegrationTest is Utility {
         vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
 
-        emit log_uint(basket.getRentBal());
-
         // call getTotalValueOfBasket
         uint256 totalValue = basket.getTotalValueOfBasket();
         
         // post state check
         emit log_named_uint("Total value of basket", totalValue);
-        assertEq(basket.getRentBal(), rentClaimable - ((rentClaimable * basket.rentFee()) / 100_00));
-        assertEq(totalValue, usdValue1 + (basket.getRentBal() * basket.decimalsDiff()));
-        assertEq(basket.getRentBal(), basket.totalRentValue());
+        assertApproxEqAbs(basket.getRentBal(), rentClaimable - ((rentClaimable * basket.rentFee()) / 100_00), 1);
+        assertApproxEqAbs(totalValue, usdValue1 + (basket.getRentBal() * basket.decimalsDiff()), 1);
+        assertApproxEqAbs(basket.getRentBal(), basket.totalRentValue(), 1);
     }
 
     /// @notice Verifies getTotalValueOfBasket is returning accurate value of basket with many TNFTs.
-    function test_baskets_getTotalValueOfBasket_multiple() public {
+    function test_baskets_USTB_getTotalValueOfBasket_multiple() public {
 
         assertEq(basket.getTotalValueOfBasket(), 0);
 
@@ -1828,28 +1861,28 @@ contract BasketsIntegrationTest is Utility {
         uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
         assertEq(usdValue2, 786_000 ether); //1e18
 
-        // deal category owner USDC to deposit into rentManager for tnft 1 and tnft 2
+        // _deal category owner USDC to deposit into rentManager for tnft 1 and tnft 2
         uint256 amount1 = 10_000 * WAD;
         uint256 amount2 = 14_000 * WAD;
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amount1 + amount2);
+        _deal(address(USTB), TANGIBLE_LABS, amount1 + amount2);
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
         // deposit rent for tnft 1
-        DAI_MOCK.approve(address(rentManager), amount1);
+        USTB.approve(address(rentManager), amount1);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(DAI_MOCK),
+            address(USTB),
             amount1,
             0,
             block.timestamp + 1,
             true
         );
         // deposit rent for tnft 2
-        DAI_MOCK.approve(address(rentManager), amount2);
+        USTB.approve(address(rentManager), amount2);
         rentManager.deposit(
             NIK_TOKEN_ID,
-            address(DAI_MOCK),
+            address(USTB),
             amount2,
             0,
             block.timestamp + 1,
@@ -1878,16 +1911,16 @@ contract BasketsIntegrationTest is Utility {
         
         // post state check
         emit log_named_uint("Total value of basket", totalValue);
-        assertEq(basket.getRentBal(), totalRent - ((totalRent * basket.rentFee()) / 100_00));
-        assertEq(totalValue, usdValue1 + usdValue2 + (basket.getRentBal() * basket.decimalsDiff()));
-        assertEq(basket.getRentBal(), basket.totalRentValue());
+        assertApproxEqAbs(basket.getRentBal(), totalRent - ((totalRent * basket.rentFee()) / 100_00), 1);
+        assertApproxEqAbs(totalValue, usdValue1 + usdValue2 + (basket.getRentBal() * basket.decimalsDiff()), 1);
+        assertApproxEqAbs(basket.getRentBal(), basket.totalRentValue(), 1);
     }
 
 
     // ~ notify ~
 
     /// @notice Verifies state changes when a successful call to Basket::notify is executed.
-    function test_baskets_notify() public {
+    function test_baskets_USTB_notify() public {
 
         // ~ config ~
 
@@ -1960,7 +1993,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ withdrawRent ~
 
     /// @notice Verifies proper state change upon a successful execution of Basket::withdrawRent.
-    function test_baskets_withdrawRent() public {
+    function test_baskets_USTB_withdrawRent() public {
 
         // ~ config ~
 
@@ -1979,18 +2012,20 @@ contract BasketsIntegrationTest is Utility {
         uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), JOE_TOKEN_ID);
         assertEq(usdValue, 655_000 ether); //1e18
 
-        // deal category owner USDC to deposit into rentManager
+        // _deal category owner USDC to deposit into rentManager
         uint256 amount = 10_000 * WAD;
         uint256 fullRentAmount = amount * 2;
 
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amount);
+        _deal(address(USTB), TANGIBLE_LABS, amount);
+
+        uint256 rentManagerPreBal = USTB.balanceOf(address(rentManager));
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
-        DAI_MOCK.approve(address(rentManager), amount);
+        USTB.approve(address(rentManager), amount);
         rentManager.deposit(
             JOE_TOKEN_ID,
-            address(DAI_MOCK),
+            address(USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -2001,17 +2036,19 @@ contract BasketsIntegrationTest is Utility {
         // go to end of vesting period
         skip(1);
 
-        // also deal USDC straight into the basket
-        deal(address(DAI_MOCK), address(basket), amount);
+        // also _deal USDC straight into the basket
+        _deal(address(USTB), address(basket), amount);
 
         // ~ Sanity check ~
 
-        assertEq(basket.getRentBal(), amount * 2);
-        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), 0);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), 0);
+        uint256 basketBal = USTB.balanceOf(address(basket));
 
-        uint256 revSharePortion = (fullRentAmount * basket.rentFee()) / 100_00;
-        uint256 withdrawable = fullRentAmount - revSharePortion;
+        assertEq(basket.getRentBal(), basketBal + amount);
+        uint256 preBalOwner = basket.primaryRentToken().balanceOf(factoryOwner);
+        uint256 preBalRevDist = basket.primaryRentToken().balanceOf(basketManager.revenueDistributor());
+
+        uint256 revSharePortion = ((amount + basketBal) * basket.rentFee()) / 100_00;
+        uint256 withdrawable = (amount + basketBal) - revSharePortion;
 
         // ~ Rebase ~
 
@@ -2020,32 +2057,31 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(basket.getRentBal(), withdrawable);
-        assertEq(basket.totalRentValue(), withdrawable);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), revSharePortion);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), fullRentAmount);
+        assertApproxEqAbs(basket.getRentBal(), withdrawable, 1);
+        assertApproxEqAbs(basket.totalRentValue(), withdrawable, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), preBalRevDist + revSharePortion, 1);
 
         // ~ Execute withdrawRent ~
 
         // Force revert
         vm.prank(factoryOwner);
         vm.expectRevert();
-        basket.withdrawRent((withdrawable) + 1);
+        basket.withdrawRent(type(uint256).max);
 
         vm.prank(factoryOwner);
         basket.withdrawRent(withdrawable);
 
         // ~ Post-state check ~
 
-        assertEq(basket.getRentBal(), 0);
-        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), withdrawable);
+        assertApproxEqAbs(basket.getRentBal(), 0, 2);
+        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), preBalOwner + withdrawable);
     }
 
     
     // ~ rebasing ~
 
     /// @notice Verifies proper state changes during rebase
-    function test_baskets_rebase() public {
+    function test_baskets_USTB_rebase() public {
 
         // ~ Config ~
 
@@ -2069,13 +2105,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amountRent);
+        _deal(address(USTB), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        DAI_MOCK.approve(address(rentManager), amountRent);
+        USTB.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(DAI_MOCK),
+            address(USTB),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2126,18 +2162,18 @@ contract BasketsIntegrationTest is Utility {
             postRebaseSupply,
             1e16
         ); // deviation of .01 or lower is acceptable
-        assertEq(basket.getRentBal(), basket.totalRentValue());
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), amountRent);
+        assertApproxEqAbs(basket.getRentBal(), basket.totalRentValue(), 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + basket.totalRentValue(), amountRent, 1);
  
         emit log_named_uint("decimals diff", basket.decimalsDiff());
-        emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
-        emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
-        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
+        emit log_named_uint("total supply", basket.totalSupply());
+        emit log_named_uint("total supply prediction", postRebaseSupply);
+        emit log_named_uint("basket value", basket.getTotalValueOfBasket());
     }
 
     /// @notice Verifies correct state changes when disableRebase is executed.
-    function test_baskets_disableRebase() public {
+    function test_baskets_USTB_disableRebase() public {
 
         // ~ Config ~
 
@@ -2159,7 +2195,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies the overall value of the basket can decrease and as long as rent has increased, rebase is positive.
-    function test_baskets_decreaseValue_thenRebase() public {
+    function test_baskets_USTB_decreaseValue_thenRebase() public {
 
         assertEq(basket.getTotalValueOfBasket(), 0);
 
@@ -2181,12 +2217,14 @@ contract BasketsIntegrationTest is Utility {
         // get nft value of tnft 2
         uint256 usdValue2 = _getUsdValueOfNft(address(realEstateTnft), NIK_TOKEN_ID);
 
-        // deal category owner USDC to deposit into rentManager for tnft 1 and tnft 2
+        // _deal category owner USDC to deposit into rentManager for tnft 1 and tnft 2
         uint256 amount = 10_000 * WAD;
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amount);
+        _deal(address(USTB), TANGIBLE_LABS, amount);
+
+        assert(USTB.balanceOf(TANGIBLE_LABS) >= amount);
         
         vm.prank(TANGIBLE_LABS);
-        DAI_MOCK.transfer(address(basket), amount);
+        USTB.transfer(address(basket), amount);
 
         // grab rent value
         vm.prank(REBASE_INDEX_MANAGER);
@@ -2195,8 +2233,8 @@ contract BasketsIntegrationTest is Utility {
         // post state check 1
         uint256 totalValue = basket.getTotalValueOfBasket();
         emit log_named_uint("Total value of basket 1", totalValue);
-        assertEq(totalValue, usdValue1 + usdValue2 + (basket.getRentBal() * basket.decimalsDiff()));
-        assertEq(basket.getRentBal(), basket.totalRentValue());
+        assertApproxEqAbs(totalValue, usdValue1 + usdValue2 + (basket.getRentBal() * basket.decimalsDiff()), 1);
+        assertApproxEqAbs(basket.getRentBal(), basket.totalRentValue(), 1);
 
         // Joe redeems NFT
         vm.startPrank(JOE);
@@ -2209,7 +2247,7 @@ contract BasketsIntegrationTest is Utility {
         // post state check 2
         totalValue = basket.getTotalValueOfBasket();
         emit log_named_uint("Total value of basket 2", totalValue);
-        assertEq(totalValue, usdValue2 + (basket.getRentBal() * basket.decimalsDiff()));
+        assertApproxEqAbs(totalValue, usdValue2 + (basket.getRentBal() * basket.decimalsDiff()), 1);
 
         uint256 preRebaseIndex = basket.rebaseIndex();
 
@@ -2220,9 +2258,9 @@ contract BasketsIntegrationTest is Utility {
 
         // deposit a bit more rent
         amount = 10 ether;
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amount);
+        _deal(address(USTB), TANGIBLE_LABS, amount);
         vm.prank(TANGIBLE_LABS);
-        DAI_MOCK.transfer(address(basket), amount);
+        USTB.transfer(address(basket), amount);
 
         // rebase
         preRebaseIndex = basket.rebaseIndex();
@@ -2237,7 +2275,7 @@ contract BasketsIntegrationTest is Utility {
     // ~ sendRequestForSeed ~
 
     /// @notice This method verifies correct state changes when sendRequestForSeed is executed
-    function test_baskets_sendRequestForSeed() public {
+    function test_baskets_USTB_sendRequestForSeed() public {
         
         // ~ Config ~
 
@@ -2277,11 +2315,11 @@ contract BasketsIntegrationTest is Utility {
     // ~ updatePrimaryRentToken ~
 
     /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed
-    function test_baskets_updatePrimaryRentToken() public {
+    function test_baskets_USTB_updatePrimaryRentToken() public {
 
         // ~ Pre-state check ~
 
-        assertEq(address(basket.primaryRentToken()), address(DAI_MOCK));
+        assertEq(address(basket.primaryRentToken()), address(USTB));
 
         // ~ Execute updatePrimaryRentToken ~
 
@@ -2294,7 +2332,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Verifies proper state changes during rebase after rent token change
-    function test_baskets_updateRent_thenRebase() public {
+    function test_baskets_USTB_updateRent_thenRebase() public {
 
         // ~ Config ~
 
@@ -2319,13 +2357,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amountRent);
+        _deal(address(USTB), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        DAI_MOCK.approve(address(rentManager), amountRent);
+        USTB.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(DAI_MOCK),
+            address(USTB),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2355,16 +2393,10 @@ contract BasketsIntegrationTest is Utility {
 
         assertEq(preTotalSupply, basket.balanceOf(ALICE));
 
-        emit log_named_uint("total supply", basket.totalSupply());     // 129350000000000000000000
-        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 130000000000000000000000
-
         // ~ rebase ~
 
         vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069230769230769230
-
-        // fee taken: 1000.000000000000000000
-        // total rent val: 9000.000000000000000000
 
         // ~ Post-state check ~
 
@@ -2379,14 +2411,9 @@ contract BasketsIntegrationTest is Utility {
             1e16
         ); // deviation of .01 or lower is acceptable
         uint256 totalRentValue = basket.totalRentValue();
-        assertEq(basket.getRentBal(), totalRentValue);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent);
- 
-        emit log_named_uint("decimals diff", basket.decimalsDiff());
-        emit log_named_uint("total supply", basket.totalSupply());     // 139299999999999999990050
-        emit log_named_uint("total supply prediction", postRebaseSupply);     // 139300000000000000000000
-        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 139000000000000000000000
+        assertApproxEqAbs(basket.getRentBal(), totalRentValue, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent, 1);
 
         // ~ Withdraw all rent from basket ~
 
@@ -2394,7 +2421,7 @@ contract BasketsIntegrationTest is Utility {
         basket.withdrawRent(basket.totalRentValue());
         vm.stopPrank();
 
-        assertEq(basket.getRentBal(), 0); // rent value is 0
+        assertApproxEqAbs(basket.getRentBal(), 0, 2);
         assertEq(basket.totalRentValue(), 0); // but `totalRentValue` is unchanged
 
         // ~ Admin changes primaryRentToken ~
@@ -2406,7 +2433,7 @@ contract BasketsIntegrationTest is Utility {
 
         // exchange USTB for USDC
         // Transfer all USDC into basket
-        deal(address(UNREAL_USDC), address(basket), amountRentUSDC);
+        _deal(address(UNREAL_USDC), address(basket), amountRentUSDC);
 
         // ~ Rebase ~
 
@@ -2428,15 +2455,10 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.getRentBal(), totalRentValue);
         assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRentUSDC * basket.rentFee()) / 100_00);
         assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRentUSDC);
- 
-        emit log_named_uint("decimals diff", basket.decimalsDiff());
-        emit log_named_uint("total supply", basket.totalSupply());     // 1472599999999999998010
-        emit log_named_uint("total supply prediction", postRebaseSupply);     // 1383050000000000000000
-        emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 139000000000000000000000
     }
 
     /// @notice Verifies state when Basket::reinvestRent is executed.
-    function test_baskets_reinvestRent() public {
+    function test_baskets_USTB_reinvestRent() public {
         // ~ Config ~
 
         uint256 amountRent = 10_000 * WAD;
@@ -2460,13 +2482,13 @@ contract BasketsIntegrationTest is Utility {
         vm.stopPrank();
 
         // deposit rent for that TNFT (no vesting)
-        deal(address(DAI_MOCK), TANGIBLE_LABS, amountRent);
+        _deal(address(USTB), TANGIBLE_LABS, amountRent);
 
         vm.startPrank(TANGIBLE_LABS);
-        DAI_MOCK.approve(address(rentManager), amountRent);
+        USTB.approve(address(rentManager), amountRent);
         rentManager.deposit(
             tokenId,
-            address(DAI_MOCK),
+            address(USTB),
             amountRent,
             0,
             block.timestamp + 1,
@@ -2517,9 +2539,9 @@ contract BasketsIntegrationTest is Utility {
             1e16
         ); // deviation of .01 or lower is acceptable
         uint256 totalRentValue = basket.totalRentValue();
-        assertEq(basket.getRentBal(), totalRentValue);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00);
-        assertEq(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent);
+        assertApproxEqAbs(basket.getRentBal(), totalRentValue, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()), (amountRent * basket.rentFee()) / 100_00, 1);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(basketManager.revenueDistributor()) + totalRentValue, amountRent, 1);
 
         // ~ Owner calls reinvestRent ~
 
@@ -2540,21 +2562,22 @@ contract BasketsIntegrationTest is Utility {
         basket.addTrustedTarget(target, true);
 
         uint256 rentBalance = 1_000 * WAD;
-        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(DAI_MOCK), rentBalance, tokenId);
+        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(USTB), rentBalance, tokenId);
 
         vm.prank(factoryOwner);
         basket.reinvestRent(target, rentBalance, data); // Index -> 1.069230769230769230
 
         // ~ Post-state check ~
 
-        assertEq(basket.getRentBal(), totalRentValue - rentBalance);
+        assertApproxEqAbs(basket.getRentBal(), totalRentValue - rentBalance, 2);
+
 
         // ~ Deal rent to basket and rebase ~
 
-        deal(address(DAI_MOCK), address(this), 100 * WAD);
-        DAI_MOCK.transfer(address(basket), 100 * WAD);
+        _deal(address(USTB), address(this), 100 * WAD);
+        USTB.transfer(address(basket), 100 * WAD);
 
-        assertEq(basket.getRentBal(), (totalRentValue - rentBalance) + (100 * WAD));
+        assertApproxEqAbs(basket.getRentBal(), (totalRentValue - rentBalance) + (100 * WAD), 2);
 
         vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069566590126291618
