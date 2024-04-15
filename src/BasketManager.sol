@@ -178,6 +178,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      * @param _tnftType Tnft category supported by basket.
      * @param _location ISO country code for supported location of basket.
      * @param _features Array of uint feature identifiers (subcategories) supported by basket.
+     * @dev `_features` MUST be sorted upon function call. 
      * @param _tangibleNFTDeposit Array of tnft addresses of tokens being deposited into basket initially.
      * @param _tokenIdDeposit Array of tokenIds being deposited into basket initally. Note: Corresponds with _tangibleNFTDeposit.
      */
@@ -401,7 +402,13 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
     // Internal Methods
     // ----------------
 
-    function _verifySortedNoDuplicates(uint256[] memory _features) internal view returns (bool isSorted) {
+    /**
+     * @notice This internal method is to sanitize an array of features.
+     * @dev This array will sanitize `_features` by ensuring it is both sorted and doesnt contain duplicates.
+     * @param _features Array of features.
+     * @return isSorted If true, `_features` is verified to be sorted and doesnt contain duplicates.
+     */
+    function _verifySortedNoDuplicates(uint256[] memory _features) internal pure returns (bool isSorted) {
         uint256 length = _features.length - 1;
         for (uint256 i; i < length;) {
 

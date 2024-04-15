@@ -15,7 +15,6 @@ contract Utility is Test{
 
     // ~ RPCs ~
 
-    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
 

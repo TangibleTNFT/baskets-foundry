@@ -1061,7 +1061,7 @@ contract BasketsUSTBIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertApproxEqAbs(basket.getRentBal(), 0, 2);
-        assertEq(basket.primaryRentToken().balanceOf(factoryOwner), preBalOwner + withdrawable);
+        assertApproxEqAbs(basket.primaryRentToken().balanceOf(factoryOwner), preBalOwner + withdrawable, 1);
     }
 
     

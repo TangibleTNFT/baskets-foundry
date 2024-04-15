@@ -53,7 +53,7 @@ contract UpgradeBasket is Script {
     
 
         // log addresses
-        console2.log("new basket imlpementation address =", address(basket));
+        console2.log("basket imlpementation address =", address(basket));
     
         vm.stopBroadcast();
     }

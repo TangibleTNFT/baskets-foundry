@@ -343,12 +343,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice ALlows this contract to get notified of a price change
+     * @notice Allows this contract to get notified of a price change
      * @dev Defined on interface IRWAPriceNotificationReceiver::notify
      * @param _tnft TNFT contract address of token being updated.
      * @param _tokenId TNFT tokenId of token being updated.
      * @param _oldNativePrice Old price of the token, native currency.
-     * @param _newNativePrice Old price of the token, native currency.
+     * @param _newNativePrice New price of the token, native currency.
      * @param _currency Currency ISO.
      */
     function notify(

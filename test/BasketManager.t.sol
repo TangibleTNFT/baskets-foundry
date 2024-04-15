@@ -7,13 +7,14 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 // local contracts
 import { Basket } from "../src/Basket.sol";
 import { IBasket } from "../src/interfaces/IBasket.sol";
 import { CurrencyCalculator } from "../src/CurrencyCalculator.sol";
 import { BasketManager } from "../src/BasketManager.sol";
-import "./utils/MumbaiAddresses.sol";
+import "./utils/UnrealAddresses.sol";
 import "./utils/Utility.sol";
 import { ArrayUtils } from "../src/libraries/ArrayUtils.sol";
 
@@ -49,15 +50,15 @@ contract BasketManagerTest is Utility {
     CurrencyCalculator public currencyCalculator;
 
     //contracts
-    IFactory public factoryV2 = IFactory(Mumbai_FactoryV2);
-    ITangibleNFT public realEstateTnft = ITangibleNFT(Mumbai_TangibleREstateTnft);
-    IPriceOracle public realEstateOracle = IPriceOracle(Mumbai_RealtyOracleTangibleV2);
-    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Mumbai_MockMatrix);
-    IMarketplace public marketplace = IMarketplace(Mumbai_Marketplace);
-    ITangiblePriceManager public priceManager = ITangiblePriceManager(Mumbai_PriceManager);
-    ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Mumbai_CurrencyFeedV2);
-    ITNFTMetadata public metadata = ITNFTMetadata(Mumbai_TNFTMetadata);
-    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Mumbai_RWAPriceNotificationDispatcher);
+    IFactory public factoryV2 = IFactory(Unreal_FactoryV2);
+    ITangibleNFT public realEstateTnft = ITangibleNFT(Unreal_TangibleREstateTnft);
+    IPriceOracle public realEstateOracle = IPriceOracle(Unreal_RealtyOracleTangibleV2);
+    IChainlinkRWAOracle public chainlinkRWAOracle = IChainlinkRWAOracle(Unreal_MockMatrix);
+    IMarketplace public marketplace = IMarketplace(Unreal_Marketplace);
+    ITangiblePriceManager public priceManager = ITangiblePriceManager(Unreal_PriceManager);
+    ICurrencyFeedV2 public currencyFeed = ICurrencyFeedV2(Unreal_CurrencyFeedV2);
+    ITNFTMetadata public metadata = ITNFTMetadata(Unreal_TNFTMetadata);
+    RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);
 
     // proxies
     TransparentUpgradeableProxy public basketManagerProxy;
@@ -80,7 +81,7 @@ contract BasketManagerTest is Utility {
 
     function setUp() public {
 
-        vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(UNREAL_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
         proxyAdmin = new ProxyAdmin(address(this));
@@ -104,7 +105,7 @@ contract BasketManagerTest is Utility {
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
-                address(MUMBAI_DAI),
+                address(UNREAL_DAI),
                 false,
                 address(currencyCalculator)
             )
@@ -121,21 +122,39 @@ contract BasketManagerTest is Utility {
             address(realEstateOracle)
         );
         // create new item with fingerprint.
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-            RE_FINGERPRINT_1,  // fingerprint
-            500_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        //     RE_FINGERPRINT_1,  // fingerprint
+        //     500_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        // IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
+        //     RE_FINGERPRINT_2,  // fingerprint
+        //     600_000_000,     // weSellAt
+        //     0,            // lockedAmount
+        //     10,           // stock
+        //     uint16(826),  // currency -> GBP ISO NUMERIC CODE
+        //     uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        // );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem( // 1
+            RE_FINGERPRINT_1,
+            500_000_000,
+            0
         );
-        IPriceOracleExt(address(chainlinkRWAOracle)).createItem(
-            RE_FINGERPRINT_2,  // fingerprint
-            600_000_000,     // weSellAt
-            0,            // lockedAmount
-            10,           // stock
-            uint16(826),  // currency -> GBP ISO NUMERIC CODE
-            uint16(826)   // country -> United Kingdom ISO NUMERIC CODE
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
+            RE_FINGERPRINT_1,
+            10
+        );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateItem( // 2
+            RE_FINGERPRINT_2,
+            600_000_000,
+            0
+        );
+        IPriceOracleExt(address(chainlinkRWAOracle)).updateStock(
+            RE_FINGERPRINT_2,
+            10
         );
         vm.stopPrank();
 
@@ -660,13 +679,15 @@ contract BasketManagerTest is Utility {
         
         // ~ Config ~
 
+        ERC20Mock MOCK_DAI = new ERC20Mock();
+
         uint256 amount = 1_000 * WAD;
-        deal(address(MUMBAI_DAI), address(basketManager), amount);
+        deal(address(MOCK_DAI), address(basketManager), amount);
 
         // ~ Pre-state check ~
 
-        assertEq(MUMBAI_DAI.balanceOf(address(basketManager)), amount);
-        assertEq(MUMBAI_DAI.balanceOf(address(factoryOwner)), 0);
+        assertEq(MOCK_DAI.balanceOf(address(basketManager)), amount);
+        assertEq(MOCK_DAI.balanceOf(address(factoryOwner)), 0);
 
         // ~ Execute withdrawERC20 ~
 
@@ -677,17 +698,17 @@ contract BasketManagerTest is Utility {
 
         // withdraw DAI balance -> success
         vm.prank(factoryOwner);
-        basketManager.withdrawERC20(address(MUMBAI_DAI));
+        basketManager.withdrawERC20(address(MOCK_DAI));
 
         // ~ Post-state check ~
 
-        assertEq(MUMBAI_DAI.balanceOf(address(basketManager)), 0);
-        assertEq(MUMBAI_DAI.balanceOf(address(factoryOwner)), amount);
+        assertEq(MOCK_DAI.balanceOf(address(basketManager)), 0);
+        assertEq(MOCK_DAI.balanceOf(address(factoryOwner)), amount);
 
         // force revert -> Insufficient amount
         vm.prank(factoryOwner);
         vm.expectRevert("Insufficient token balance");
-        basketManager.withdrawERC20(address(MUMBAI_DAI));
+        basketManager.withdrawERC20(address(MOCK_DAI));
     }
 
 

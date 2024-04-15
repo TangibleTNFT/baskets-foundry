@@ -35,11 +35,10 @@ contract UpgradeBasketManager is Script {
     // wallets
     address immutable DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-
-    //string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
+        vm.createSelectFork(UNREAL_RPC_URL);
     }
 
     function run() public {
@@ -54,10 +53,8 @@ contract UpgradeBasketManager is Script {
     
 
         // log addresses
-        console2.log("basket manager imlpementatino address =", address(basketManager));
+        console2.log("basket manager imlpementation address =", address(basketManager));
     
         vm.stopBroadcast();
     }
 }
-
-// 0x655171B068E842C42348509370c0dCcBE65198D8
