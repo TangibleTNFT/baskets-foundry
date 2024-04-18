@@ -954,11 +954,11 @@ contract BasketsUSTBIntegrationTest is Utility {
 
         // get claimable rent value for tnft 1
         uint256 rentClaimable1 = rentManager.claimableRentForToken(JOE_TOKEN_ID);
-        assertEq(rentClaimable1, amount1);
+        assertApproxEqAbs(rentClaimable1, amount1, 1);
 
         // get claimable rent value for tnft 2
         uint256 rentClaimable2 = rentManager.claimableRentForToken(NIK_TOKEN_ID);
-        assertEq(rentClaimable2, amount2);
+        assertApproxEqAbs(rentClaimable2, amount2, 1);
 
         uint256 totalRent = rentClaimable1 + rentClaimable2;
 

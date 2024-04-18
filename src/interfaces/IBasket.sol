@@ -45,6 +45,8 @@ interface IBasket is IERC20, IERC20Metadata {
     error LowLevelCallFailed(bytes call);
     /// @dev This error is emitted when rent is removed for reinvesting and not replaced with something of equal or greater value.
     error TotalValueDecreased();
+    /// @dev This error is emitted when the fee is too high.
+    error FeeTooHigh(uint16 fee);
 
 
     // -------

@@ -115,10 +115,26 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
     // Errors
     // ------
 
-    /**
-     * @notice This error is emitted when an invalid address(0) input is caught.
-     */
+    /// @dev Emitted when an input address is a zero address.
     error ZeroAddress();
+    /// @dev Emitted when there is a withdraw of an asset amount that exceeds this contract's balance.
+    error InsufficientBalance();
+    /// @dev Emitted when the _tangibleNFTDeposit and _tokenIdDeposit are not acceptable lengths.
+    error InvalidArrayEntry();
+    /// @dev Emitted when the features array size for creating a new basket exceeds the limit.
+    error FeatureLimitExceeded();
+    /// @dev Emitted when a tnft type is input into a new basket, but is not a valid type.
+    error InvalidTnftType(uint256 tnftType);
+    /// @dev Emitted when a new basket is being created with a name that is already taken.
+    error NameNotAvailable(string name);
+    /// @dev Emitted when a new basket is being created with a symbol that is already taken.
+    error SymbolNotAvailable(string symbol);
+    /// @dev Emitted when a new basket is being created with a _features array that is not sorted.
+    error FeaturesNotSorted();
+    /// @dev Emitted when a new basket is being created with features that are not unique.
+    error BasketAlreadyExists();
+    /// @dev Emitted when the features of a new basket are not supported by it's tnft type.
+    error FeatureNotSupportedInType(uint256 tnftType, uint256 feature);
 
 
     // -----------
@@ -191,39 +207,35 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
         address[] memory _tangibleNFTDeposit,
         uint256[] memory _tokenIdDeposit
     ) external nonReentrant returns (IBasket, uint256[] memory basketShares) {
-        // verify _tanfibleNFTDeposit array and _tokenIdDeposit array are the same size.
-        require(_tangibleNFTDeposit.length == _tokenIdDeposit.length, "Differing lengths");
-
-        // verify deployer is depositing an initial token into basket.
-        require(_tangibleNFTDeposit.length != 0, "Must be an initial deposit");
+        // verify _tanfibleNFTDeposit array and _tokenIdDeposit array are the same size & not 0.
+        if (_tangibleNFTDeposit.length != _tokenIdDeposit.length || _tangibleNFTDeposit.length == 0) revert InvalidArrayEntry();
 
         // verify _features does not have more features that what is allowed.
-        require(featureLimit >= _features.length, "Too many features");
+        if (_features.length > featureLimit) revert FeatureLimitExceeded();
 
         // verify _tnftType is a supported type in the Metadata contract.
         (bool added,,) = ITNFTMetadata(IFactory(factory()).tnftMetadata()).tnftTypes(_tnftType);
-        require(added, "Invalid tnftType");
+        if (!added) revert InvalidTnftType(_tnftType);
 
-        // verify _name is unique and available
-        require(!nameHashTaken[_name], "Name not available");
-
-        // verify _symbol is unique and available
-        require(!symbolHashTaken[_symbol], "Symbol not available");
+        // verify _name & _symbol are unique and available
+        if (nameHashTaken[_name]) revert NameNotAvailable(_name);
+        if (symbolHashTaken[_symbol]) revert SymbolNotAvailable(_symbol);
 
         // if features array contains more than 1 element, verify no duplicates and is sorted
         if (_features.length > 1) {
-            require(_verifySortedNoDuplicates(_features), "features not sorted or duplicates");
+            if (!_verifySortedNoDuplicates(_features)) revert FeaturesNotSorted();
         }
 
         // create unique hash for new basket
         _hashCache = createHash(_tnftType, _location, _features);
 
         // check basket availability
-        require(fetchBasketByHash[_hashCache] == address(0), "Basket already exists");
+        if (fetchBasketByHash[_hashCache] != address(0)) revert BasketAlreadyExists();
 
         // check features are valid.
         for (uint256 i; i < _features.length;) {
-            require(ITNFTMetadata(IFactory(factory()).tnftMetadata()).featureInType(_tnftType, _features[i]), "Feature not supported in type");
+            if (!ITNFTMetadata(IFactory(factory()).tnftMetadata()).featureInType(_tnftType, _features[i]))
+                revert FeatureNotSupportedInType(_tnftType, _features[i]);
             unchecked {
                 ++i;
             }
@@ -315,7 +327,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
         if (_contract == address(0)) revert ZeroAddress();
 
         uint256 balance = IERC20(_contract).balanceOf(address(this));
-        require(balance > 0, "Insufficient token balance");
+        if (balance == 0) revert InsufficientBalance();
 
         IERC20(_contract).safeTransfer(msg.sender, balance);
     }
@@ -361,7 +373,6 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      * @param _limit New feature limit.
      */
     function setFeatureLimit(uint256 _limit) external onlyFactoryOwner {
-        require(_limit != featureLimit, "Already set");
         featureLimit = _limit;
     }
 

@@ -43,6 +43,9 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
     /// @notice Emitted when fulfillRandomWords is executed.
     event RequestFulfilled(uint256 requestId, address basket);
 
+    /// @dev This error is emitted when address(0) is detected on an input.
+    error ZeroAddress();
+
 
     // ---------
     // Modifiers
@@ -75,7 +78,7 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      * @param _operator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
      */
     function initialize(address _factory, address _operator, uint256 chainId) external initializer {
-        require(_operator != address(0), "Cannot init with address(0)");
+        if (_factory == address(0) || _operator == address(0)) revert ZeroAddress();
         __FactoryModifiers_init(_factory);
         operator = _operator;
         testnetChainId = chainId;
@@ -108,6 +111,7 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      * @notice This method is used to update `operator` in the event GelatoVRF needs to be reset
      */
     function updateOperator(address _operator) external onlyFactoryOwner {
+        if (_operator == address(0)) revert ZeroAddress();
         operator = _operator;
     }
 

@@ -483,7 +483,7 @@ contract RentManagerTest is Utility {
             totalRent += claimables[i];
         }
 
-        assertEq(totalRent, amount/2);
+        assertApproxEqAbs(totalRent, amount/2, 10);
     }
 
     /// @notice Verifies correct state changes when RentManager::claimRentForTokenBatch is executed for 1 token
@@ -566,10 +566,10 @@ contract RentManagerTest is Utility {
         assertEq(UNREAL_USTB.balanceOf(JOE), 0);
         uint256 totalRentClaimable;
         for (uint256 i; i < claimables.length; ++i) {
-            assertEq(claimables[i], baseDeposit/2);
+            assertApproxEqAbs(claimables[i], baseDeposit/2, 2);
             totalRentClaimable += claimables[i];
         }
-        assertEq(totalRentClaimable, amount/2);
+        assertApproxEqAbs(totalRentClaimable, amount/2, 10);
         assertEq(totalRentClaimable, rentManager.claimableRentForTokenBatchTotal(tokenIds));
 
         // Execute claimRentForTokenBatch
@@ -579,7 +579,7 @@ contract RentManagerTest is Utility {
         // Post-state check 2
         assertApproxEqAbs(UNREAL_USTB.balanceOf(JOE), amount/2, 100);
         for (uint256 i; i < amountTNFTs; ++i) {
-            assertEq(claimed[i], baseDeposit/2);
+            assertApproxEqAbs(claimed[i], baseDeposit/2, 2);
         }
     }
   

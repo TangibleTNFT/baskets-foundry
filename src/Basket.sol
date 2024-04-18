@@ -404,7 +404,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _rentFee New rent fee.
      */
     function updateRentFee(uint16 _rentFee) external onlyFactoryOwner {
-        require(_rentFee <= 50_00, "CE 50%"); // Cannot Exceed 50%
+        if (_rentFee > 50_00) revert FeeTooHigh(_rentFee);
         rentFee = _rentFee;
     }
 
@@ -415,16 +415,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param value If true, is a trusted address.
      */
     function addTrustedTarget(address target, bool value) external onlyFactoryOwner {
+        if (target == address(0)) revert ZeroAddress();
         trustedTarget[target] = value;
     }
 
     /**
      * @notice This method allows the factory owner to give permission to another address to withdraw rent.
-     * @param _address Address being granted or not granted permission to withdraw
-     * @param _canWithdraw If true, address can call `withdrawRent`.
+     * @param account Address being granted or not granted permission to withdraw
+     * @param hasRole If true, address can call `withdrawRent`.
      */
-    function setWithdrawRole(address _address, bool _canWithdraw) external onlyFactoryOwner {
-        canWithdraw[_address] = _canWithdraw;
+    function setWithdrawRole(address account, bool hasRole) external onlyFactoryOwner {
+        if (account == address(0)) revert ZeroAddress();
+        canWithdraw[account] = hasRole;
     }
 
     /**
@@ -689,7 +691,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _tokenId TokenId of token.
      * @return If true, token is compatible and can be deposited into this basket contract.
      */
-    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public returns (bool) {
         // a. Check supported TNFTType (category)
         if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
 

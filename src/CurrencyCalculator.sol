@@ -80,7 +80,7 @@ contract CurrencyCalculator {
         decimals = priceFeed.decimals();
         (, int256 price, , , ) = priceFeed.latestRoundData();
 
-        if (price > 0) exchangeRate = uint256(price) + currencyFeed.conversionPremiums(_currency);
+        if (price != 0) exchangeRate = uint256(price) + currencyFeed.conversionPremiums(_currency);
     }
 
     /**

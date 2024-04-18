@@ -5,8 +5,7 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 // local contracts
@@ -34,9 +33,6 @@ import { RWAPriceNotificationDispatcher } from "@tangible/notifications/RWAPrice
 // chainlink interface imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-
-// Mumbai RPC: https://rpc.ankr.com/polygon_mumbai
-
 /**
  * @title BasketsManagerTest
  * @author Chase Brown
@@ -61,17 +57,14 @@ contract BasketManagerTest is Utility {
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);
 
     // proxies
-    TransparentUpgradeableProxy public basketManagerProxy;
-    TransparentUpgradeableProxy public basketVrfConsumerProxy;
-    ProxyAdmin public proxyAdmin;
+    ERC1967Proxy public basketManagerProxy;
+    ERC1967Proxy public basketVrfConsumerProxy;
 
     // ~ Actors ~
 
     address public factoryOwner;
     address public ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
     address public TANGIBLE_LABS;
-
-    uint256[] testArray1 = [8, 7, 4, 6, 9, 2, 10, 1, 3, 5];
 
     uint256[] internal mintedToken;
 
@@ -84,7 +77,6 @@ contract BasketManagerTest is Utility {
         vm.createSelectFork(UNREAL_RPC_URL);
 
         factoryOwner = IOwnable(address(factoryV2)).owner();
-        proxyAdmin = new ProxyAdmin(address(this));
 
         // new category owner
         TANGIBLE_LABS = factoryV2.categoryOwner(ITangibleNFT(realEstateTnft));
@@ -99,9 +91,8 @@ contract BasketManagerTest is Utility {
         basketManager = new BasketManager();
 
         // Deploy proxy for basketManager -> initialize
-        basketManagerProxy = new TransparentUpgradeableProxy(
+        basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
-            address(proxyAdmin),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
                 address(factoryV2),
@@ -277,6 +268,87 @@ contract BasketManagerTest is Utility {
     // Unit Tests
     // ----------
 
+    // ~ Initializer ~
+
+    /// @notice Verifies proper state changes when BasketManager::initialize is executed
+    function test_basketManager_initialize() public {
+        BasketManager newBasketManager = new BasketManager();
+
+        ERC1967Proxy newBasketManagerProxy = new ERC1967Proxy(
+            address(newBasketManager),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryV2),
+                address(UNREAL_DAI),
+                false,
+                address(currencyCalculator)
+            )
+        );
+        newBasketManager = BasketManager(address(newBasketManagerProxy));
+
+        assertEq(address(newBasketManager.currencyCalculator()), address(currencyCalculator));
+        assertEq(newBasketManager.primaryRentToken(), address(UNREAL_DAI));
+        assertEq(newBasketManager.rentIsRebaseToken(), false);
+        assertEq(newBasketManager.featureLimit(), 10);
+    }
+
+    /// @notice Verifies initial state initializer restrictions for BasketManager::initialize
+    function test_basketManager_initialize_restrictions() public {
+        BasketManager newBasketManager = new BasketManager();
+
+        // basketImplementation cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        ERC1967Proxy newBasketManagerProxy = new ERC1967Proxy(
+            address(newBasketManager),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(0),
+                address(factoryV2),
+                address(UNREAL_DAI),
+                false,
+                address(currencyCalculator)
+            )
+        );
+
+        // factory cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        newBasketManagerProxy = new ERC1967Proxy(
+            address(newBasketManager),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(0),
+                address(UNREAL_DAI),
+                false,
+                address(currencyCalculator)
+            )
+        );
+
+        // rent token cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        newBasketManagerProxy = new ERC1967Proxy(
+            address(newBasketManager),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryV2),
+                address(0),
+                false,
+                address(currencyCalculator)
+            )
+        );
+
+        // currency calculator cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        newBasketManagerProxy = new ERC1967Proxy(
+            address(newBasketManager),
+            abi.encodeWithSelector(BasketManager.initialize.selector,
+                address(basket),
+                address(factoryV2),
+                address(UNREAL_DAI),
+                false,
+                address(0)
+            )
+        );
+    }
+
 
     // ~ deployBasket testing ~
 
@@ -287,9 +359,6 @@ contract BasketManagerTest is Utility {
         uint256[] memory features = new uint256[](2);
         features[0] = RE_FEATURE_2;
         features[1] = RE_FEATURE_1;
-
-        address[] memory emptyAddrArr = new address[](0);
-        uint256[] memory emptyUintArr = new uint256[](0);
 
         // add features to initial deposit token
         _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
@@ -318,6 +387,11 @@ contract BasketManagerTest is Utility {
         // Post-state check
         assertEq(basketShares.length, 1);
         assertEq(_basket.basketManager(), address(basketManager));
+
+        uint256[] memory supportedFeatures = _basket.getSupportedFeatures();
+        assertEq(supportedFeatures.length, features.length);
+        assertEq(supportedFeatures[0], features[0]);
+        assertEq(supportedFeatures[1], features[1]);
 
         basketsArray = basketManager.getBasketsArray();
         assertEq(basketsArray.length, 1);
@@ -357,6 +431,36 @@ contract BasketManagerTest is Utility {
         assertEq(deposited[0].tnft, address(realEstateTnft));
         assertEq(deposited[0].tokenId, JOE_TOKEN_1);
         assertEq(deposited[0].fingerprint, RE_FINGERPRINT_1);
+    }
+
+    /// @notice Verifies proper restrictions when a basket is deployed with features
+    function test_basketManager_deployBasket_restrictions() public {
+
+        // create features array
+        uint256[] memory features = new uint256[](2);
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        address[] memory emptyAddrArr = new address[](0);
+        uint256[] memory emptyUintArr = new uint256[](0);
+
+        // add features to initial deposit token
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_1, features);
+        _addFeatureToCategory(address(realEstateTnft), JOE_TOKEN_2, features);
+
+        // deploy basket
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_1);
+        basketManager.deployBasket(
+            "Tangible Basket Token",
+            "TBT",
+            RE_TNFTTYPE,
+            UK_ISO,
+            features.sort(),
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_1)
+        );
+        vm.stopPrank();
 
         // ensure elements arent sorted
         features[0] = RE_FEATURE_2;
@@ -365,7 +469,7 @@ contract BasketManagerTest is Utility {
         // deploy same basket without sorting -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("features not sorted or duplicates");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.FeaturesNotSorted.selector));
         basketManager.deployBasket(
             "Tangible Basket Token1",
             "TBT1",
@@ -384,7 +488,7 @@ contract BasketManagerTest is Utility {
         // deploy same basket with duplicates -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("features not sorted or duplicates");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.FeaturesNotSorted.selector));
         basketManager.deployBasket(
             "Tangible Basket Token1",
             "TBT1",
@@ -403,7 +507,7 @@ contract BasketManagerTest is Utility {
         // deploy another basket with same name -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("Name not available");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.NameNotAvailable.selector, "Tangible Basket Token"));
         basketManager.deployBasket(
             "Tangible Basket Token",
             "TBT",
@@ -418,7 +522,7 @@ contract BasketManagerTest is Utility {
         // deploy another basket with same symbol -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("Symbol not available");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.SymbolNotAvailable.selector, "TBT"));
         basketManager.deployBasket(
             "Tangible Basket Token1",
             "TBT",
@@ -433,7 +537,7 @@ contract BasketManagerTest is Utility {
         // deploy another basket with same features -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("Basket already exists");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.BasketAlreadyExists.selector));
         basketManager.deployBasket(
             "Tangible Basket Token1",
             "TBT1",
@@ -445,10 +549,25 @@ contract BasketManagerTest is Utility {
         );
         vm.stopPrank();
 
+        // deploy another basket with diff array sizes -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.InvalidArrayEntry.selector));
+        basketManager.deployBasket(
+            "Tangible Basket Token1",
+            "TBT1",
+            RE_TNFTTYPE,
+            UK_ISO,
+            features,
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            emptyUintArr
+        );
+        vm.stopPrank();
+
         // deploy another basket with no deposit -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
-        vm.expectRevert("Must be an initial deposit");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.InvalidArrayEntry.selector));
         basketManager.deployBasket(
             "Tangible Basket Token1",
             "TBT1",
@@ -460,22 +579,61 @@ contract BasketManagerTest is Utility {
         );
         vm.stopPrank();
 
+        uint256 unSupportedType = 999999999999999;
+
         // deploy another basket with same features -> revert
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.InvalidTnftType.selector, unSupportedType));
         basketManager.deployBasket(
-            "Tangible Basket Token1",
+            "Tangible Basket Token 1",
             "TBT1",
-            RE_TNFTTYPE,
-            0,
-            features,
+            unSupportedType,
+            UK_ISO,
+            features.sort(),
             _asSingletonArrayAddress(address(realEstateTnft)),
-            _asSingletonArrayUint(JOE_TOKEN_2)
+            _asSingletonArrayUint(JOE_TOKEN_1)
         );
         vm.stopPrank();
 
-        basketsArray = basketManager.getBasketsArray();
-        assertEq(basketsArray.length, 2);
+        vm.prank(factoryOwner);
+        basketManager.setFeatureLimit(1);
+
+        // deploy another basket with same features -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.FeatureLimitExceeded.selector));
+        basketManager.deployBasket(
+            "Tangible Basket Token 1",
+            "TBT1",
+            RE_TNFTTYPE,
+            UK_ISO,
+            features.sort(),
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_1)
+        );
+        vm.stopPrank();
+
+        vm.prank(factoryOwner);
+        basketManager.setFeatureLimit(10);
+
+        features[0] = 999999999999998;
+        features[1] = 999999999999999;
+
+        // deploy another basket with different features, but not supported under type -> revert
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basketManager), JOE_TOKEN_2);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.FeatureNotSupportedInType.selector, RE_TNFTTYPE, features[0]));
+        basketManager.deployBasket(
+            "Tangible Basket Token 1",
+            "TBT1",
+            RE_TNFTTYPE,
+            UK_ISO,
+            features.sort(),
+            _asSingletonArrayAddress(address(realEstateTnft)),
+            _asSingletonArrayUint(JOE_TOKEN_1)
+        );
+        vm.stopPrank();
     }
 
     /// @notice Verifies proper state changes when a basket is deployed with features
@@ -707,7 +865,7 @@ contract BasketManagerTest is Utility {
 
         // force revert -> Insufficient amount
         vm.prank(factoryOwner);
-        vm.expectRevert("Insufficient token balance");
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.InsufficientBalance.selector));
         basketManager.withdrawERC20(address(MOCK_DAI));
     }
 
@@ -737,12 +895,7 @@ contract BasketManagerTest is Utility {
         // Pre-state check.
         assertEq(basketManager.featureLimit(), 10);
 
-        // Execute setFeatureLimit with same value -> revert
-        vm.prank(factoryOwner);
-        vm.expectRevert("Already set");
-        basketManager.setFeatureLimit(10);
-
-        // Execute setFeatureLimit -> success
+        // Execute setFeatureLimit
         vm.prank(factoryOwner);
         basketManager.setFeatureLimit(100);
 
@@ -750,4 +903,151 @@ contract BasketManagerTest is Utility {
         assertEq(basketManager.featureLimit(), 100);
     }
 
+    /// @notice Verifies restrictions when BasketManager::setFeatureLimit is executed.
+    function test_basketManager_setFeatureLimit_restrictions() public {
+        // bob cannot call setFeatureLimit
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.setFeatureLimit(100);
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::setCurrencyCalculator is executed.
+    function test_basketManager_setCurrencyCalculator() public {
+        // Pre-state check.
+        assertNotEq(address(basketManager.currencyCalculator()), address(222));
+
+        // Execute setCurrencyCalculator
+        vm.prank(factoryOwner);
+        basketManager.setCurrencyCalculator(address(222));
+
+        // Post-state check.
+        assertEq(address(basketManager.currencyCalculator()), address(222));
+
+    }
+
+    /// @notice Verifies restrictions when BasketManager::setCurrencyCalculator is executed.
+    function test_basketManager_setCurrencyCalculator_restrictions() public {
+        // Execute setCurrencyCalculator with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        basketManager.setCurrencyCalculator(address(0));
+
+        // bob cannot call setCurrencyCalculator
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.setCurrencyCalculator(address(222));
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::setRevenueDistributor is executed.
+    function test_basketManager_setRevenueDistributor() public {
+        // Pre-state check.
+        assertNotEq(address(basketManager.revenueDistributor()), address(222));
+
+        // Execute setRevenueDistributor
+        vm.prank(factoryOwner);
+        basketManager.setRevenueDistributor(address(222));
+
+        // Post-state check.
+        assertEq(address(basketManager.revenueDistributor()), address(222));
+
+    }
+
+    /// @notice Verifies restrictions when BasketManager::setRevenueDistributor is executed.
+    function test_basketManager_setRevenueDistributor_restrictions() public {
+        // Execute setRevenueDistributor with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        basketManager.setRevenueDistributor(address(0));
+
+        // bob cannot call setRevenueDistributor
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.setRevenueDistributor(address(222));
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::updateBasketImplementation is executed.
+    function test_basketManager_updateBasketImplementation() public {
+        Basket newBasket = new Basket();
+
+        // Pre-state check.
+        assertNotEq(basketManager.beacon().implementation(), address(newBasket));
+
+        // Execute updateBasketImplementation
+        vm.prank(factoryOwner);
+        basketManager.updateBasketImplementation(address(newBasket));
+
+        // Post-state check.
+        assertEq(basketManager.beacon().implementation(), address(newBasket));
+
+    }
+
+    /// @notice Verifies restrictions when BasketManager::updateBasketImplementation is executed.
+    function test_basketManager_updateBasketImplementation_restrictions() public {
+        Basket newBasket = new Basket();
+
+        // Execute updateBasketImplementation with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        basketManager.updateBasketImplementation(address(0));
+
+        // bob cannot call updateBasketImplementation
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.updateBasketImplementation(address(newBasket));
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::setRebaseController is executed.
+    function test_basketManager_setRebaseController() public {
+        // Pre-state check.
+        assertNotEq(address(basketManager.rebaseController()), address(222));
+
+        // Execute setRebaseController
+        vm.prank(factoryOwner);
+        basketManager.setRebaseController(address(222));
+
+        // Post-state check.
+        assertEq(address(basketManager.rebaseController()), address(222));
+
+    }
+
+    /// @notice Verifies restrictions when BasketManager::setRebaseController is executed.
+    function test_basketManager_setRebaseController_restrictions() public {
+        // Execute setRebaseController with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        basketManager.setRebaseController(address(0));
+
+        // bob cannot call setRebaseController
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.setRebaseController(address(222));
+    }
+
+    /// @notice Verifies correct state changes when BasketManager::updatePrimaryRentToken is executed.
+    function test_basketManager_updatePrimaryRentToken() public {
+        // Pre-state check.
+        assertEq(basketManager.primaryRentToken(), address(UNREAL_DAI));
+        assertEq(basketManager.rentIsRebaseToken(), false);
+
+        // Execute updatePrimaryRentToken
+        vm.prank(factoryOwner);
+        basketManager.updatePrimaryRentToken(address(222), true);
+
+        // Post-state check.
+        assertEq(basketManager.primaryRentToken(), address(222));
+        assertEq(basketManager.rentIsRebaseToken(), true);
+    }
+
+    /// @notice Verifies restrictions when BasketManager::updatePrimaryRentToken is executed.
+    function test_basketManager_updatePrimaryRentToken_restrictions() public {
+        // Execute updatePrimaryRentToken with address(0) -> revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketManager.ZeroAddress.selector));
+        basketManager.updatePrimaryRentToken(address(0), false);
+
+        // bob cannot call updatePrimaryRentToken
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketManager.updatePrimaryRentToken(address(222), false);
+    }
 }

@@ -531,6 +531,17 @@ contract BasketsIntegrationTest is Utility {
         Basket(basket).depositTNFT(address(realEstateTnft), tokenId);
     }
 
+    /// @notice Helper method for calling Basket::reinvestRent method.
+    function reinvestNoDeposit(address basket, address rentToken, uint256 amount, uint256 tokenId) external {
+        // transfer tokens here
+        IERC20(rentToken).transferFrom(basket, address(this), amount);
+    }
+
+    /// @notice Helper method to test edge case when CurrencyCalculator returns 0 when Basket::getUSDValue is called.
+    function getUSDValue(address,uint256) external returns (uint256) {
+        return 0;
+    }
+
 
     // ------------------
     // Initial State Test
@@ -575,13 +586,85 @@ contract BasketsIntegrationTest is Utility {
     // Unit Tests
     // ----------
 
+    // ~ Initializers ~
+
+    /// @notice Verifies restrictions when initializing a new Basket contract.
+    function test_baskets_initializer_restrictions() public {
+        Basket newBasket = new Basket();
+
+        uint256[] memory features = new uint256[](2);
+        features[0] = RE_FEATURE_2;
+        features[1] = RE_FEATURE_1;
+
+        vm.expectRevert(abi.encodeWithSelector(IBasket.ZeroAddress.selector));
+        ERC1967Proxy prox = new ERC1967Proxy(
+            address(newBasket),
+            abi.encodeWithSelector(Basket.initialize.selector,
+                "test basket",
+                "t",
+                address(0),
+                RE_TNFTTYPE,
+                address(UNREAL_DAI),
+                false,
+                features,
+                UK_ISO,
+                msg.sender
+            )
+        );
+    }
+
+    /// @notice Verifies restrictions and proper state when initializing a new BasketVrfConsumer contract.
+    function test_baskets_basketsVrfConsumer_initializer() public {
+        BasketsVrfConsumer newConsumer = new BasketsVrfConsumer();
+
+        // cannot initialize a new BasketsVrfConsumer with factory address(0).
+        vm.expectRevert(abi.encodeWithSelector(BasketsVrfConsumer.ZeroAddress.selector));
+        ERC1967Proxy prox = new ERC1967Proxy(
+            address(newConsumer),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(0),
+                GELATO_OPERATOR,
+                block.chainid
+            )
+        );
+
+        // cannot initialize a new BasketsVrfConsumer with operator address(0).
+        vm.expectRevert(abi.encodeWithSelector(BasketsVrfConsumer.ZeroAddress.selector));
+        prox = new ERC1967Proxy(
+            address(newConsumer),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(factoryV2),
+                address(0),
+                block.chainid
+            )
+        );
+
+        // initialize new vrf consumer successfully
+        prox = new ERC1967Proxy(
+            address(newConsumer),
+            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
+                address(factoryV2),
+                GELATO_OPERATOR,
+                block.chainid
+            )
+        );
+        newConsumer = BasketsVrfConsumer(address(prox));
+
+        // post-state check 
+        assertEq(newConsumer.factory(), address(factoryV2));
+        assertEq(newConsumer.operator(), GELATO_OPERATOR);
+        assertEq(newConsumer.testnetChainId(), block.chainid);
+    }
+
 
     // ~ Deposit Testing ~
 
-    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT is executed.
     function test_baskets_depositTNFT_single() public {
 
         // ~ Pre-state check ~
+
+        assertEq(basket.getTotalValueOfBasket(), 0);
 
         assertEq(realEstateTnft.balanceOf(JOE), 1);
         assertEq(realEstateTnft.balanceOf(address(basket)), 0);
@@ -607,6 +690,10 @@ contract BasketsIntegrationTest is Utility {
         realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
         basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
         vm.stopPrank();
+
+        // restriction check -> Can't deposit token that's already deposited
+        vm.expectRevert(abi.encodeWithSelector(IBasket.TokenAlreadyDeposited.selector, address(realEstateTnft), JOE_TOKEN_ID));
+        basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
 
         emit log_named_uint("JOE's BASKET BALANCE", basket.balanceOf(JOE));
         emit log_named_uint("SHARE PRICE", basket.getSharePrice());
@@ -648,7 +735,54 @@ contract BasketsIntegrationTest is Utility {
         assertEq(tokenIdLib[0], JOE_TOKEN_ID);
     }
 
-    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    /// @notice Verifies the various cases where a token is and is not compatible with a basket.
+    function test_baskets_depositTNFT_initialDeposit() public {
+        uint256[] memory _features = new uint256[](0);
+
+        Basket newBasket = new Basket();
+        ERC1967Proxy prox = new ERC1967Proxy(
+            address(newBasket),
+            abi.encodeWithSelector(Basket.initialize.selector,
+                "test basket",
+                "t",
+                address(factoryV2),
+                RE_TNFTTYPE,
+                address(UNREAL_DAI),
+                false,
+                _features,
+                0,
+                JOE
+            )
+        );
+        newBasket = Basket(address(prox));
+
+        // restriction check -> Basket not whitelisted on NotificationDispatcher
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(newBasket), JOE_TOKEN_ID);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotWhitelisted.selector));
+        newBasket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
+        vm.stopPrank();
+
+        // whitelist basket
+        vm.prank(TANGIBLE_LABS);
+        notificationDispatcher.whitelistAddressAndReceiver(address(newBasket));
+        
+        // transfer Joe's token to BasketManager
+        vm.prank(JOE);
+        realEstateTnft.transferFrom(JOE, address(basketManager), JOE_TOKEN_ID);
+
+        uint256 preBal = newBasket.balanceOf(JOE);
+
+        // basket manager makes deposit -> Joe gets tokens (emulating initial deposit)
+        vm.startPrank(address(basketManager));
+        realEstateTnft.approve(address(newBasket), JOE_TOKEN_ID);
+        newBasket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
+        vm.stopPrank();
+
+        assertGt(newBasket.balanceOf(JOE), preBal);
+    }
+
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT is executed.
     function test_baskets_depositTNFT_multiple() public {
 
         // ~ Pre-state check ~
@@ -747,7 +881,98 @@ contract BasketsIntegrationTest is Utility {
         assertEq(tokenidLib[1], NIK_TOKEN_ID);
     }
 
-    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    /// @notice Verifies proper amounts when Basket::getBatchQuoteIn is executed.
+    function test_baskets_getBatchQuoteIn() public {
+        address[] memory _tangibleNFTs = new address[](2);
+        _tangibleNFTs[0] = address(realEstateTnft);
+        _tangibleNFTs[1] = address(realEstateTnft);
+
+        uint256[] memory _tokenIds = new uint256[](2);
+        _tokenIds[0] = JOE_TOKEN_ID;
+        _tokenIds[1] = NIK_TOKEN_ID;
+
+        uint256 quote_Joe = basket.getQuoteIn(address(realEstateTnft), JOE_TOKEN_ID);
+        uint256 quote_Nik = basket.getQuoteIn(address(realEstateTnft), NIK_TOKEN_ID);
+
+        uint256[] memory shares = basket.getBatchQuoteIn(_tangibleNFTs, _tokenIds);
+
+        assertEq(shares[0], quote_Joe);
+        assertEq(shares[1], quote_Nik);
+    }
+
+    /// @notice Verifies the various cases where a token is and is not compatible with a basket.
+    function test_baskets_isCompatibleTnft() public {
+        // gold bars TNFT not compatible with RE basket (tnftType does not match)
+        assertEq(basket.isCompatibleTnft(Unreal_TangibleGoldBarsTnft, 1), false);
+        // RE type is compatible with basket, types match
+        assertEq(basket.isCompatibleTnft(address(realEstateTnft), 1), true);
+
+        // Create new basket with RE type, RE feature, and UK location
+        Basket newBasket = new Basket();
+        ERC1967Proxy prox = new ERC1967Proxy(
+            address(newBasket),
+            abi.encodeWithSelector(Basket.initialize.selector,
+                "test basket",
+                "t",
+                address(factoryV2),
+                RE_TNFTTYPE,
+                address(UNREAL_DAI),
+                false,
+                _asSingletonArrayUint(RE_FEATURE_1),
+                UK_ISO,
+                msg.sender
+            )
+        );
+        newBasket = Basket(address(prox));
+
+        // create token in UK without RE feature
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000,
+            1,
+            1,
+            9999,
+            BOB,
+            UK_ISO // XAU
+        );
+        uint256 UKTokenId = tokenIds[0];
+        // create token in US without RE feature
+        tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000,
+            1,
+            1,
+            9998,
+            BOB,
+            US_ISO // US
+        );
+        uint256 USTokenId = tokenIds[0];
+
+        // UK token is not compatible -> missing feature
+        assertEq(newBasket.isCompatibleTnft(address(realEstateTnft), UKTokenId), false);
+        // US token is not compatible -> missing feature
+        assertEq(newBasket.isCompatibleTnft(address(realEstateTnft), USTokenId), false);
+
+        // add RE feature to both tokens
+        _addFeatureToCategory(address(realEstateTnft), UKTokenId, _asSingletonArrayUint(RE_FEATURE_1));
+        _addFeatureToCategory(address(realEstateTnft), USTokenId, _asSingletonArrayUint(RE_FEATURE_1));
+
+        // UK Token is now compatible - same type, feature, and location
+        assertEq(newBasket.isCompatibleTnft(address(realEstateTnft), UKTokenId), true);
+        // US Token is NOT compatible - same type, feature, but different location
+        assertEq(newBasket.isCompatibleTnft(address(realEstateTnft), USTokenId), false);
+    }
+
+    /// @notice Verifies revert when currencyCalculator.getUSDValue returns 0 when Basket::getUSDValue is called.
+    function test_baskets_getUSDValue_0() public {
+        vm.prank(factoryOwner);
+        basketManager.setCurrencyCalculator(address(this));
+
+        vm.expectRevert(abi.encodeWithSelector(IBasket.UnsupportedTNFT.selector, address(realEstateTnft), JOE_TOKEN_ID));
+        basket.getUSDValue(address(realEstateTnft), JOE_TOKEN_ID);
+    }
+
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT is executed.
     function test_baskets_depositTNFT_feature() public {
         uint256[] memory features = new uint256[](1);
         features[0] = RE_FEATURE_1;
@@ -810,7 +1035,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(_basket.featureSupported(RE_FEATURE_1), true);
     }
 
-    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT() is executed.
+    /// @notice Verifies restrictions and correct state changes when Basket::depositTNFT is executed.
     function test_baskets_depositTNFT_feature_multiple() public {
         // create initial token for deployment
         uint256[] memory tokenIds = _mintToken(
@@ -935,7 +1160,7 @@ contract BasketsIntegrationTest is Utility {
         assertEq(_basket.tokenDeposited(address(realEstateTnft), NIK_TOKEN_ID), true);
     }
 
-    /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT() is executed.
+    /// @notice Verifies restrictions and correct state changes when Basket::batchDepositTNFT is executed.
     function test_baskets_batchDepositTNFT() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
@@ -1150,7 +1375,7 @@ contract BasketsIntegrationTest is Utility {
 
     // ~ Redeem Testing ~
 
-    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed.
+    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT is executed.
     function test_baskets_redeemTNFT_single() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
@@ -1175,6 +1400,7 @@ contract BasketsIntegrationTest is Utility {
 
         uint256 feeTaken = _calculateFeeAmount(quote);
 
+        assertNotEq(basket.getTotalValueOfBasket(), 0);
         assertWithinPrecision(
             (basket.totalSupply() * basket.getSharePrice()) / 1 ether,
             basket.getTotalValueOfBasket(),
@@ -1202,6 +1428,9 @@ contract BasketsIntegrationTest is Utility {
 
         uint256[] memory tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 1);
+
+        string[] memory supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 1);
 
         // ~ State changes ~
 
@@ -1246,9 +1475,12 @@ contract BasketsIntegrationTest is Utility {
 
         tokenIdLib = basket.getTokenIdLibrary(address(realEstateTnft));
         assertEq(tokenIdLib.length, 0);
+
+        supportedCurrencies = basket.getSupportedCurrencies();
+        assertEq(supportedCurrencies.length, 1);
     }
 
-    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT() is executed for multiple TNFTs.
+    /// @notice Verifies restrictions and correct state changes when Basket::redeemTNFT is executed for multiple TNFTs.
     function test_baskets_redeemTNFT_multiple() public {
 
         uint256 preBalBasket = realEstateTnft.balanceOf(address(basket));
@@ -1336,6 +1568,12 @@ contract BasketsIntegrationTest is Utility {
         // NOTE: cheaper budget, redeems cheaper token first which is Joe's token
         vm.startPrank(JOE);
         basket.redeemTNFT(basket.balanceOf(JOE), keccak256(abi.encodePacked(address(realEstateTnft), JOE_TOKEN_ID)));
+        vm.stopPrank();
+
+        // restriction check -> can't redeem when a seed request is in progress
+        vm.startPrank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.SeedRequestPending.selector));
+        basket.redeemTNFT(1 ether, keccak256(abi.encodePacked(address(realEstateTnft), JOE_TOKEN_ID)));
         vm.stopPrank();
 
         // This redeem generates a request to vrf. Mock response.
@@ -1789,6 +2027,11 @@ contract BasketsIntegrationTest is Utility {
         uint256 rentClaimable = rentManager.claimableRentForToken(JOE_TOKEN_ID);
         assertEq(rentClaimable, 10_000 * WAD);
 
+        // bob tries to rebase -> revert
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotAuthorized.selector, BOB));
+        basket.rebase();
+
         // grab rent value
         vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase();
@@ -1958,6 +2201,14 @@ contract BasketsIntegrationTest is Utility {
         console2.log("POST SHARE PRICE", post_sharePrice);
     }
 
+    /// @notice Verifies restrictions when calling Basket::notify()
+    function test_baskets_notify_restrictions() public {
+        // only notification dispatcher can call notify()
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotAuthorized.selector, BOB));
+        basket.notify(address(realEstateTnft), 1, 0, 100_000, 200_000, 826);
+    }
+
 
     // ~ withdrawRent ~
 
@@ -2029,10 +2280,15 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Execute withdrawRent ~
 
-        // Force revert
+        // estriction check -> Cannot withdraw more than withdrawable
         vm.prank(factoryOwner);
         vm.expectRevert();
         basket.withdrawRent((withdrawable) + 1);
+
+        // restriction check -> Bob cannot call withdrawRent
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotAuthorized.selector, BOB));
+        basket.withdrawRent(withdrawable);
 
         vm.prank(factoryOwner);
         basket.withdrawRent(withdrawable);
@@ -2138,6 +2394,40 @@ contract BasketsIntegrationTest is Utility {
         emit log_named_uint("basket value", basket.getTotalValueOfBasket());  // 140000000000000000000000
     }
 
+    /// @notice Verifies proper state changes when Basket::updateRebaseIndexManager is called.
+    function test_baskets_updateRebaseIndexManager() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(basket.rebaseIndexManager(), address(222));
+
+        // ~ Execute updateRebaseIndexManager with FactoryOwner ~
+
+        vm.prank(factoryOwner);
+        basket.updateRebaseIndexManager(address(222));
+
+        // ~ Post-state check 1 ~
+
+        assertEq(basket.rebaseIndexManager(), address(222));
+
+        // ~ Execute updateRebaseIndexManager with RebaseController ~
+
+        vm.prank(basketManager.rebaseController());
+        basket.updateRebaseIndexManager(address(333));
+
+        // ~ Post-state check 2 ~
+
+        assertEq(basket.rebaseIndexManager(), address(333));
+    }
+
+    /// @notice Verifies restrictions for Basket::updateRebaseIndexManager() method.
+    function test_baskets_updateRebaseIndexManager_restrictions() public {
+        // random actor cannot call method
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotAuthorized.selector, BOB));
+        basket.updateRebaseIndexManager(address(222));
+    }
+
     /// @notice Verifies correct state changes when disableRebase is executed.
     function test_baskets_disableRebase() public {
 
@@ -2158,6 +2448,14 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check
 
         assertEq(basket.isRebaseDisabled(JOE), true);
+    }
+
+    /// @notice Verifies correct restrictions when disableRebase is executed.
+    function test_baskets_disableRebase_restrictions() public {
+        // Verify permissions
+        vm.prank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.NotAuthorized.selector, BOB));
+        basket.disableRebase(JOE, true);
     }
 
     /// @notice Verifies the overall value of the basket can decrease and as long as rent has increased, rebase is positive.
@@ -2243,6 +2541,10 @@ contract BasketsIntegrationTest is Utility {
         
         // ~ Config ~
 
+        vm.prank(factoryOwner);
+        uint256 requestId = basket.sendRequestForSeed();
+        assertEq(requestId, 0); // nothing happens. No NFTs deposited
+
         // Joe deposits so depositedTnfts.length > 0
         vm.startPrank(JOE);
         realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
@@ -2257,7 +2559,7 @@ contract BasketsIntegrationTest is Utility {
         // ~ Execute sendRequestForSeed ~
 
         vm.prank(factoryOwner);
-        uint256 requestId = basket.sendRequestForSeed();
+        requestId = basket.sendRequestForSeed();
 
         // ~ Post-state check 1 ~
 
@@ -2293,6 +2595,20 @@ contract BasketsIntegrationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(address(basket.primaryRentToken()), address(UNREAL_USDC));
+    }
+
+    /// @notice Verifies restritions when Basket::updatePrimaryRentToken is executed
+    function test_baskets_updatePrimaryRentToken_restrictions() public {
+        // Cannot be address(0)
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.ZeroAddress.selector));
+        basket.updatePrimaryRentToken(address(0), false);
+
+        // force disableRebase failure
+        bytes memory data = abi.encodeWithSignature("disableRebase(address,bool)", address(basket), true);
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.LowLevelCallFailed.selector, data));
+        basket.updatePrimaryRentToken(address(DAI_MOCK), true);
     }
 
     /// @notice Verifies proper state changes when Basket::updatePrimaryRentToken is executed and the new token is a rebase token
@@ -2561,8 +2877,15 @@ contract BasketsIntegrationTest is Utility {
         basket.addTrustedTarget(target, true);
 
         uint256 rentBalance = 1_000 * WAD;
-        bytes memory data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(DAI_MOCK), rentBalance, tokenId);
+        bytes memory data = abi.encodeWithSignature("reinvestNoDeposit(address,address,uint256,uint256)", address(basket), address(DAI_MOCK), rentBalance, tokenId);
 
+        // if value does not increase, revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.TotalValueDecreased.selector));
+        basket.reinvestRent(target, rentBalance, data);
+
+        data = abi.encodeWithSignature("reinvest(address,address,uint256,uint256)", address(basket), address(DAI_MOCK), rentBalance, tokenId);
+        
         vm.prank(factoryOwner);
         basket.reinvestRent(target, rentBalance, data); // Index -> 1.069230769230769230
 
@@ -2579,5 +2902,145 @@ contract BasketsIntegrationTest is Utility {
 
         vm.prank(REBASE_INDEX_MANAGER);
         basket.rebase(); // Index -> 1.069566590126291618
+    }
+
+    /// @notice Verifies restrictions when Basket::reinvestRent is executed.
+    function test_baskets_reinvestRent_restrictions() public {
+        address target = address(this);
+
+        uint256 rentBalance = 1_000 * WAD;
+        bytes memory data;
+
+        // create token of certain value
+        uint256[] memory tokenIds = _createItemAndMint(
+            address(realEstateTnft),
+            100_000_000, //100k gbp
+            1,
+            1,
+            1, // fingerprint
+            ALICE
+        );
+        uint256 tokenId = tokenIds[0];
+
+        // cannot call target that has not been added as trusted
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.InvalidTarget.selector, target));
+        basket.reinvestRent(target, rentBalance, data);
+
+        vm.prank(factoryOwner);
+        basket.addTrustedTarget(target, true);
+
+        // if low level call fails, revert
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.LowLevelCallFailed.selector, data));
+        basket.reinvestRent(target, rentBalance, data);
+    }
+
+
+    // ~ updateRentFee ~
+
+    /// @notice Verifies proper state changes when Basket::updateRentFee is executed.
+    function test_baskets_updateRentFee() public {
+
+        // ~ Pre-state check
+
+        assertEq(basket.rentFee(), 10_00);
+
+        // ~ Execute updateRentFee ~
+
+        vm.prank(factoryOwner);
+        basket.updateRentFee(20_00);
+
+        // ~ Post-state check
+
+        assertEq(basket.rentFee(), 20_00);
+    }
+
+    /// @notice Covers all necessary restrictions when Basket::updateRentFee is executed.
+    function test_baskets_updateRentFee_restrictions() public {
+        // rent fee cannot exceed 50% (50_00)
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.FeeTooHigh.selector, 60_00));
+        basket.updateRentFee(60_00);
+
+        // bob cannot call updateRentFee
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basket.updateRentFee(20_00);
+    }
+
+
+    // ~ setWithdrawRole ~
+
+    /// @notice Verifies proper state changes when Basket::setWithdrawRole is executed.
+    function test_baskets_setWithdrawRole() public {
+
+        // ~ Pre-state check
+
+        assertEq(basket.canWithdraw(BOB), false);
+
+        // ~ Execute setWithdrawRole ~
+
+        vm.prank(factoryOwner);
+        basket.setWithdrawRole(BOB, true);
+
+        // ~ Post-state check
+
+        assertEq(basket.canWithdraw(BOB), true);
+    }
+
+    /// @notice Covers all necessary restrictions when Basket::setWithdrawRole is executed.
+    function test_baskets_setWithdrawRole_restrictions() public {
+        // cannot call with address(0)
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.ZeroAddress.selector));
+        basket.setWithdrawRole(address(0), true);
+
+        // bob cannot call updateRentFee
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basket.setWithdrawRole(BOB, true);
+    }
+
+    /// @notice Verifies proper state when BasketsVrfConsumer::updateOperator is called.
+    function test_baskets_basketsVrfConsumer_updateOperator() public {
+        assertEq(basketVrfConsumer.operator(), GELATO_OPERATOR);
+        vm.prank(factoryOwner);
+        basketVrfConsumer.updateOperator(JOE);
+        assertEq(basketVrfConsumer.operator(), JOE);
+    }
+
+    /// @notice Verifies restrictions when BasketsVrfConsumer::updateOperator is called.
+    function test_baskets_basketsVrfConsumer_updateOperator_restrictions() public {
+        // cannot call with address(0)
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(BasketsVrfConsumer.ZeroAddress.selector));
+        basketVrfConsumer.updateOperator(address(0));
+
+        // bob cannot call updateRentFee
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basketVrfConsumer.updateOperator(JOE);
+    }
+
+    /// @notice Verifies proper state when Basket::addTrustedTarget is called.
+    function test_baskets_addTrustedTarget() public {
+        assertEq(basket.trustedTarget(BOB), false);
+        vm.prank(factoryOwner);
+        basket.addTrustedTarget(BOB, true);
+        assertEq(basket.trustedTarget(BOB), true);
+    }
+
+    /// @notice Verifies restrictions when Basket::addTrustedTarget is called
+    function test_baskets_addTrustedTarget_restrictions() public {
+        // cannot call with address(0)
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.ZeroAddress.selector));
+        basket.addTrustedTarget(address(0), true);
+
+        // bob cannot call updateRentFee
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basket.addTrustedTarget(BOB, true);
     }
 }
