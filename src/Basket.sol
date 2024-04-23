@@ -691,7 +691,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param _tokenId TokenId of token.
      * @return If true, token is compatible and can be deposited into this basket contract.
      */
-    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public returns (bool) {
+    function isCompatibleTnft(address _tangibleNFT, uint256 _tokenId) public view returns (bool) {
         // a. Check supported TNFTType (category)
         if (ITangibleNFTExt(_tangibleNFT).tnftType() != tnftType) return false;
 

@@ -532,13 +532,13 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Helper method for calling Basket::reinvestRent method.
-    function reinvestNoDeposit(address basket, address rentToken, uint256 amount, uint256 tokenId) external {
+    function reinvestNoDeposit(address basket, address rentToken, uint256 amount) external {
         // transfer tokens here
         IERC20(rentToken).transferFrom(basket, address(this), amount);
     }
 
     /// @notice Helper method to test edge case when CurrencyCalculator returns 0 when Basket::getUSDValue is called.
-    function getUSDValue(address,uint256) external returns (uint256) {
+    function getUSDValue(address,uint256) external pure returns (uint256) {
         return 0;
     }
 
@@ -597,7 +597,7 @@ contract BasketsIntegrationTest is Utility {
         features[1] = RE_FEATURE_1;
 
         vm.expectRevert(abi.encodeWithSelector(IBasket.ZeroAddress.selector));
-        ERC1967Proxy prox = new ERC1967Proxy(
+        new ERC1967Proxy(
             address(newBasket),
             abi.encodeWithSelector(Basket.initialize.selector,
                 "test basket",
@@ -1398,7 +1398,7 @@ contract BasketsIntegrationTest is Utility {
 
         // ~ Pre-state check ~
 
-        uint256 feeTaken = _calculateFeeAmount(quote);
+        //uint256 feeTaken = _calculateFeeAmount(quote);
 
         assertNotEq(basket.getTotalValueOfBasket(), 0);
         assertWithinPrecision(
@@ -1854,9 +1854,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(),  0);
 
         // get usd value of token and quote for deposit
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
-        uint256 feeTaken = _calculateFeeAmount(quote);
+        //uint256 feeTaken = _calculateFeeAmount(quote);
 
         // ~ Joe deposits ~
 
@@ -1931,9 +1931,9 @@ contract BasketsIntegrationTest is Utility {
         assertEq(basket.totalSupply(),  0);
 
         // get usd value of token
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
-        uint256 feeTaken = _calculateFeeAmount(quote);
+        //uint256 feeTaken = _calculateFeeAmount(quote);
 
         // ~ Joe deposits ~
 
@@ -2777,7 +2777,6 @@ contract BasketsIntegrationTest is Utility {
         // ~ Config ~
 
         uint256 amountRent = 10_000 * WAD;
-        uint256 amountRentUSDC = 10_000 * USD;
 
         // create token of certain value
         uint256[] memory tokenIds = _createItemAndMint(
@@ -2877,7 +2876,7 @@ contract BasketsIntegrationTest is Utility {
         basket.addTrustedTarget(target, true);
 
         uint256 rentBalance = 1_000 * WAD;
-        bytes memory data = abi.encodeWithSignature("reinvestNoDeposit(address,address,uint256,uint256)", address(basket), address(DAI_MOCK), rentBalance, tokenId);
+        bytes memory data = abi.encodeWithSignature("reinvestNoDeposit(address,address,uint256)", address(basket), address(DAI_MOCK), rentBalance);
 
         // if value does not increase, revert
         vm.prank(factoryOwner);
@@ -2912,7 +2911,7 @@ contract BasketsIntegrationTest is Utility {
         bytes memory data;
 
         // create token of certain value
-        uint256[] memory tokenIds = _createItemAndMint(
+        _createItemAndMint(
             address(realEstateTnft),
             100_000_000, //100k gbp
             1,
@@ -2920,7 +2919,6 @@ contract BasketsIntegrationTest is Utility {
             1, // fingerprint
             ALICE
         );
-        uint256 tokenId = tokenIds[0];
 
         // cannot call target that has not been added as trusted
         vm.prank(factoryOwner);

@@ -9,7 +9,7 @@ import { FactoryModifiers } from "@tangible/abstract/FactoryModifiers.sol";
 import { IFactory } from "@tangible/interfaces/IFactory.sol";
 
 // local imports
-import { GelatoVRFConsumerBase } from "./abstract/GelatoVRFConsumerBase.sol";
+import { GelatoVRFConsumerBaseUpgradeable } from "./abstract/GelatoVRFConsumerBaseUpgradeable.sol";
 import { IBasketsVrfConsumer } from "./interfaces/IBasketsVrfConsumer.sol";
 import { IBasket } from "./interfaces/IBasket.sol";
 import { IBasketManager } from "./interfaces/IBasketManager.sol";
@@ -19,7 +19,7 @@ import { IBasketManager } from "./interfaces/IBasketManager.sol";
  * @author Chase Brown
  * @notice This contract handles all vrf requests from all basket contracts.
  */
-contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSUpgradeable, FactoryModifiers {
+contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgradeable, UUPSUpgradeable, FactoryModifiers {
 
     // ---------------
     // State Variables
@@ -76,12 +76,13 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBase, UUPSU
      * @notice Initializes BasketVrfConsumer contract.
      * @param _factory Contract address of Factory contract.
      * @param _operator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
+     * @param _testnetChainId Testnet Chain Id. This allows for debugging and manual entropy fulfillment.
      */
-    function initialize(address _factory, address _operator, uint256 chainId) external initializer {
+    function initialize(address _factory, address _operator, uint256 _testnetChainId) external initializer {
         if (_factory == address(0) || _operator == address(0)) revert ZeroAddress();
         __FactoryModifiers_init(_factory);
+        __GelatoVRFConsumerBase_init(_testnetChainId);
         operator = _operator;
-        testnetChainId = chainId;
     }
 
     
