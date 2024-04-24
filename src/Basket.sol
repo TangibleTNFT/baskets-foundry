@@ -374,7 +374,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @dev If the new rent token is a rebase token, this contract will need to opt out of rebasing. By setting
      * `_isRebaseToken` to true, this contract will call disableRebase via a low level call.
      */
-    function updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) external onlyFactoryOwner {
+    function updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) external nonReentrant onlyFactoryOwner {
         if (_primaryRentToken == address(0)) revert ZeroAddress();
         _updatePrimaryRentToken(_primaryRentToken, _isRebaseToken);
     }
@@ -427,7 +427,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice This method allows a permissioned address to withdraw a specified amount of claimable rent from this basket.
      * @param _withdrawAmount Amount of rent to withdraw.
      */
-    function withdrawRent(uint256 _withdrawAmount) external onlyCanWithdraw {
+    function withdrawRent(uint256 _withdrawAmount) external nonReentrant onlyCanWithdraw {
         _transferRent(msg.sender, _withdrawAmount);
     }
 
@@ -510,7 +510,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param rentBalance Amount of rent balance being allocated for reinvestment.
      * @param data calldata payload for function call.
      */
-    function reinvestRent(address target, uint256 rentBalance, bytes calldata data) external onlyCanWithdraw returns (uint256 amountUsed) {
+    function reinvestRent(
+        address target,
+        uint256 rentBalance,
+        bytes calldata data
+    ) external nonReentrant onlyCanWithdraw returns (uint256 amountUsed) {
         if (!trustedTarget[target]) revert InvalidTarget(target);
 
         uint256 preBal = primaryRentToken.balanceOf(address(this));
