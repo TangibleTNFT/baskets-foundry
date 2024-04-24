@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 // oz imports
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
@@ -74,15 +74,15 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgrade
 
     /**
      * @notice Initializes BasketVrfConsumer contract.
-     * @param _factory Contract address of Factory contract.
-     * @param _operator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
+     * @param initialFactory Contract address of Factory contract.
+     * @param initialOperator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
      * @param _testnetChainId Testnet Chain Id. This allows for debugging and manual entropy fulfillment.
      */
-    function initialize(address _factory, address _operator, uint256 _testnetChainId) external initializer {
-        if (_factory == address(0) || _operator == address(0)) revert ZeroAddress();
-        __FactoryModifiers_init(_factory);
+    function initialize(address initialFactory, address initialOperator, uint256 _testnetChainId) external initializer {
+        if (initialFactory == address(0) || initialOperator == address(0)) revert ZeroAddress();
+        __FactoryModifiers_init(initialFactory);
         __GelatoVRFConsumerBase_init(_testnetChainId);
-        operator = _operator;
+        operator = initialOperator;
     }
 
     
@@ -111,9 +111,9 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgrade
     /**
      * @notice This method is used to update `operator` in the event GelatoVRF needs to be reset
      */
-    function updateOperator(address _operator) external onlyFactoryOwner {
-        if (_operator == address(0)) revert ZeroAddress();
-        operator = _operator;
+    function updateOperator(address newOperator) external onlyFactoryOwner {
+        if (newOperator == address(0)) revert ZeroAddress();
+        operator = newOperator;
     }
 
     /**

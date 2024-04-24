@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -236,14 +236,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         if (_factoryProvider == address(0)) revert ZeroAddress();
         
         // If _features is not empty, add features
-        for (uint256 i; i < _features.length;) {
+        for (uint256 i; i < _features.length; ++i) {
             uint256 feature = _features[i];
             supportedFeatures.push(feature);
             featureSupported[feature] = true;
-
-            unchecked {
-                ++i;
-            }
         }
 
         depositFee = 50; // 0.5%
@@ -282,11 +278,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         basketShares = new uint256[](length);
 
-        for (uint256 i; i < length;) {
+        for (uint256 i; i < length; ++i) {
             basketShares[i] = _depositTNFT(_tangibleNFTs[i], _tokenIds[i], msg.sender);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -450,17 +443,16 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 len = _tangibleNFTs.length;
         uint256 depFee = uint256(depositFee);
         shares = new uint256[](len);
-        for (uint i; i < len;) {
+        for (uint i; i < len; ++i) {
             // calculate usd value of TNFT with 18 decimals
             uint256 usdValue = getUSDValue(_tangibleNFTs[i], _tokenIds[i]);
 
             // calculate shares for depositor
             uint256 share = _quoteShares(usdValue);
-            uint256 fee = (share * depFee) / 100_00;
 
             unchecked {
+                uint256 fee = (share * depFee) / 100_00;
                 shares[i] = share - fee;
-                ++i;
             }
         }
     }
@@ -646,15 +638,12 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getTotalValueOfBasket() public view returns (uint256 totalValue) {
         // get total value of nfts in basket by currency
         uint256 len = supportedCurrencies.length;
-        for (uint256 i; i < len;) {
+        for (uint256 i; i < len; ++i) {
             string memory currency = supportedCurrencies[i];
             uint256 nativeValue = totalNftValueByCurrency[currency];
             if (nativeValue != 0) {
                 (uint256 price, uint256 priceDecimals) = IBasketManager(basketManager).currencyCalculator().getUsdExchangeRate(currency);
                 totalValue += (price * nativeValue * 10 ** 18) / 10 ** priceDecimals / 10 ** currencyDecimals[currency];
-            }
-            unchecked {
-                ++i;
             }
         }
         // get value of rent accrued by this contract.
@@ -668,17 +657,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     function getRentBal() public view returns (uint256 totalRent) {
         // iterate through all claimable rent for each tokenId in the contract.
         uint256 length = tnftsSupported.length;
-        for (uint256 i; i < length;) {
+        for (uint256 i; i < length; ++i) {
             address tnft = tnftsSupported[i];
 
             uint256 claimable = _getRentManager(tnft).claimableRentForTokenBatchTotal(tokenIdLibrary[tnft]);
 
             if (claimable > 0) {
                 totalRent += claimable;
-            }
-
-            unchecked {
-                ++i;
             }
         }
 
@@ -698,14 +683,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         uint256 length = supportedFeatures.length;
 
         // b. Check supported features, if any (sub-category)
-        for (uint256 i; i < length;) {
+        for (uint256 i; i < length; ++i) {
 
             if (!ITangibleNFTExt(_tangibleNFT).tokenFeatureAdded(_tokenId, supportedFeatures[i]).added) {
                 return false;
-            }
-
-            unchecked {
-                ++i;
             }
         }
 
@@ -835,9 +816,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         }
 
         // charge deposit fee.
-        uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
-
         unchecked {
+            uint256 feeShare = (basketShare * uint256(depositFee)) / 100_00;
             basketShare -= feeShare;
         }
 
@@ -981,30 +961,28 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
             // iterate through all TNFT contracts supported by this basket.
             uint256 supportedLength = tnftsSupported.length;
-            for (uint256 i; i < supportedLength;) {
+            for (uint256 i; i < supportedLength; ++i) {
                 address tnft = tnftsSupported[i];
+                uint256 totalClaimable;
 
                 // for each TNFT supported, make a batch call to the rent manager for all rent claimable for the array of tokenIds.
                 uint256[] memory claimables = _getRentManager(tnft).claimableRentForTokenBatch(tokenIdLibrary[tnft]);
 
                 // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
                 uint256 claimablesLength = claimables.length;
-                for (uint256 j; j < claimablesLength;) {
+                for (uint256 j; j < claimablesLength; ++j) {
                     uint256 amountClaimable = claimables[j];
 
                     if (amountClaimable > 0) {
                         claimableRent[counter] = RentData(tnft, tokenIdLibrary[tnft][j], amountClaimable);
                         unchecked {
+                            totalClaimable += amountClaimable;
                             ++counter;
                         }
                     }
-                    unchecked {
-                        ++j;
-                    }
                 }
-                unchecked {
-                    ++i;
-                }
+                // if total amount claimable in claimableRent + balance is sufficient, break loop and start claiming.
+                if (totalClaimable + primaryRentToken.balanceOf(address(this)) >= _withdrawAmount) break;
             }
 
             // start iterating through the master claimable rent array claiming rent for each token.
@@ -1107,11 +1085,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @return exists -> If address exists in `tnftsSupported`, will be true. Otherwise false.
      */
     function _isSupportedTnft(address _tnft) internal view returns (uint256 index, bool exists) {
-        for(uint256 i; i < tnftsSupported.length;) {
+        for (uint256 i; i < tnftsSupported.length; ++i) {
             if (tnftsSupported[i] == _tnft) return (i, true);
-            unchecked {
-                ++i;
-            }
         }
         return (0, false);
     }

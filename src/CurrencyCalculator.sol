@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
-
-// oz imports
+pragma solidity ^0.8.23;
 
 // chainlink imports
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -12,7 +10,6 @@ import { ITangiblePriceManager } from "@tangible/interfaces/ITangiblePriceManage
 import { ITangibleNFT, ITangibleNFTExt } from "@tangible/interfaces/ITangibleNFT.sol";
 import { ICurrencyFeedV2 } from "@tangible/interfaces/ICurrencyFeedV2.sol";
 import { IPriceOracle } from "@tangible/interfaces/IPriceOracle.sol";
-
 
 /**
  * @title CurrencyCalculator
@@ -84,8 +81,7 @@ contract CurrencyCalculator {
     }
 
     /**
-     * @notice This method is an internal view method that fetches the PriceOracle contract for a specified TNFT contract.
-     * @param _tangibleNFT TNFT contract address we want the PriceOracle for.
+        * @param _tangibleNFT TNFT contract address we want the PriceOracle for.
      * @return PriceOracle contract reference.
      */
     function _getOracle(address _tangibleNFT) internal view returns (IPriceOracle) {

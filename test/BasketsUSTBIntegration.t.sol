@@ -545,13 +545,13 @@ contract BasketsUSTBIntegrationTest is Utility {
     }
 
     /// @notice Helper method for calling Basket::reinvestRent method.
-    function reinvest(address basket, address rentToken, uint256 amount, uint256 tokenId) external {
+    function reinvest(address _basket, address rentToken, uint256 amount, uint256 tokenId) external {
         // transfer tokens here
-        IERC20(rentToken).transferFrom(basket, address(this), amount);
+        IERC20(rentToken).transferFrom(_basket, address(this), amount);
 
         // deposit into basket
-        realEstateTnft.approve(address(basket), tokenId);
-        Basket(basket).depositTNFT(address(realEstateTnft), tokenId);
+        realEstateTnft.approve(address(_basket), tokenId);
+        Basket(_basket).depositTNFT(address(realEstateTnft), tokenId);
     }
 
 
@@ -786,9 +786,9 @@ contract BasketsUSTBIntegrationTest is Utility {
         assertEq(basket.totalSupply(),  0);
 
         // get usd value of token
-        uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
+        //uint256 usdValue = _getUsdValueOfNft(address(realEstateTnft), tokenId);
         uint256 quote = basket.getQuoteIn(address(realEstateTnft), tokenId);
-        uint256 feeTaken = _calculateFeeAmount(quote);
+        //uint256 feeTaken = _calculateFeeAmount(quote);
 
         // ~ Joe deposits ~
 
@@ -1001,11 +1001,9 @@ contract BasketsUSTBIntegrationTest is Utility {
 
         // _deal category owner USDC to deposit into rentManager
         uint256 amount = 10_000 * WAD;
-        uint256 fullRentAmount = amount * 2;
+        //uint256 fullRentAmount = amount * 2;
 
         _deal(address(USTB), TANGIBLE_LABS, amount);
-
-        uint256 rentManagerPreBal = USTB.balanceOf(address(rentManager));
 
         // deposit rent for that TNFT (no vesting)
         vm.startPrank(TANGIBLE_LABS);
@@ -1392,7 +1390,6 @@ contract BasketsUSTBIntegrationTest is Utility {
         // ~ Config ~
 
         uint256 amountRent = 10_000 * WAD;
-        uint256 amountRentUSDC = 10_000 * USD;
 
         // create token of certain value
         uint256[] memory tokenIds = _createItemAndMint(

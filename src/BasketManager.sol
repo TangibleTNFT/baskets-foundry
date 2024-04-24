@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 // oz imports
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -233,12 +233,9 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
         if (fetchBasketByHash[_hashCache] != address(0)) revert BasketAlreadyExists();
 
         // check features are valid.
-        for (uint256 i; i < _features.length;) {
+        for (uint256 i; i < _features.length; ++i) {
             if (!ITNFTMetadata(IFactory(factory()).tnftMetadata()).featureInType(_tnftType, _features[i]))
                 revert FeatureNotSupportedInType(_tnftType, _features[i]);
-            unchecked {
-                ++i;
-            }
         }
 
         initData = abi.encodeWithSelector(
@@ -276,7 +273,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
         fetchBasketByHash[_hashCache] = address(newBasketBeacon);
 
         // transfer initial TNFT from newBasketBeacon owner to this contract and approve transfer of TNFT to new basket
-        for (uint256 i; i < _tokenIdDeposit.length;) {
+        for (uint256 i; i < _tokenIdDeposit.length; ++i) {
             IPriceOracle oracle = ITangiblePriceManager(address(IFactory(factory()).priceManager())).oracleForCategory(ITangibleNFT(_tangibleNFTDeposit[i]));
             IRWAPriceNotificationDispatcher notificationDispatcher = IGetNotificationDispatcher(address(oracle)).notificationDispatcher();
 
@@ -286,9 +283,6 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
 
             IERC721(_tangibleNFTDeposit[i]).transferFrom(msg.sender, address(this), _tokenIdDeposit[i]);
             IERC721(_tangibleNFTDeposit[i]).approve(address(newBasketBeacon), _tokenIdDeposit[i]);
-            unchecked {
-                ++i;
-            }
         }
 
         // call batchDepositTNFT
@@ -421,15 +415,10 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function _verifySortedNoDuplicates(uint256[] memory _features) internal pure returns (bool isSorted) {
         uint256 length = _features.length - 1;
-        for (uint256 i; i < length;) {
-
+        for (uint256 i; i < length; ++i) {
             // if greater-than => not sorted
             // if equal-to => duplicates
             if (_features[i] >= _features[i+1]) return false;
-
-            unchecked {
-                ++i;
-            }
         }
         return true;
     }

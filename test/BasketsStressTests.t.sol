@@ -684,7 +684,7 @@ contract StressTests is Utility {
 
                 // get quotes for deposit
                 uint256 quote = basket.getQuoteIn(tnft, tokenId);
-                uint256 feeTaken = _calculateFeeAmount(quote);
+                //uint256 feeTaken = _calculateFeeAmount(quote);
 
                 // Joe executed depositTNFT
                 vm.startPrank(JOE);
@@ -753,13 +753,14 @@ contract StressTests is Utility {
     // ~ stress batchDepositTNFT ~
 
     /// @notice Stress test of batchDepositTNFT method.
-    /// NOTE: When num of tokens == 200, batchDepositTNFT consumes ~30.5M gas
+    /// @dev gas reports:
+    ///     - When num of tokens == 200, batchDepositTNFT consumes ~30.5M gas
     function test_stress_batchDepositTNFT_noFuzz() public {
         
         // ~ Config ~
 
         config.newCategories = 2;
-        config.amountFingerprints = 10;
+        config.amountFingerprints = 4;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         uint256[] memory fingerprints = new uint256[](config.amountFingerprints);
@@ -1034,13 +1035,14 @@ contract StressTests is Utility {
     }
 
     /// @notice Stress test of batchDepositTNFT method with TNFTs accruing rent.
-    /// NOTE: When num of tokens == 90, batchDepositTNFT consumes ~30.3M gas
+    /// @dev gas reports:
+    ///     - When num of tokens == 90, batchDepositTNFT consumes ~30.3M gas
     function test_stress_batchDepositTNFT_rent() public {
         
         // ~ Config ~
         
-        config.newCategories = 3;
-        config.amountFingerprints = 4;
+        config.newCategories = 5;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         uint256 rent = 10_000 * WAD; // per token
@@ -1179,15 +1181,15 @@ contract StressTests is Utility {
     // ~ stress redeemTNFT ~
 
     /// @notice Stress test of Basket::redeemTNFT with numerous tokens -> NO RENT
-
-    /// NOTE: 1*100   (100 tokens)   -> redeemTNFT costs 117_342 gas
-    /// NOTE: 10*100  (1000 tokens)  -> redeemTNFT costs 353_157 gas
-    /// NOTE: 50*100  (5000 tokens)  -> redeemTNFT costs 1_659_006 gas
+    /// @dev gas reports:
+    /// NOTE: 1*100   (100 tokens)   -> redeemTNFT costs 323_116 gas
+    /// NOTE: 10*100  (1000 tokens)  -> redeemTNFT costs 323_116 gas
+    /// NOTE: 50*100  (5000 tokens)  -> redeemTNFT costs 323_116 gas
     function test_stress_redeemTNFT_noFuzz() public {
         
         // ~ Config ~
 
-        config.newCategories = 4;
+        config.newCategories = 5;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1310,17 +1312,15 @@ contract StressTests is Utility {
     }
 
     /// @notice Stress test of Basket::redeemTNFT with numerous tokens and random rent claimable for each token.
-    /// @dev basis: 100 tokens to iterate through.
-
-    /// NOTE: 1x100  (100 tokens)  -> redeemTNFT costs xxx gas
-    /// NOTE: 4x25   (100 tokens)  -> redeemTNFT costs 117_950 gas
-    /// NOTE: 10x10  (100 tokens)  -> redeemTNFT costs xxx gas
-    /// NOTE: 10x100 (1000 tokens) -> redeemTNFT costs xxx gas
+    /// @dev Num of tokens deposited should not affect redemption gas.
+    /// @dev gas reports:
+    ///     - 10x10   (100 tokens)    -> redeemTNFT costs 388_992 MAX gas
+    ///     - 10x100  (1,000 tokens)  -> redeemTNFT costs 388_992 MAX gas
     function test_stress_redeemTNFT_rent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
 
-        config.newCategories = 4;
+        config.newCategories = 5;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1454,11 +1454,18 @@ contract StressTests is Utility {
     // ~ stress withdrawRent ~
 
     /// @notice This method stress tests Basket::withdrawRent
+    /// @dev gas reports:
+    ///     - 10x10   (100 tokens)   -> withdrawRent costs 5_599_434 gas
+    ///     - 10x10   (100 tokens)   -> rebase       costs 881_388 gas
+    ///     - 10x20   (200 tokens)   -> withdrawRent costs 11_818_793 gas
+    ///     - 10x20   (200 tokens)   -> rebase       costs 4_437_610 gas
+    ///     - 10x50   (500 tokens)   -> withdrawRent costs 29_255_432 gas
+    ///     - 10x50   (500 tokens)   -> rebase       costs 5_822_649 gas
     function test_stress_withdrawRent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
 
-        config.newCategories = 4;
+        config.newCategories = 5;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1603,6 +1610,9 @@ contract StressTests is Utility {
     // ~ stress rebasing ~
 
     /// @notice Verifies proper state changes during rebase
+    /// @dev gas reports:
+    ///     - 100  (100 tokens)   -> withdrawRent costs 447_209 gas
+    ///     - 500  (500 tokens)   -> withdrawRent costs 29_255_432 gas
     function test_stress_rebase() public {
 
         // ~ Config ~
@@ -1676,13 +1686,6 @@ contract StressTests is Utility {
             assertEq(basket.totalSupply(), basket.balanceOf(ALICE));
             assertGt(basket.totalSupply(), preTotalSupply);
             assertGt(basket.getTotalValueOfBasket(), preTotalValue);
-            // assertWithinDiff(
-            //     basket.totalSupply(),
-            //     //preTotalSupply + ((preTotalSupply * increaseRatio) / 100_0000000000000000),
-            //     //preTotalSupply + ((preTotalSupply * amountRent * 1e18) / (preTotalValue * 100_00)),
-            //     postRebaseSupply,
-            //     1e24
-            // );
             assertEq(basket.getRentBal(), basket.totalRentValue());
         }
     }

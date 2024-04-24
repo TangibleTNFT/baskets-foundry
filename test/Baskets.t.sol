@@ -522,19 +522,19 @@ contract BasketsIntegrationTest is Utility {
     }
 
     /// @notice Helper method for calling Basket::reinvestRent method.
-    function reinvest(address basket, address rentToken, uint256 amount, uint256 tokenId) external {
+    function reinvest(address _basket, address rentToken, uint256 amount, uint256 tokenId) external {
         // transfer tokens here
-        IERC20(rentToken).transferFrom(basket, address(this), amount);
+        IERC20(rentToken).transferFrom(_basket, address(this), amount);
 
         // deposit into basket
-        realEstateTnft.approve(address(basket), tokenId);
-        Basket(basket).depositTNFT(address(realEstateTnft), tokenId);
+        realEstateTnft.approve(address(_basket), tokenId);
+        Basket(_basket).depositTNFT(address(realEstateTnft), tokenId);
     }
 
     /// @notice Helper method for calling Basket::reinvestRent method.
-    function reinvestNoDeposit(address basket, address rentToken, uint256 amount) external {
+    function reinvestNoDeposit(address _basket, address rentToken, uint256 amount) external {
         // transfer tokens here
-        IERC20(rentToken).transferFrom(basket, address(this), amount);
+        IERC20(rentToken).transferFrom(_basket, address(this), amount);
     }
 
     /// @notice Helper method to test edge case when CurrencyCalculator returns 0 when Basket::getUSDValue is called.
