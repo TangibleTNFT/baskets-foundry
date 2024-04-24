@@ -39,9 +39,11 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgrade
     // ------
 
     /// @notice Emitted when makeRequestForRandomWords is executed.
-    event RequestSubmitted(uint256 requestId, address basket);
+    event RequestSubmitted(uint256 indexed requestId, address indexed basket);
     /// @notice Emitted when fulfillRandomWords is executed.
-    event RequestFulfilled(uint256 requestId, address basket);
+    event RequestFulfilled(uint256 indexed requestId, address indexed basket);
+    /// @notice Emitted when the operator variable is updated.
+    event OperatorUpdated(address indexed newOperator);
 
     /// @dev This error is emitted when address(0) is detected on an input.
     error ZeroAddress();
@@ -113,6 +115,7 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgrade
      */
     function updateOperator(address newOperator) external onlyFactoryOwner {
         if (newOperator == address(0)) revert ZeroAddress();
+        emit OperatorUpdated(newOperator);
         operator = newOperator;
     }
 

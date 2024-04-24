@@ -103,12 +103,22 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
     // Events
     // ------
 
-    /**
-     * @notice This event is emitted when a new basket instance is created // beaconProxy deployed.
-     * @param creator Address of deployer.
-     * @param basket Address of basket deployed.
-     */
+    /// @notice Emitted when a new basket instance is created.
     event BasketCreated(address indexed creator, address indexed basket);
+    /// @notice Emitted when the primaryRentToken variable is updated.
+    event PrimaryRentTokenUpdated(address indexed newPrimaryRentToken);
+    /// @notice Emitted when the rebaseController is updated.
+    event RebaseControllerUpdated(address indexed newController);
+    /// @notice Emitted when the basket implementation address is updated on the upgradeable beacon.
+    event BasketImplementationUpdated(address indexed newBasketImplementation);
+    /// @notice Emitted when the basketsVrfConsumer address is updated.
+    event BasketsVrfConsumerUpdated(address indexed newBasketsVrfConsumer);
+    /// @notice Emitted when the RevenueDistributor address is updated.
+    event RevenueDistributorUpdated(address indexed newRevenueDistributor);
+    /// @notice Emitted when the CurrencyCalculator address is updated.
+    event CurrencyCalculatorUpdated(address indexed newCurrencyCalculator);
+    /// @notice Emitted when the featureLimit variable is updated.
+    event FeatureLimitUpdated(uint256 indexed newLimit);
 
 
     // ------
@@ -171,7 +181,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
 
         __FactoryModifiers_init(_factory);
         __ReentrancyGuard_init();
-        
+
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
             address(this)
@@ -302,6 +312,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function updatePrimaryRentToken(address _primaryRentToken, bool _isRebaseToken) external onlyFactoryOwner {
         if (_primaryRentToken == address(0)) revert ZeroAddress();
+        emit PrimaryRentTokenUpdated(_primaryRentToken);
         primaryRentToken = _primaryRentToken;
         rentIsRebaseToken = _isRebaseToken;
     }
@@ -312,6 +323,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function setRebaseController(address _controller) external onlyFactoryOwner {
         if (_controller == address(0)) revert ZeroAddress();
+        emit RebaseControllerUpdated(_controller);
         rebaseController = _controller;
     }
 
@@ -334,6 +346,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function updateBasketImplementation(address _newBasketImp) external onlyFactoryOwner {
         if (_newBasketImp == address(0)) revert ZeroAddress();
+        emit BasketImplementationUpdated(_newBasketImp);
         beacon.upgradeTo(_newBasketImp);
     }
 
@@ -343,6 +356,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function setBasketsVrfConsumer(address _basketsVrfConsumer) external onlyFactoryOwner {
         if (_basketsVrfConsumer == address(0)) revert ZeroAddress();
+        emit BasketsVrfConsumerUpdated(_basketsVrfConsumer);
         basketsVrfConsumer = _basketsVrfConsumer;
     }
 
@@ -352,6 +366,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function setRevenueDistributor(address _revenueDistributor) external onlyFactoryOwner {
         if (_revenueDistributor == address(0)) revert ZeroAddress();
+        emit RevenueDistributorUpdated(_revenueDistributor);
         revenueDistributor = _revenueDistributor;
     }
 
@@ -361,6 +376,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      */
     function setCurrencyCalculator(address _currencyCalculator) external onlyFactoryOwner {
         if (_currencyCalculator == address(0)) revert ZeroAddress();
+        emit CurrencyCalculatorUpdated(_currencyCalculator);
         currencyCalculator = ICurrencyCalculator(_currencyCalculator);
     }
 
@@ -369,6 +385,7 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
      * @param _limit New feature limit.
      */
     function setFeatureLimit(uint256 _limit) external onlyFactoryOwner {
+        emit FeatureLimitUpdated(_limit);
         featureLimit = _limit;
     }
 

@@ -8,6 +8,85 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 interface IBasket is IERC20, IERC20Metadata {
 
     // ------
+    // Events
+    // ------
+
+    /**
+     * @notice This event is emitted when a TNFT is deposited into this basket.
+     * @param prevOwner Previous owner before deposit. Aka depositor.
+     * @param tnft TNFT contract address of token being deposited.
+     * @param tokenId TokenId identifier of token being deposited.
+     */
+    event TNFTDeposited(address indexed prevOwner, address indexed tnft, uint256 indexed tokenId);
+
+    /**
+     * @notice This event is emitted when a TNFT is redeemed from this basket.
+     * @param newOwner New owner before deposit. Aka redeemer.
+     * @param tnft TNFT contract address of token being redeemed.
+     * @param tokenId TokenId identifier of token being redeemed.
+     */
+    event TNFTRedeemed(address indexed newOwner, address indexed tnft, uint256 indexed tokenId);
+
+    /**
+     * @notice This event is emitted when the price of a TNFT token is updated by the oracle.
+     * @param tnft TNFT contract address of token being updated.
+     * @param tokenId TokenId identifier of token being updated.
+     * @param oldPrice Old USD price of TNFT token.
+     * @param newPrice New USD price of TNFT token.
+     */
+    event PriceNotificationReceived(address indexed tnft, uint256 indexed tokenId, uint256 oldPrice, uint256 newPrice);
+
+    /**
+     * @notice This event is emitted when a successful request to vrf has been made.
+     * @param requestId Request identifier returned by Gelato's Vrf Coordinator contract.
+     */
+    event RequestSentToVrf(uint256 indexed requestId);
+
+    /**
+     * @notice This event is emitted when `fulfillRandomSeed` is successfully executed and a new `nextToRedeem` was assigned.
+     * @param tnft Tangible NFT contract address of NFT redeemable.
+     * @param tokenId TokenId of NFT redeemable.
+     */
+    event RedeemableChosen(address indexed tnft, uint256 indexed tokenId);
+
+    /**
+     * @notice This event is emitted when `rebase` is successfully executed.
+     * @param caller msg.sender that called `rebase`
+     * @param newTotalRentValue New value assigned to `totalRentValue`.
+     * @param newRebaseIndex New multiplier used for calculating rebase tokens.
+     */
+    event RebaseExecuted(address indexed caller, uint256 newTotalRentValue, uint256 newRebaseIndex);
+
+    /**
+     * @notice Emitted when the rentFee is updated.
+     * @param newFee The new fee applied to rent upon rebase.
+     */
+    event RentFeeUpdated(uint16 newFee);
+
+    /**
+     * @notice Emitted when a trusted target is added/removed.
+     * @param target Target address being added as trusted, or removed as trusted.
+     * @param isTrustedTarget If true, is a trusted target for reinvestRent.
+     */
+    event TrustedTargetAdded(address indexed target, bool isTrustedTarget);
+    
+    /**
+     * @notice Emitted when the withdraw role is granted to an address.
+     * @param account Address being given permission to withdraw rent from basket.
+     * @param hasRole If true, can withdraw.
+     */
+    event WithdrawRoleGranted(address indexed account, bool hasRole);
+
+    /**
+     * @notice Emitted when rent is transferred from the basket to another address.
+     * @param recipient Address that received rent.
+     * @param amount Amount of rent transferred.
+     */
+    event RentTransferred(address indexed recipient, uint256 amount);
+
+
+
+    // ------
     // Errors
     // ------
 
@@ -57,12 +136,6 @@ interface IBasket is IERC20, IERC20Metadata {
         address tnft;
         uint256 tokenId;
         uint256 fingerprint;
-    }
-
-    struct RentData {
-        address tnft;
-        uint256 tokenId;
-        uint256 amountClaimable;
     }
 
     struct RedeemData {

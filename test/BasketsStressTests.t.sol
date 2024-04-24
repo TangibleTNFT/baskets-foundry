@@ -1455,18 +1455,20 @@ contract StressTests is Utility {
 
     /// @notice This method stress tests Basket::withdrawRent
     /// @dev gas reports:
-    ///     - 10x10   (100 tokens)   -> withdrawRent costs 5_599_434 gas
-    ///     - 10x10   (100 tokens)   -> rebase       costs 881_388 gas
-    ///     - 10x20   (200 tokens)   -> withdrawRent costs 11_818_793 gas
-    ///     - 10x20   (200 tokens)   -> rebase       costs 4_437_610 gas
-    ///     - 10x50   (500 tokens)   -> withdrawRent costs 29_255_432 gas
-    ///     - 10x50   (500 tokens)   -> rebase       costs 5_822_649 gas
-    function test_stress_withdrawRent_fuzzing(uint256 randomWord) public {
+    ///     - 10x10 (100 tokens) -> withdrawRent costs 4_829_884 gas
+    ///     - 10x10 (100 tokens) -> rebase       costs 1_486_108 gas
+    ///     - 10x20 (200 tokens) -> withdrawRent costs 9_848_561 gas
+    ///     - 10x20 (200 tokens) -> rebase       costs 2_833_720 gas
+    ///     - 10x50 (500 tokens) -> withdrawRent costs 24_577_725 gas
+    ///     - 10x50 (500 tokens) -> rebase       costs 6_877_565 gas
+    ///     - 10x60 (600 tokens) -> withdrawRent costs 29_516_621 gas
+    ///     - 10x60 (600 tokens) -> rebase       costs 8_225_543 gas
+    function test_stress_withdrawRent_allRent_fuzzing(uint256 randomWord) public {
 
         // ~ Config ~
 
-        config.newCategories = 5;
-        config.amountFingerprints = 5;
+        config.newCategories = 10;
+        config.amountFingerprints = 50;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT
