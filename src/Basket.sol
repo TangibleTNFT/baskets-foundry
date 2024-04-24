@@ -514,18 +514,18 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address target,
         uint256 rentBalance,
         bytes calldata data
-    ) external nonReentrant onlyCanWithdraw returns (uint256 amountUsed) {
+    ) external onlyCanWithdraw returns (uint256 amountUsed) {
         if (!trustedTarget[target]) revert InvalidTarget(target);
 
         uint256 preBal = primaryRentToken.balanceOf(address(this));
         uint256 basketValueBefore = getTotalValueOfBasket();
-        primaryRentToken.approve(target, rentBalance);
+        primaryRentToken.forceApprove(target, rentBalance);
 
         (bool success,) = target.call(data);
         if (!success) revert LowLevelCallFailed(data);
 
         uint256 postBal = primaryRentToken.balanceOf(address(this));
-        primaryRentToken.approve(target, 0);
+        primaryRentToken.forceApprove(target, 0);
 
         amountUsed = preBal - postBal;
         totalRentValue -= amountUsed;
