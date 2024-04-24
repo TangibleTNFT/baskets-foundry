@@ -170,6 +170,8 @@ contract BasketManager is UUPSUpgradeable, ReentrancyGuardUpgradeable, FactoryMo
             _currencyCalculator == address(0)) revert ZeroAddress();
 
         __FactoryModifiers_init(_factory);
+        __ReentrancyGuard_init();
+        
         beacon = new UpgradeableBeacon(
             _initBasketImplementation,
             address(this)

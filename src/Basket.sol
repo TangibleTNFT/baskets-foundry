@@ -234,6 +234,10 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         address _deployer
     ) external initializer {   
         if (_factoryProvider == address(0)) revert ZeroAddress();
+
+        __RebaseToken_init(_name, _symbol);
+        __FactoryModifiers_init(_factoryProvider);
+        __ReentrancyGuard_init();
         
         // If _features is not empty, add features
         for (uint256 i; i < _features.length; ++i) {
@@ -247,9 +251,6 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         location = _location;
         basketManager = msg.sender;
-
-        __RebaseToken_init(_name, _symbol);
-        __FactoryModifiers_init(_factoryProvider);
 
         _setRebaseIndex(1 ether);
 
