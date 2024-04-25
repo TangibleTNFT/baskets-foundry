@@ -28,8 +28,8 @@ import "../../test/utils/Utility.sol";
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually: 
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 */
 
 /**
@@ -84,7 +84,7 @@ contract DeployToUnreal is Script {
             address(currencyCalculator),
             abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
                 UNREAL_FACTORY,
-                25 hours,
+                24 hours,
                 31 days
             )
         );
@@ -104,6 +104,7 @@ contract DeployToUnreal is Script {
                 address(currencyCalculator)
             )
         );
+        basketManager = BasketManager(address(basketManagerProxy));
 
         // 6. Deploy BasketsVrfConsumer
         basketVrfConsumer = new BasketsVrfConsumer();
@@ -113,27 +114,29 @@ contract DeployToUnreal is Script {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 UNREAL_FACTORY,
-                DEPLOYER_ADDRESS, // TODO Update to Gelato Operator
-                UNREAL_CHAIN_ID // TODO TESTNET CHAINID ONLY
+                UNREAL_CHAIN_ID /// NOTE TESTNET CHAINID ONLY
             )
         );
+        basketVrfConsumer = BasketsVrfConsumer(address(basketVrfConsumerProxy));
 
-        // 7. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
+        // 8. TODO: Create and set Gelato Operator via BasketsVrfConsumer::updateOperator
 
-        // 8. TODO: set revenueShare via BasketManager::setRevenueShare -> SET REVENUE DISTRIBUTOR
+        // 9. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
 
-        // 9. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
+        // 10. TODO: set revenueShare via BasketManager::setRevenueShare -> SET REVENUE DISTRIBUTOR
 
-        // 10. TODO: Call setRebaseController on BasketManager to set controller.
+        // 11. TODO: Ensure the new basket manager is added on factory and is whitelister on notification dispatcher
 
-        // 11. TODO: If not already deployed, deploy basketManagerDeployer
+        // 12. TODO: Call setRebaseController on BasketManager to set controller.
 
-        // 12. TODO: Make sure basket contract is opted out of USTB reabse
+        // 13. TODO: If not already deployed, deploy basketRebaseManagerDeployer.
+
+        // 14. TODO: Make sure basket contract is opted out of USTB reabse
     
 
         // log addresses
-        console2.log("1. BasketManager =", address(basketManagerProxy));
-        console2.log("2. BasketVrfConsumer =", address(basketVrfConsumerProxy));
+        console2.log("1. BasketManager =", address(basketManager));
+        console2.log("2. BasketVrfConsumer =", address(basketVrfConsumer));
         console2.log("3. CurrencyCalculator =", address(currencyCalculator));
     
         vm.stopBroadcast();

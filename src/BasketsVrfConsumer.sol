@@ -77,14 +77,12 @@ contract BasketsVrfConsumer is IBasketsVrfConsumer, GelatoVRFConsumerBaseUpgrade
     /**
      * @notice Initializes BasketVrfConsumer contract.
      * @param initialFactory Contract address of Factory contract.
-     * @param initialOperator Msg.sender for GelatoVRF callback on entropy requests (provided by Gelato).
      * @param _testnetChainId Testnet Chain Id. This allows for debugging and manual entropy fulfillment.
      */
-    function initialize(address initialFactory, address initialOperator, uint256 _testnetChainId) external initializer {
-        if (initialFactory == address(0) || initialOperator == address(0)) revert ZeroAddress();
+    function initialize(address initialFactory, uint256 _testnetChainId) external initializer {
+        if (initialFactory == address(0)) revert ZeroAddress();
         __FactoryModifiers_init(initialFactory);
         __GelatoVRFConsumerBase_init(_testnetChainId);
-        operator = initialOperator;
     }
 
     

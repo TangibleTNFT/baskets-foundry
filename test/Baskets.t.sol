@@ -147,11 +147,14 @@ contract BasketsIntegrationTest is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                GELATO_OPERATOR,
                 block.chainid // must be testnet
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
+
+        // set Gelato Operator on basketsVrfConsumer
+        vm.prank(factoryOwner);
+        basketVrfConsumer.updateOperator(GELATO_OPERATOR);
 
         // set basketVrfConsumer address on basketManager
         vm.prank(factoryOwner);
@@ -630,18 +633,6 @@ contract BasketsIntegrationTest is Utility {
             address(newConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(0),
-                GELATO_OPERATOR,
-                block.chainid
-            )
-        );
-
-        // cannot initialize a new BasketsVrfConsumer with operator address(0).
-        vm.expectRevert(abi.encodeWithSelector(BasketsVrfConsumer.ZeroAddress.selector));
-        prox = new ERC1967Proxy(
-            address(newConsumer),
-            abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
-                address(factoryV2),
-                address(0),
                 block.chainid
             )
         );
@@ -651,7 +642,6 @@ contract BasketsIntegrationTest is Utility {
             address(newConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                GELATO_OPERATOR,
                 block.chainid
             )
         );
@@ -659,7 +649,6 @@ contract BasketsIntegrationTest is Utility {
 
         // post-state check 
         assertEq(newConsumer.factory(), address(factoryV2));
-        assertEq(newConsumer.operator(), GELATO_OPERATOR);
         assertEq(newConsumer.testnetChainId(), block.chainid);
     }
 

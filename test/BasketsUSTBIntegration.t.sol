@@ -149,11 +149,14 @@ contract BasketsUSTBIntegrationTest is Utility {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
-                GELATO_OPERATOR,
                 block.chainid // must be testnet
             )
         );
         basketVrfConsumer = BasketsVrfConsumer(address(vrfConsumerProxy));
+
+        // set Gelato Operator on basketsVrfConsumer
+        vm.prank(factoryOwner);
+        basketVrfConsumer.updateOperator(GELATO_OPERATOR);
 
         // set basketVrfConsumer address on basketManager
         vm.prank(factoryOwner);
