@@ -84,6 +84,12 @@ interface IBasket is IERC20, IERC20Metadata {
      */
     event RentTransferred(address indexed recipient, uint256 amount);
 
+    /**
+     * @notice Emitted when the basket cap is updated.
+     * @param newCap New cap.
+     */
+    event CapUpdated(uint24 newCap);
+
 
 
     // ------
@@ -126,6 +132,8 @@ interface IBasket is IERC20, IERC20Metadata {
     error TotalValueDecreased();
     /// @dev This error is emitted when the fee is too high.
     error FeeTooHigh(uint16 fee);
+    /// @dev This error is emitted when there are too many TNFTs deposited into a basket.
+    error CapExceeded();
 
 
     // -------

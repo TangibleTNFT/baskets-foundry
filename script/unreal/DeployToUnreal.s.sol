@@ -47,10 +47,6 @@ contract DeployToUnreal is Script {
     CurrencyCalculator public currencyCalculator;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // proxies
-    ERC1967Proxy public basketManagerProxy;
-    ERC1967Proxy public basketVrfConsumerProxy;
-
     // marketplace contracts
     address public UNREAL_FACTORY = 0x61d595f7e7E9e08340c7B044499F5A25149b8Fca;
 
@@ -80,14 +76,25 @@ contract DeployToUnreal is Script {
         // 1. deploy basket
         basket = new Basket();
 
-        // 2. Deploy CurrencyCalculator -> not upgradeable
-        currencyCalculator = new CurrencyCalculator(UNREAL_FACTORY);
+        // 2. Deploy CurrencyCalculator
+        currencyCalculator = new CurrencyCalculator();
 
-        // 3. Deploy basketManager
+        // 3. Deploy proxy for CurrencyCalculator -> initialize
+        ERC1967Proxy currencyCalculatorProxy = new ERC1967Proxy(
+            address(currencyCalculator),
+            abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
+                UNREAL_FACTORY,
+                25 hours,
+                31 days
+            )
+        );
+        currencyCalculator = CurrencyCalculator(address(currencyCalculatorProxy));
+
+        // 4. Deploy basketManager
         basketManager = new BasketManager();
 
-        // 4. Deploy proxy for basketManager & initialize
-        basketManagerProxy = new ERC1967Proxy(
+        // 5. Deploy proxy for basketManager & initialize
+        ERC1967Proxy basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
@@ -98,11 +105,11 @@ contract DeployToUnreal is Script {
             )
         );
 
-        // 5. Deploy BasketsVrfConsumer
+        // 6. Deploy BasketsVrfConsumer
         basketVrfConsumer = new BasketsVrfConsumer();
 
-        // 6. Initialize BasketsVrfConsumer with proxy
-        basketVrfConsumerProxy = new ERC1967Proxy(
+        // 7. Initialize BasketsVrfConsumer with proxy
+        ERC1967Proxy basketVrfConsumerProxy = new ERC1967Proxy(
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 UNREAL_FACTORY,

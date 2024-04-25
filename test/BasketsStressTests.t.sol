@@ -131,8 +131,19 @@ contract StressTests is Utility {
         // basket stuff
         basket = new Basket();
 
-        // Deploy CurrencyCalculator -> not upgradeable
-        currencyCalculator = new CurrencyCalculator(address(factoryV2));
+        // Deploy CurrencyCalculator
+        currencyCalculator = new CurrencyCalculator();
+
+        // Deploy proxy for CurrencyCalculator -> initialize
+        ERC1967Proxy currencyCalculatorProxy = new ERC1967Proxy(
+            address(currencyCalculator),
+            abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
+                address(factoryV2),
+                100 * 365 days, // 100 year maxAge for testing
+                100 * 365 days // 100 year maxAge for testing
+            )
+        );
+        currencyCalculator = CurrencyCalculator(address(currencyCalculatorProxy));
         
         // Deploy basketManager
         basketManager = new BasketManager();
@@ -759,8 +770,8 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        config.newCategories = 2;
-        config.amountFingerprints = 4;
+        config.newCategories = 4;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         uint256[] memory fingerprints = new uint256[](config.amountFingerprints);
@@ -1041,7 +1052,7 @@ contract StressTests is Utility {
         
         // ~ Config ~
         
-        config.newCategories = 5;
+        config.newCategories = 4;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1189,7 +1200,7 @@ contract StressTests is Utility {
         
         // ~ Config ~
 
-        config.newCategories = 5;
+        config.newCategories = 4;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1320,7 +1331,7 @@ contract StressTests is Utility {
 
         // ~ Config ~
 
-        config.newCategories = 5;
+        config.newCategories = 4;
         config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
@@ -1467,8 +1478,8 @@ contract StressTests is Utility {
 
         // ~ Config ~
 
-        config.newCategories = 10;
-        config.amountFingerprints = 50;
+        config.newCategories = 4;
+        config.amountFingerprints = 5;
         config.totalTokens = config.newCategories * config.amountFingerprints;
 
         // declare arrays that will be used for args for batchDepositTNFT

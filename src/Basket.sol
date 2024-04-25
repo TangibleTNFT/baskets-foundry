@@ -120,6 +120,9 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     /// @notice Address of BasketManager
     address public basketManager;
 
+    /// @notice Stores amount of NFTs that are allowed to be inside basket at one time.
+    uint24 public cap;
+
     /// @notice Stores the fee taken upon a deposit. Uses 2 basis points (i.e. 2% == 200)
     uint16 public depositFee; // 0.5% by default
 
@@ -200,6 +203,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
         depositFee = 50; // 0.5%
         rentFee = 10_00; // 10.0%
+        cap = 500;
 
         location = _location;
         basketManager = msg.sender;
@@ -356,12 +360,23 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice This method allows the factory owner to update the basket cap.
+     * @dev By default this cap is 500 tokens. The cap is the amount of NFTs that are allowed to be in
+     *      the basket at any given time.
+     * @param _cap New cap;
+     */
+    function updateCap(uint24 _cap) external onlyFactoryOwner {
+        emit CapUpdated(_cap);
+        cap = _cap;
+    }
+
+    /**
      * @notice This method adds a `target` and value to `trustedTarget`.
      * @dev If the `target` is trusted, it can be used to send funds to in `reinvestRent`.
      * @param target Target address.
      * @param value If true, is a trusted address.
      */
-    function addTrustedTarget(address target, bool value) external onlyFactoryOwner { // TODO: Add event
+    function addTrustedTarget(address target, bool value) external onlyFactoryOwner {
         if (target == address(0)) revert ZeroAddress();
         emit TrustedTargetAdded(target, value);
         trustedTarget[target] = value;
@@ -372,7 +387,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @param account Address being granted or not granted permission to withdraw
      * @param hasRole If true, address can call `withdrawRent`.
      */
-    function setWithdrawRole(address account, bool hasRole) external onlyFactoryOwner { // TODO: Add event
+    function setWithdrawRole(address account, bool hasRole) external onlyFactoryOwner {
         if (account == address(0)) revert ZeroAddress();
         emit WithdrawRoleGranted(account, hasRole);
         canWithdraw[account] = hasRole;
@@ -762,6 +777,8 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
         depositedTnfts.push(TokenData(_tangibleNFT, _tokenId, fingerprint));
         indexInDepositedTnfts[_tangibleNFT][_tokenId] = depositedTnfts.length - 1;
 
+        if (depositedTnfts.length > cap) revert CapExceeded();
+
         tokenIdLibrary[_tangibleNFT].push(_tokenId);
         indexInTokenIdLibrary[_tangibleNFT][_tokenId] = tokenIdLibrary[_tangibleNFT].length - 1;
 
@@ -932,7 +949,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
 
                 uint256[] memory claimableAmounts = rentManager.claimableRentForTokenBatch(tokenIdLibrary[tnft]);
 
-                // iterate through the array of claimable rent for each tokenId for each TNFT and push it to the master claimableRent array.
+                // iterate through all claimable rent and claim rent for each tokenId
                 uint256 tokenIdsLength = tokenIdLibrary[tnft].length;
                 for (uint256 j; j < tokenIdsLength; ++j) {
                     uint256 tokenId = tokenIdLibrary[tnft][j];
@@ -942,12 +959,11 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
                         if (claimed == 0) revert ClaimingError();
                     }
                 }
-                // if total amount in balance is sufficient, break loop and transfer.
+                // if total amount in balance is sufficient, break loop and transfer to recipient.
                 if (primaryRentToken.balanceOf(address(this)) >= _withdrawAmount) break;
             }
         }
 
-        // transfer rent to msg.sender (factory owner)
         primaryRentToken.safeTransfer(_recipient, _withdrawAmount);
         totalRentValue -= _withdrawAmount;
 

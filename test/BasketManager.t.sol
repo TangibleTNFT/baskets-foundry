@@ -84,8 +84,19 @@ contract BasketManagerTest is Utility {
         // Deploy basket implementation
         basket = new Basket();
 
-        // Deploy CurrencyCalculator -> not upgradeable
-        currencyCalculator = new CurrencyCalculator(address(factoryV2));
+        // Deploy CurrencyCalculator
+        currencyCalculator = new CurrencyCalculator();
+
+        // Deploy proxy for CurrencyCalculator -> initialize
+        ERC1967Proxy currencyCalculatorProxy = new ERC1967Proxy(
+            address(currencyCalculator),
+            abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
+                address(factoryV2),
+                100 * 365 days, // 100 year maxAge for testing
+                100 * 365 days // 100 year maxAge for testing
+            )
+        );
+        currencyCalculator = CurrencyCalculator(address(currencyCalculatorProxy));
 
         // Deploy basketManager
         basketManager = new BasketManager();

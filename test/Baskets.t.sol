@@ -75,10 +75,6 @@ contract BasketsIntegrationTest is Utility {
     RentManager public rentManager = RentManager(Unreal_RentManagerTnft);
     RWAPriceNotificationDispatcher public notificationDispatcher = RWAPriceNotificationDispatcher(Unreal_RWAPriceNotificationDispatcher);
 
-    // proxies
-    ERC1967Proxy public basketManagerProxy;
-    ERC1967Proxy public vrfConsumerProxy;
-
     // ~ Actors and Variables ~
 
     address public factoryOwner;
@@ -113,14 +109,25 @@ contract BasketsIntegrationTest is Utility {
         // Deploy Basket implementation
         basket = new Basket();
 
-        // Deploy CurrencyCalculator -> not upgradeable
-        currencyCalculator = new CurrencyCalculator(address(factoryV2));
+        // Deploy CurrencyCalculator
+        currencyCalculator = new CurrencyCalculator();
+
+        // Deploy proxy for CurrencyCalculator -> initialize
+        ERC1967Proxy currencyCalculatorProxy = new ERC1967Proxy(
+            address(currencyCalculator),
+            abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
+                address(factoryV2),
+                100 * 365 days, // 100 year maxAge for testing
+                100 * 365 days // 100 year maxAge for testing
+            )
+        );
+        currencyCalculator = CurrencyCalculator(address(currencyCalculatorProxy));
 
         // Deploy BasketManager
         basketManager = new BasketManager();
 
         // Deploy proxy for basketManager -> initialize
-        basketManagerProxy = new ERC1967Proxy(
+        ERC1967Proxy basketManagerProxy = new ERC1967Proxy(
             address(basketManager),
             abi.encodeWithSelector(BasketManager.initialize.selector,
                 address(basket),
@@ -136,7 +143,7 @@ contract BasketsIntegrationTest is Utility {
         basketVrfConsumer = new BasketsVrfConsumer();
 
         // Deploy proxy for basketsVrfConsumer -> initialize
-        vrfConsumerProxy = new ERC1967Proxy(
+        ERC1967Proxy vrfConsumerProxy = new ERC1967Proxy(
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 address(factoryV2),
@@ -733,6 +740,73 @@ contract BasketsIntegrationTest is Utility {
         uint256[] memory tokenIdLib = basket.getTokenIdLibrary(tnftsSupported[0]);
         assertEq(tokenIdLib.length, 1);
         assertEq(tokenIdLib[0], JOE_TOKEN_ID);
+    }
+
+    /// @notice Verifies the usage of a cap on amount of deposits can be made in a basket.
+    function test_baskets_depositTNFT_cap() public {
+
+        // ~ config ~
+
+        vm.prank(factoryOwner);
+        basket.updateCap(1);
+
+        // ~ Execute a deposit ~
+
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
+        basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
+        vm.stopPrank();
+
+        // ~ Nik attempts a deposit -> fails ~
+
+        vm.startPrank(NIK);
+        realEstateTnft.approve(address(basket), NIK_TOKEN_ID);
+        vm.expectRevert(abi.encodeWithSelector(IBasket.CapExceeded.selector));
+        basket.depositTNFT(address(realEstateTnft), NIK_TOKEN_ID);
+        vm.stopPrank();
+    }
+
+    /// @notice Verifies the usage of a cap on amount of deposits can be made in a basket.
+    function test_baskets_claimRentForToken() public {
+
+        // ~ config ~
+
+        // deposit token and rent
+        vm.startPrank(JOE);
+        realEstateTnft.approve(address(basket), JOE_TOKEN_ID);
+        basket.depositTNFT(address(realEstateTnft), JOE_TOKEN_ID);
+        vm.stopPrank();
+
+        uint256 amountRent = 10 * 1e18;
+        deal(address(DAI_MOCK), TANGIBLE_LABS, amountRent);
+
+        vm.startPrank(TANGIBLE_LABS);
+        DAI_MOCK.approve(address(rentManager), amountRent);
+        rentManager.deposit(
+            JOE_TOKEN_ID,
+            address(DAI_MOCK),
+            amountRent,
+            0,
+            block.timestamp + 1,
+            true
+        );
+        vm.stopPrank();
+        vm.warp(block.timestamp + 1);
+
+        // ~ Pre-state check ~
+
+        assertEq(DAI_MOCK.balanceOf(address(rentManager)), amountRent);
+        assertEq(DAI_MOCK.balanceOf(address(basket)), 0);
+
+        // ~ factory Owner executes claimRentForToken ~
+
+        vm.prank(factoryOwner);
+        basket.claimRentForToken(address(realEstateTnft), JOE_TOKEN_ID);
+
+        // ~ Post-state check ~
+
+        assertEq(DAI_MOCK.balanceOf(address(rentManager)), 0);
+        assertEq(DAI_MOCK.balanceOf(address(basket)), amountRent);
     }
 
     /// @notice Verifies the various cases where a token is and is not compatible with a basket.
@@ -2935,7 +3009,7 @@ contract BasketsIntegrationTest is Utility {
     }
 
 
-    // ~ updateRentFee ~
+    // ~ setters ~
 
     /// @notice Verifies proper state changes when Basket::updateRentFee is executed.
     function test_baskets_updateRentFee() public {
@@ -2966,9 +3040,6 @@ contract BasketsIntegrationTest is Utility {
         vm.expectRevert(bytes("NFO"));
         basket.updateRentFee(20_00);
     }
-
-
-    // ~ setWithdrawRole ~
 
     /// @notice Verifies proper state changes when Basket::setWithdrawRole is executed.
     function test_baskets_setWithdrawRole() public {
@@ -3040,5 +3111,84 @@ contract BasketsIntegrationTest is Utility {
         vm.prank(BOB);
         vm.expectRevert(bytes("NFO"));
         basket.addTrustedTarget(BOB, true);
+    }
+
+    /// @notice Verifies proper state when Basket::updateCap is called.
+    function test_baskets_updateCap() public {
+        assertEq(basket.cap(), 500);
+        vm.prank(factoryOwner);
+        basket.updateCap(600);
+        assertEq(basket.cap(), 600);
+    }
+
+    /// @notice Verifies restrictions when Basket::updateCap is called
+    function test_baskets_updateCap_restrictions() public {
+        // bob cannot call updateRentFee
+        vm.prank(BOB);
+        vm.expectRevert(bytes("NFO"));
+        basket.updateCap(600);
+    }
+
+    /// @notice Verifies proper state changes when CurrencyCalculator::updateExchangeRateOracleMaxAge is called.
+    function test_baskets_currencyCalculator_updateExchangeRateOracleMaxAge() public {
+        assertNotEq(currencyCalculator.exchangeRateOracleMaxAge(), 1 days);
+        vm.prank(factoryOwner);
+        currencyCalculator.updateExchangeRateOracleMaxAge(1 days);
+        assertEq(currencyCalculator.exchangeRateOracleMaxAge(), 1 days);
+    }
+
+    /// @notice Verifies proper restrictions when CurrencyCalculator::updateExchangeRateOracleMaxAge is called.
+    function test_baskets_currencyCalculator_updateExchangeRateOracleMaxAge_restrictions() public {
+        // Cannot set maxAge to 0
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(CurrencyCalculator.ZeroValue.selector));
+        currencyCalculator.updateExchangeRateOracleMaxAge(0);
+    }
+
+    /// @notice Verifies proper state changes when CurrencyCalculator::updatePriceOracleMaxAge is called.
+    function test_baskets_currencyCalculator_updatePriceOracleMaxAge() public {
+        assertNotEq(currencyCalculator.priceOracleMaxAge(), 1 days);
+        vm.prank(factoryOwner);
+        currencyCalculator.updatePriceOracleMaxAge(1 days);
+        assertEq(currencyCalculator.priceOracleMaxAge(), 1 days);
+    }
+
+    /// @notice Verifies restrictions when CurrencyCalculator::updatePriceOracleMaxAge is called.
+    function test_baskets_currencyCalculator_updatePriceOracleMaxAge_restrictions() public {
+        // Cannot set maxAge to 0
+        vm.prank(factoryOwner);
+        vm.expectRevert(abi.encodeWithSelector(CurrencyCalculator.ZeroValue.selector));
+        currencyCalculator.updatePriceOracleMaxAge(0);
+    }
+
+    /// @notice Verifies restrictions when CurrencyCalculator::getTnftNativeValue is called.
+    function test_baskets_currencyCalculator_getTnftNativeValue_restrictions() public {
+        vm.prank(factoryOwner);
+        currencyCalculator.updatePriceOracleMaxAge(1);
+        skip(100);
+
+        uint256 fp = ITangibleNFT(address(realEstateTnft)).tokensFingerprint(JOE_TOKEN_ID);
+
+        vm.expectRevert();
+        currencyCalculator.getTnftNativeValue(address(realEstateTnft), fp);
+    }
+
+    /// @notice Verifies proper state when initializing a CurrencyCalculator contract.
+    function test_baskets_currencyCalculator_initializer() public {
+        CurrencyCalculator newCC = new CurrencyCalculator();
+
+        ERC1967Proxy newCCProx = new ERC1967Proxy(
+            address(newCC),
+            abi.encodeWithSelector(CurrencyCalculator.initialize.selector,
+                address(factoryV2),
+                24 hours,
+                31 days
+            )
+        );
+        newCC = CurrencyCalculator(address(newCCProx));
+
+        assertEq(newCC.factory(), address(factoryV2));
+        assertEq(newCC.exchangeRateOracleMaxAge(), 24 hours);
+        assertEq(newCC.priceOracleMaxAge(), 31 days);
     }
 }
