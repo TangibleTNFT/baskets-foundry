@@ -255,6 +255,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      *         if the budget is sufficient will transfer the NFT stored in `nextToRedeem` to the msg.sender.
      * @dev Burns basket tokens 1-1 with usdValue of token redeemed.
      * @param _budget Amount of basket tokens being submitted to redeem method.
+     * @param _desiredToken Tnft address and tokenId encoded as bytes32.
      */
     function redeemTNFT(uint256 _budget, bytes32 _desiredToken) external {
         _redeemTNFT(msg.sender, _budget, _desiredToken);
@@ -852,6 +853,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      * @notice Internal method for redeeming a specified TNFT from this basket contract.
      * @param _redeemer EOA address of redeemer. note: msg.sender
      * @param _budget Budget of basket tokens willing to redeem
+     * @param _token tnft address and tokenId encoded as bytes32
      */
     function _redeemTNFT(
         address _redeemer,

@@ -127,7 +127,7 @@ contract CurrencyCalculator is UUPSUpgradeable, FactoryModifiers {
         decimals = priceFeed.decimals();
         (, int256 price, , uint256 updatedAt, ) = priceFeed.latestRoundData();
         if (block.timestamp > updatedAt + exchangeRateOracleMaxAge) revert StalePriceFromOracle(address(priceFeed), updatedAt);
-        if (price == 0) revert ZeroPrice();
+        if (price <= 0) revert ZeroPrice();
 
         exchangeRate = uint256(price) + currencyFeed.conversionPremiums(_currency);
     }
