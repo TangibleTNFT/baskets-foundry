@@ -27,21 +27,17 @@ import "../../test/utils/Utility.sol";
 
 /** 
     @dev To run: 
-    forge script script/re.al/DeployAll.s.sol:DeployAll --broadcast --legacy \
+    forge script script/re.al/PostDeployConfig.s.sol:PostDeployConfig --broadcast --legacy \
     --gas-estimate-multiplier 600 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
-
-    @dev To verify manually: 
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://explorer.re.al//api
 */
 
 /**
- * @title DeployAll
+ * @title PostDeployConfig
  * @author Chase Brown
  * @notice This script deploys a new instance of the baskets protocol (in full) to the Unreal Testnet.
  */
-contract DeployAll is Script {
+contract PostDeployConfig is Script {
 
     // ~ Script Configure ~
 
