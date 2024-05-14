@@ -27,9 +27,7 @@ import "../../test/utils/Utility.sol";
 
 /** 
     @dev To run: 
-    forge script script/re.al/PostDeployConfig.s.sol:PostDeployConfig --broadcast --legacy \
-    --gas-estimate-multiplier 600 \
-    --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
+    forge script script/re.al/PostDeployConfig.s.sol:PostDeployConfig --broadcast --legacy --gas-estimate-multiplier 600 -vvvv
 */
 
 /**
