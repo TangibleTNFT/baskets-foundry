@@ -9,23 +9,55 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgrade
 import { ERC20Upgradeable, OFTCoreUpgradeable, OFTUpgradeable } from "@tangible-foundation-contracts/layerzero/token/oft/v1/OFTUpgradeable.sol";
 import { IOFTCore } from "@layerzerolabs/contracts/token/oft/v1/interfaces/IOFTCore.sol";
 
-import { WadMath } from "./WadMath.sol";
+import { IRebaseToken } from "../interfaces/IRebaseToken.sol";
 
+/**
+ * @title WrappedBasketToken
+ * @notice Wrapped basket token using ERC-4626 for "unwrapping" and "wrapping" basket tokens in this vault contract.
+ * This contract also utilizes OFTUpgradeable for cross chain functionality to optimize the baskets footprint.
+ */
 contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradeable, IERC4626 {
-    using WadMath for uint256;
 
-    address immutable public asset;
+    // ~ State Variables ~
 
+    /// @notice Address of basket token being "wrapped".
+    address public immutable asset;
+    /// @notice Half of WAD. Used for conversions.
+    uint256 internal constant HALF_WAD = 5e17;
+    /// @notice WAD constant uses for conversions.
+    uint256 internal constant WAD = 1e18;
+
+
+    // ~ Events ~
+
+    /// @notice This event is fired if this contract is opted out of `asset` rebase.
     event RebaseDisabled(address indexed asset);
 
+
+    // ~ Constructor ~
+
+    /**
+     * @notice Initializes WrappedBasketToken.
+     * @param lzEndpoint Local layer zero v1 endpoint address.
+     * @param basketToken Will be assigned to `asset`.
+     */
     constructor(address lzEndpoint, address basketToken) OFTUpgradeable(lzEndpoint) {
-        (bool success,) = basketToken.call(abi.encodeWithSignature("disableRebase(address,bool)", address(this), true));
+        (bool success,) = basketToken.call(abi.encodeCall(IRebaseToken.disableRebase, (address(this), true)));
         if (success) {
             emit RebaseDisabled(basketToken);
         }
         asset = basketToken;
     }
 
+
+    // ~ Initializer ~
+
+    /**
+     * @notice Initializes WrappedBasketToken's inherited upgradeables.
+     * @param owner Initial owner of contract.
+     * @param name Name of wrapped token.
+     * @param symbol Symbol of wrapped token.
+     */
     function initialize(
         address owner,
         string memory name,
@@ -35,6 +67,9 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         __Pausable_init();
         __OFT_init(owner, name, symbol);
     }
+
+
+    // ~ Methods ~
 
     function totalAssets() external view override returns (uint256) {
         return _convertToAssetsDown(totalSupply());
@@ -226,18 +261,16 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
     }
 
     function _getRate() private view returns (uint256) {
-        (,bytes memory data) = asset.staticcall(
-            abi.encodeWithSignature("rebaseIndex()")
-        );
-        return abi.decode(data, (uint256));
+        return IRebaseToken(asset).rebaseIndex();
     }
 
     function _convertToSharesUp(uint256 assets) private view returns (uint256) {
-        return assets.rayDiv(_getRate());
+        uint256 rate = _getRate();
+        return (rate / 2 + assets * WAD) / rate;
     }
 
     function _convertToAssetsUp(uint256 shares) private view returns (uint256) {
-        return shares.rayMul(_getRate());
+        return (HALF_WAD + shares * _getRate()) / WAD;
     }
 
     function _convertToSharesDown(uint256 assets)
@@ -271,9 +304,8 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    ///
-    /// LayerZero overrides
-    ///
+
+    // ~ LayerZero overrides ~
 
     function sendFrom(
         address _from,
