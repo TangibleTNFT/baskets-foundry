@@ -6,3 +6,4 @@ forge-std/=lib/forge-std/src/
 @chainlink/=lib/chainlink/
 @tangible-foundation-contracts/=lib/tangible-foundation-contracts/src/
 @vrf/=lib/vrf-contracts
+@layerzerolabs/contracts/=lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/
