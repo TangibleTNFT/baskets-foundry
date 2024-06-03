@@ -71,10 +71,18 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
 
     // ~ Methods ~
 
+    /**
+     * @notice Returns the amount of assets this contract has minted.
+     */
     function totalAssets() external view override returns (uint256) {
         return _convertToAssetsDown(totalSupply());
     }
 
+    /**
+     * @notice Converts assets to shares.
+     * @dev "shares" is the variable balance/totalSupply that is NOT affected by an index.
+     * @param assets Num of assets to convert to shares.
+     */
     function convertToShares(uint256 assets)
         external
         view
@@ -84,6 +92,11 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToSharesDown(assets);
     }
 
+    /**
+     * @notice Converts shares to assets.
+     * @dev "assets" is the variable balance/totalSupply that IS affected by an index.
+     * @param shares Num of shares to convert to assets.
+     */
     function convertToAssets(uint256 shares)
         external
         view
@@ -93,12 +106,19 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToAssetsDown(shares);
     }
 
+    /**
+     * @notice The maximum amount that is allowed to be deposited at one time.
+     */
     function maxDeposit(
         address /*receiver*/
     ) external pure override returns (uint256) {
         return type(uint256).max;
     }
 
+    /**
+     * @notice Takes assets and returns a preview of the amount of shares that would be received
+     * if the amount assets was deposited via `deposit`.
+     */
     function previewDeposit(uint256 assets)
         external
         view
@@ -108,6 +128,13 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToSharesDown(assets);
     }
 
+    /**
+     * @notice Allows a user to deposit assets amount of `asset` into this contract to receive
+     * shares amount of wrapped basket token.
+     * @dev I.e. Deposit X UKRE to get Y wUKRE: X is provided
+     * @param assets Amount of asset.
+     * @param receiver Address that will be minted wrappd token.
+     */
     function deposit(uint256 assets, address receiver)
         external
         override
@@ -129,12 +156,19 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         emit Deposit(msg.sender, receiver, amountReceived, shares);
     }
 
+    /**
+     * @notice Maximum amount allowed to be minted at once.
+     */
     function maxMint(
         address /*receiver*/
     ) external pure override returns (uint256) {
         return type(uint256).max;
     }
 
+    /**
+     * @notice Takes shares amount and returns the amount of base token that would be
+     * required to mint that many shares of wrapped token.
+     */
     function previewMint(uint256 shares)
         external
         view
@@ -144,6 +178,12 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToAssetsUp(shares);
     }
 
+    /**
+     * @notice Allows a user to mint shares amount of wrapped token.
+     * @dev I.e. Mint X wUKRE using Y UKRE: X is provided
+     * @param shares Amount of wrapped token the user desired to mint.
+     * @param receiver Address where the wrapped token will be minted to.
+     */
     function mint(uint256 shares, address receiver)
         external
         override
@@ -167,6 +207,10 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         emit Deposit(msg.sender, receiver, amountReceived, shares);
     }
 
+    /**
+     * @notice Maximum amount of basket tokens allowed to be withdrawn for `owner`.
+     * It will check the `owner` balance of wrapped tokens to quote withdraw.
+     */
     function maxWithdraw(address owner)
         external
         view
@@ -176,6 +220,10 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToAssetsDown(balanceOf(owner));
     }
 
+    /**
+     * @notice Returns the amount of wrapped basket tokens that would be required if
+     * `assets` amount of basket tokens was withdrawn from this contract.
+     */
     function previewWithdraw(uint256 assets)
         external
         view
@@ -185,6 +233,13 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToSharesUp(assets);
     }
 
+    /**
+     * @notice Allows a user to withdraw a specified amount of basket tokens from contract.
+     * @dev I.e. Withdraw X UKRE from Y wUKRE: X is provided
+     * @param assets Amount of basket tokens the user desired to withdraw.
+     * @param receiver Address where the basket tokens are transferred to.
+     * @param owner Current owner of wrapped basket tokens.
+     */
     function withdraw(
         uint256 assets,
         address receiver,
@@ -216,10 +271,17 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
+    /**
+     * @notice Maximum amount of wrapped basket tokens an `owner` can use to redeem basket tokens.
+     */
     function maxRedeem(address owner) external view override returns (uint256) {
         return balanceOf(owner);
     }
 
+    /**
+     * @notice Returns an amount of basket tokens that would be redeemed if `shares` amount of wrapped tokens
+     * were used to redeem.
+     */
     function previewRedeem(uint256 shares)
         external
         view
@@ -229,6 +291,13 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return _convertToAssetsDown(shares);
     }
 
+    /**
+     * @notice Allows a user to use a specified amount of wrapped basket tokens to redeem basket tokens.
+     * @dev I.e. Redeem X wUKRE for Y UKRE: X is provided
+     * @param shares Amount of wrapped basket tokens the user wants to use in order to redeem basket tokens.
+     * @param receiver Address where the basket tokens are transferred to.
+     * @param owner Current owner of wrapped basket tokens. shares` amount will be burned from this address.
+     */
     function redeem(
         uint256 shares,
         address receiver,
@@ -260,19 +329,34 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
+
+    // ~ Internal Methods ~
+
+    /**
+     * @dev Returns the rebase index of the underlying asset token.
+     */
     function _getRate() private view returns (uint256) {
         return IRebaseToken(asset).rebaseIndex();
     }
 
+    /**
+     * @dev Converts assets to shares, rounding up.
+     */
     function _convertToSharesUp(uint256 assets) private view returns (uint256) {
         uint256 rate = _getRate();
         return (rate / 2 + assets * WAD) / rate;
     }
 
+    /**
+     * @dev Converts shares to assets, rounding up.
+     */
     function _convertToAssetsUp(uint256 shares) private view returns (uint256) {
         return (HALF_WAD + shares * _getRate()) / WAD;
     }
 
+    /**
+     * @dev Converts assets to shares, rounding down.
+     */
     function _convertToSharesDown(uint256 assets)
         private
         view
@@ -281,6 +365,9 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return (assets * 10**decimals()) / _getRate();
     }
 
+    /**
+     * @dev Converts shares to assets, rounding down.
+     */
     function _convertToAssetsDown(uint256 shares)
         private
         view
@@ -289,12 +376,19 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         return (shares * _getRate()) / 10**decimals();
     }
 
+    /**
+     * @dev Pulls assets from `from` address of `amount`. Performs a pre and post balance check to 
+     * confirm the amount received, and returns that amount.
+     */
     function _pullAssets(address from, uint256 amount) private returns (uint256 received) {
         uint256 preBal = IERC20(asset).balanceOf(address(this));
         IERC20(asset).transferFrom(from, address(this), amount);
         received = IERC20(asset).balanceOf(address(this)) - preBal;
     }
 
+    /**
+     * @dev Transfers an `amount` of `asset` to the `to` address.
+     */
     function _pushAssets(address to, uint256 amount) private {
         IERC20(asset).transfer(to, amount);
     }

@@ -61,7 +61,7 @@ contract DeployWrappedToken is Script {
         );
 
         // Deploy proxy for WrappedBasketToken -> initialize
-        ERC1967Proxy wUKREProxy = new ERC1967Proxy(
+        new ERC1967Proxy(
             address(wUKRE),
             abi.encodeWithSelector(WrappedBasketToken.initialize.selector,
                 DEPLOYER_ADDRESS,
