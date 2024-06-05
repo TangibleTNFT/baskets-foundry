@@ -11,6 +11,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgrade
 // local contracts
 import { Basket } from "../../src/Basket.sol";
 import { WrappedBasketToken } from "../../src/wrapped/WrappedBasketToken.sol";
+import { WrappedBasketTokenSatellite } from "../../src/wrapped/WrappedBasketTokenSatellite.sol";
 import { IBasket } from "../../src/interfaces/IBasket.sol";
 import { BasketManager } from "../../src/BasketManager.sol";
 import { CurrencyCalculator } from "../../src/CurrencyCalculator.sol";
@@ -30,7 +31,7 @@ import "../utils/Constants.sol";
     @dev To verify manually (Base, Optimism, Polygon, BSC):
     export ETHERSCAN_API_KEY="<API_KEY>"
     forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/wrapped/WrappedBasketToken.sol:WrappedBasketToken \
-    --verifier etherscan --constructor-args $(cast abi-encode "constructor(address, address)" <LOCAL_LZ_ADDRESS> <BASKET>)
+    --verifier etherscan --constructor-args $(cast abi-encode "constructor(address)" <LOCAL_LZ_ADDRESS>)
 */
 
 /**
@@ -48,7 +49,7 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
         address lz_endpoint;
         uint16 chainId;
         address basket;
-        address tokenAddress;
+        bool mainChain;
     }
 
     NetworkData[] internal allChains;
@@ -71,7 +72,7 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
                 lz_endpoint: UNREAL_LZ_ENDPOINT_V1, 
                 chainId: UNREAL_LZ_CHAIN_ID_V1,
                 basket: BASKET,
-                tokenAddress: address(0)
+                mainChain: true
             }
         ));
         allChains.push(NetworkData(
@@ -79,9 +80,9 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
                 chainName: "sepolia", 
                 rpc_url: vm.envString("SEPOLIA_RPC_URL"), 
                 lz_endpoint: SEPOLIA_LZ_ENDPOINT_V1, 
-                chainId: SEPOLIA_LZ_CHAIN_ID_V1, 
+                chainId: SEPOLIA_LZ_CHAIN_ID_V1,
                 basket: address(0),
-                tokenAddress: address(0)
+                mainChain: false
             }
         ));
     }
@@ -90,35 +91,38 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
 
         uint256 len = allChains.length;
         for (uint256 i; i < len; ++i) {
-            if (allChains[i].tokenAddress == address(0)) {
 
-                vm.createSelectFork(allChains[i].rpc_url);
-                vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
+            vm.createSelectFork(allChains[i].rpc_url);
+            vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-                address wrappedBasketTokenAddress = _deployWrappedBasketToken(allChains[i].lz_endpoint, allChains[i].basket);
+            address wrappedBasketTokenAddress;
+            if (allChains[i].mainChain) {
+                wrappedBasketTokenAddress = _deployWrappedBasketToken(allChains[i].lz_endpoint, allChains[i].basket);
+            }
+            else {
+                wrappedBasketTokenAddress = _deployWrappedBasketTokenForSatellite(allChains[i].lz_endpoint);
+            }
 
-                allChains[i].tokenAddress = wrappedBasketTokenAddress;
-                WrappedBasketToken wrappedBasketToken = WrappedBasketToken(wrappedBasketTokenAddress);
+            WrappedBasketToken wrappedBasketToken = WrappedBasketToken(wrappedBasketTokenAddress);
 
-                // set trusted remote address on all other chains for each token.
-                for (uint256 j; j < len; ++j) {
-                    if (i != j) {
-                        if (
-                            !wrappedBasketToken.isTrustedRemote(
-                                allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress, wrappedBasketTokenAddress)
-                            )
-                        ) {
-                            wrappedBasketToken.setTrustedRemoteAddress(
-                                allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress)
-                            );
-                        }
+            // set trusted remote address on all other chains for each token.
+            for (uint256 j; j < len; ++j) {
+                if (i != j) {
+                    if (
+                        !wrappedBasketToken.isTrustedRemote(
+                            allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress, wrappedBasketTokenAddress)
+                        )
+                    ) {
+                        wrappedBasketToken.setTrustedRemoteAddress(
+                            allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress)
+                        );
                     }
                 }
-
-                // save wrappedBasketToken addresses to appropriate JSON
-                _saveDeploymentAddress(allChains[i].chainName, SYMBOL, wrappedBasketTokenAddress);
-                vm.stopBroadcast();
             }
+
+            // save wrappedBasketToken addresses to appropriate JSON
+            _saveDeploymentAddress(allChains[i].chainName, SYMBOL, wrappedBasketTokenAddress);
+            vm.stopBroadcast();
         }
     }
 
@@ -149,6 +153,41 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
 
         bytes memory init = abi.encodeWithSelector(
             WrappedBasketToken.initialize.selector,
+            DEPLOYER_ADDRESS,
+            NAME,
+            SYMBOL
+        );
+
+        proxyAddress = _deployProxy("wrappedBasketToken", address(wrappedToken), init);
+    }
+
+    /**
+     * @dev This method is in charge of deploying and upgrading wrappedToken on a satellite chain.
+     * This method will perform the following steps:
+     *    - Compute the wrappedToken implementation address
+     *    - If this address is not deployed, deploy new implementation
+     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the wrappedToken address computed,
+     *      it will upgrade that proxy.
+     */
+    function _deployWrappedBasketTokenForSatellite(address layerZeroEndpoint) internal returns (address proxyAddress) {
+        bytes memory bytecode = abi.encodePacked(type(WrappedBasketTokenSatellite).creationCode);
+        address wrappedTokenAddress = vm.computeCreate2Address(
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(layerZeroEndpoint)))
+        );
+
+        WrappedBasketTokenSatellite wrappedToken;
+
+        if (_isDeployed(wrappedTokenAddress)) {
+            console.log("wrappedToken is already deployed to %s", wrappedTokenAddress);
+            wrappedToken = WrappedBasketTokenSatellite(wrappedTokenAddress);
+        } else {
+            wrappedToken = new WrappedBasketTokenSatellite{salt: _SALT}(layerZeroEndpoint);
+            assert(wrappedTokenAddress == address(wrappedToken));
+            console.log("wrappedToken deployed to %s", wrappedTokenAddress);
+        }
+
+        bytes memory init = abi.encodeWithSelector(
+            WrappedBasketTokenSatellite.initialize.selector,
             DEPLOYER_ADDRESS,
             NAME,
             SYMBOL
