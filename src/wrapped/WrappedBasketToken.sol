@@ -2,11 +2,10 @@
 pragma solidity ^0.8.23;
 
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import { IERC4626, IERC20Metadata } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-import { ERC20Upgradeable, OFTCoreUpgradeable, OFTUpgradeable } from "@tangible-foundation-contracts/layerzero/token/oft/v1/OFTUpgradeable.sol";
+import { OFTCoreUpgradeable, OFTUpgradeable } from "@tangible-foundation-contracts/layerzero/token/oft/v1/OFTUpgradeable.sol";
 import { IOFTCore } from "@layerzerolabs/contracts/token/oft/v1/interfaces/IOFTCore.sol";
 
 import { IRebaseToken } from "../interfaces/IRebaseToken.sol";
@@ -16,7 +15,7 @@ import { IRebaseToken } from "../interfaces/IRebaseToken.sol";
  * @notice Wrapped basket token using ERC-4626 for "unwrapping" and "wrapping" basket tokens in this vault contract.
  * This contract also utilizes OFTUpgradeable for cross chain functionality to optimize the baskets footprint.
  */
-contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradeable, IERC4626 {
+contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
 
     // ~ State Variables ~
 
@@ -64,7 +63,6 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         string memory symbol
     ) external initializer {
         __Ownable_init(owner);
-        __Pausable_init();
         __OFT_init(owner, name, symbol);
     }
 
@@ -138,7 +136,6 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
     function deposit(uint256 assets, address receiver)
         external
         override
-        whenNotPaused
         returns (uint256 shares)
     {
         require(
@@ -187,7 +184,6 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
     function mint(uint256 shares, address receiver)
         external
         override
-        whenNotPaused
         returns (uint256 assets)
     {
         require(
@@ -244,7 +240,7 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         uint256 assets,
         address receiver,
         address owner
-    ) external override whenNotPaused returns (uint256 shares) {
+    ) external override returns (uint256 shares) {
         require(
             receiver != address(0),
             "Zero address for receiver not allowed"
@@ -302,7 +298,7 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         uint256 shares,
         address receiver,
         address owner
-    ) external override whenNotPaused returns (uint256 assets) {
+    ) external override returns (uint256 assets) {
         require(
             receiver != address(0),
             "Zero address for receiver not allowed"
@@ -409,7 +405,7 @@ contract WrappedBasketToken is UUPSUpgradeable, PausableUpgradeable, OFTUpgradea
         address payable _refundAddress,
         address _zroPaymentAddress,
         bytes calldata _adapterParams
-    ) public payable override(IOFTCore, OFTCoreUpgradeable) whenNotPaused {
+    ) public payable override(IOFTCore, OFTCoreUpgradeable) {
         _send(
             _from,
             _dstChainId,
