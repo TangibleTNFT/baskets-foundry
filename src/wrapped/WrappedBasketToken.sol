@@ -4,6 +4,7 @@ pragma solidity ^0.8.23;
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { OFTCoreUpgradeable, OFTUpgradeable } from "@tangible-foundation-contracts/layerzero/token/oft/v1/OFTUpgradeable.sol";
 import { IOFTCore } from "@layerzerolabs/contracts/token/oft/v1/interfaces/IOFTCore.sol";
@@ -16,6 +17,7 @@ import { IRebaseToken } from "../interfaces/IRebaseToken.sol";
  * This contract also utilizes OFTUpgradeable for cross chain functionality to optimize the baskets footprint.
  */
 contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
+    using SafeERC20 for IERC20;
 
     // ~ State Variables ~
 
@@ -41,11 +43,8 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
      * @param basketToken Will be assigned to `asset`.
      */
     constructor(address lzEndpoint, address basketToken) OFTUpgradeable(lzEndpoint) {
-        (bool success,) = basketToken.call(abi.encodeCall(IRebaseToken.disableRebase, (address(this), true)));
-        if (success) {
-            emit RebaseDisabled(basketToken);
-        }
         asset = basketToken;
+        _disableInitializers();
     }
 
 
@@ -62,7 +61,6 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         string memory name,
         string memory symbol
     ) external initializer {
-        __Ownable_init(owner);
         __OFT_init(owner, name, symbol);
     }
 
@@ -306,12 +304,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         require(owner != address(0), "Zero address for owner not allowed");
 
         if (owner != msg.sender) {
-            uint256 currentAllowance = allowance(owner, msg.sender);
-            require(
-                currentAllowance >= shares,
-                "Redeem amount exceeds allowance"
-            );
-            _approve(owner, msg.sender, currentAllowance - shares);
+            _spendAllowance(owner, msg.sender, shares);
         }
 
         _burn(owner, shares);
@@ -378,7 +371,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
      */
     function _pullAssets(address from, uint256 amount) private returns (uint256 received) {
         uint256 preBal = IERC20(asset).balanceOf(address(this));
-        IERC20(asset).transferFrom(from, address(this), amount);
+        IERC20(asset).safeTransferFrom(from, address(this), amount);
         received = IERC20(asset).balanceOf(address(this)) - preBal;
     }
 
@@ -386,7 +379,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
      * @dev Transfers an `amount` of `asset` to the `to` address.
      */
     function _pushAssets(address to, uint256 amount) private {
-        IERC20(asset).transfer(to, amount);
+        IERC20(asset).safeTransfer(to, amount);
     }
 
     /**

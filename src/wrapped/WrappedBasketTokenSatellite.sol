@@ -34,8 +34,8 @@ contract WrappedBasketTokenSatellite is UUPSUpgradeable, OFTUpgradeable {
         string memory name,
         string memory symbol
     ) external initializer {
-        __Ownable_init(owner);
         __OFT_init(owner, name, symbol);
+        _disableInitializers();
     }
 
     /**

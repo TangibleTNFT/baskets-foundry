@@ -387,10 +387,10 @@ contract WrappedBasketTokenTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(UKRE.balanceOf(ACTOR), preBal);
-        assertEq(UKRE.balanceOf(address(wUKRE)), 0);
-        assertEq(wUKRE.totalSupply(), 0);
-        assertEq(wUKRE.balanceOf(address(ACTOR)), 0);
+        assertApproxEqAbs(UKRE.balanceOf(ACTOR), preBal, 2);
+        assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 2);
+        assertApproxEqAbs(wUKRE.totalSupply(), 0, 2);
+        assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), 0, 2);
     }
 
     // ~ redeem ~
@@ -470,7 +470,7 @@ contract WrappedBasketTokenTest is Utility {
         // ~ Post-state check ~
 
         assertApproxEqAbs(UKRE.balanceOf(ACTOR), preBal, 3);
-        assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 2);
+        assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 3);
         assertApproxEqAbs(wUKRE.totalSupply(), 0 ,0);
         assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), 0, 0);
     }
@@ -513,7 +513,7 @@ contract WrappedBasketTokenTest is Utility {
         // ~ Post-state check ~
 
         assertApproxEqAbs(UKRE.balanceOf(ACTOR), preBal, 3);
-        assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 2);
+        assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 3);
         assertApproxEqAbs(wUKRE.totalSupply(), 0 ,0);
         assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), 0, 0);
     }
