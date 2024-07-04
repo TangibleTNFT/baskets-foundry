@@ -343,7 +343,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         view
         returns (uint256)
     {
-        return (assets * 10**decimals()) / _getRate();
+        return (assets * WAD) / _getRate();
     }
 
     /**
@@ -354,7 +354,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         view
         returns (uint256)
     {
-        return (shares * _getRate()) / 10**decimals();
+        return (shares * _getRate()) / WAD;
     }
 
     /**
