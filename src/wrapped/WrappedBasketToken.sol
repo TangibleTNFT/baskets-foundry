@@ -35,6 +35,12 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
     event RebaseDisabled(address indexed asset);
 
 
+    // ~ Errors ~
+
+    /// @notice This error is fired if an argument is equal to address(0).
+    error ZeroAddressException();
+
+
     // ~ Constructor ~
 
     /**
@@ -136,10 +142,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         override
         returns (uint256 shares)
     {
-        require(
-            receiver != address(0),
-            "Zero address for receiver not allowed"
-        );
+        if (receiver == address(0)) revert ZeroAddressException();
 
         uint256 amountReceived = _pullAssets(msg.sender, assets);
         shares = _convertToSharesDown(amountReceived);
@@ -184,10 +187,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         override
         returns (uint256 assets)
     {
-        require(
-            receiver != address(0),
-            "Zero address for receiver not allowed"
-        );
+        if (receiver == address(0)) revert ZeroAddressException();
 
         assets = _convertToAssetsUp(shares);
 
@@ -239,11 +239,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         address receiver,
         address owner
     ) external override returns (uint256 shares) {
-        require(
-            receiver != address(0),
-            "Zero address for receiver not allowed"
-        );
-        require(owner != address(0), "Zero address for owner not allowed");
+        if (receiver == address(0) || owner == address(0)) revert ZeroAddressException();
 
         shares = _convertToSharesUp(assets);
 
@@ -297,11 +293,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         address receiver,
         address owner
     ) external override returns (uint256 assets) {
-        require(
-            receiver != address(0),
-            "Zero address for receiver not allowed"
-        );
-        require(owner != address(0), "Zero address for owner not allowed");
+        if (receiver == address(0) || owner == address(0)) revert ZeroAddressException();
 
         if (owner != msg.sender) {
             _spendAllowance(owner, msg.sender, shares);

@@ -164,6 +164,12 @@ contract WrappedBasketTokenTest is Utility {
         assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), amount * 1e18 / UKRE.rebaseIndex(), 1);
     }
 
+    /// @dev Verifies ZeroAddressException error if argument `receiver` is == address(0)
+    function test_wrappedBasketToken_deposit_zeroAddressException() public {
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.deposit(1, address(0));
+    }
+
     /// @dev Uses fuzzing to verify proper state changes when WrappedBasketToken::deposit is used when UKRE's rebaseIndex > 1e18.
     function test_wrappedBasketToken_deposit_rebaseIndexNot1_fuzzing(uint256 amount) public {
         // ~ Config ~
@@ -233,6 +239,12 @@ contract WrappedBasketTokenTest is Utility {
         assertEq(UKRE.balanceOf(address(wUKRE)), amount);
         assertEq(wUKRE.totalSupply(), amount);
         assertEq(wUKRE.balanceOf(address(ACTOR)), amount);
+    }
+
+    /// @dev Verifies ZeroAddressException error if argument `receiver` is == address(0)
+    function test_wrappedBasketToken_mint_zeroAddressException() public {
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.mint(1, address(0));
     }
 
     /// @dev Verifies proper state changes when WrappedBasketToken::mint is used when UKRE's rebaseIndex > 1e18.
@@ -393,6 +405,17 @@ contract WrappedBasketTokenTest is Utility {
         assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), 0, 2);
     }
 
+    /// @dev Verifies ZeroAddressException error if argument `receiver` is == address(0)
+    function test_wrappedBasketToken_withdraw_zeroAddressException() public {
+        // receiver cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.withdraw(1, address(0), ACTOR);
+
+        // owner cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.withdraw(1, ACTOR, address(0));
+    }
+
     // ~ redeem ~
 
     // Redeem X wUKRE for Y UKRE: X is provided
@@ -473,6 +496,17 @@ contract WrappedBasketTokenTest is Utility {
         assertApproxEqAbs(UKRE.balanceOf(address(wUKRE)), 0, 3);
         assertApproxEqAbs(wUKRE.totalSupply(), 0 ,0);
         assertApproxEqAbs(wUKRE.balanceOf(address(ACTOR)), 0, 0);
+    }
+
+    /// @dev Verifies ZeroAddressException error if argument `receiver` is == address(0)
+    function test_wrappedBasketToken_redeem_zeroAddressException() public {
+        // receiver cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.redeem(1, address(0), ACTOR);
+
+        // owner cannot be address(0)
+        vm.expectRevert(abi.encodeWithSelector(WrappedBasketToken.ZeroAddressException.selector));
+        wUKRE.redeem(1, ACTOR, address(0));
     }
 
     /// @dev Uses fuzzing to verify proper state changes when WrappedBasketToken::redeem is used when UKRE's rebaseIndex > 1e18.
