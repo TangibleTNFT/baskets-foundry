@@ -320,18 +320,14 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
      */
     function _convertToSharesUp(uint256 assets) private view returns (uint256) {
         uint256 rate = _getRate();
-        unchecked {
-            return (rate / 2 + assets * WAD) / rate;
-        }
+        return (rate / 2 + assets * WAD) / rate;
     }
 
     /**
      * @dev Converts shares to assets, rounding up.
      */
     function _convertToAssetsUp(uint256 shares) private view returns (uint256) {
-        unchecked {
-            return (HALF_WAD + shares * _getRate()) / WAD;
-        }
+        return (HALF_WAD + shares * _getRate()) / WAD;
     }
 
     /**
@@ -342,9 +338,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         view
         returns (uint256)
     {
-        unchecked {
-            return (assets * WAD) / _getRate();
-        }
+        return (assets * WAD) / _getRate();
     }
 
     /**
@@ -355,9 +349,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         view
         returns (uint256)
     {
-        unchecked {
-            return (shares * _getRate()) / WAD;
-        }
+        return (shares * _getRate()) / WAD;
     }
 
     /**
