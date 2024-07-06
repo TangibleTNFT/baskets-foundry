@@ -18,7 +18,9 @@ contract WrappedBasketTokenSatellite is UUPSUpgradeable, OFTUpgradeable {
      * @notice Initializes WrappedBasketTokenSatellite.
      * @param lzEndpoint Local layer zero v1 endpoint address.
      */
-    constructor(address lzEndpoint) OFTUpgradeable(lzEndpoint) {}
+    constructor(address lzEndpoint) OFTUpgradeable(lzEndpoint) {
+        _disableInitializers();
+    }
 
 
     // ~ Initializer ~
@@ -35,7 +37,6 @@ contract WrappedBasketTokenSatellite is UUPSUpgradeable, OFTUpgradeable {
         string memory symbol
     ) external initializer {
         __OFT_init(owner, name, symbol);
-        _disableInitializers();
     }
 
     /**
