@@ -244,12 +244,7 @@ contract WrappedBasketToken is UUPSUpgradeable, OFTUpgradeable, IERC4626 {
         shares = _convertToSharesUp(assets);
 
         if (owner != msg.sender) {
-            uint256 currentAllowance = allowance(owner, msg.sender);
-            require(
-                currentAllowance >= shares,
-                "Withdraw amount exceeds allowance"
-            );
-            _approve(owner, msg.sender, currentAllowance - shares);
+            _spendAllowance(owner, msg.sender, shares);
         }
 
         if (shares != 0) {
