@@ -37,5 +37,7 @@ jobs:
           forge test
         env:
           MUMBAI_RPC_URL: ${{ secrets.MUMBAI_RPC_URL }}
+          UNREAL_RPC_URL: ${{ secrets.UNREAL_RPC_URL }}
+          REAL_RPC_URL: ${{ secrets.REAL_RPC_URL }}
           POLYGONSCAN_API_URL: ${{ secrets.POLYGONSCAN_API_URL }}
         id: test

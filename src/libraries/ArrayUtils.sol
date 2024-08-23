@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.23;
 
 /**
  * @title ArrayUtils Library
@@ -15,7 +15,7 @@ library ArrayUtils {
      * @return sortedArr The sorted array. 
      */
     function sort(uint256[] memory arr) internal pure returns (uint256[] memory) {
-        for (uint256 i = 1; i < arr.length; ) {
+        for (uint256 i = 1; i < arr.length; ++i) {
             uint256 key = arr[i];
             uint256 j = i - 1;
 
@@ -29,7 +29,6 @@ library ArrayUtils {
 
             unchecked {
                 arr[j + 1] = key;
-                ++i;
             }
         }
 

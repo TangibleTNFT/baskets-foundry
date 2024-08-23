@@ -7,6 +7,9 @@ import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
+// tangible imports
+import { IOwnable } from "@tangible/interfaces/IOwnable.sol";
+
 // local contracts
 import { Basket } from "../../src/Basket.sol";
 import { IBasket } from "../../src/interfaces/IBasket.sol";
@@ -14,11 +17,10 @@ import { BasketManager } from "../../src/BasketManager.sol";
 import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 
 // helper contracts
-import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol";
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
 
-/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --fork-url <RPC_URL> --broadcast --verify
+/// @dev To run: forge script script/mumbai/DeployToMumbai.s.sol:DeployToMumbai --broadcast --verify
 
 /**
  * @title DeployBasketsToMumbai
@@ -34,43 +36,30 @@ contract DeployToMumbai is Script {
     BasketManager public basketManager;
     BasketsVrfConsumer public basketVrfConsumer;
 
-    // helper Note: temporary
-    VRFCoordinatorV2Mock public vrfCoordinatorMock;
-
     // proxies
     ERC1967Proxy public basketManagerProxy;
     ERC1967Proxy public basketVrfConsumerProxy;
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
+    address public constant GELATO_VRF_OPERATOR = address(0); // TODO If necessary. Testnet has fulfillRandomnessTestnet which is permissionless
 
-    // vars
-    /// @dev https://docs.chain.link/vrf/v2/subscription/supported-networks#polygon-matic-mumbai-testnet
-    bytes32 public constant MUMBAI_VRF_KEY_HASH = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f; // 500 gwei
-
-    uint64 internal subId;
-
-    address deployerAddress;
     uint256 deployerPrivKey;
 
-    function setUp() public {
+    address public factoryOwner;
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+    function setUp() public {
+        vm.createSelectFork(MUMBAI_RPC_URL);
+
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {
 
         vm.startBroadcast(deployerPrivKey);
 
-        // 1. Configure vrf
-        // deploy mock
-        vrfCoordinatorMock = new VRFCoordinatorV2Mock(100000, 100000);
-        // create subscription id
-        subId = vrfCoordinatorMock.createSubscription();
-        // fund subscription
-        vrfCoordinatorMock.fundSubscription(subId, 100 ether);
+        factoryOwner = IOwnable(Mumbai_FactoryV2).owner();
 
         // 1. deploy basket
         basket = new Basket();
@@ -95,16 +84,14 @@ contract DeployToMumbai is Script {
             address(basketVrfConsumer),
             abi.encodeWithSelector(BasketsVrfConsumer.initialize.selector,
                 Mumbai_FactoryV2,
-                subId,
-                address(vrfCoordinatorMock),
-                MUMBAI_VRF_KEY_HASH
+                GELATO_VRF_OPERATOR,
+                80001 // mumbai chain Id
             )
         );
 
-        // 6. Add consumer to vrf coordinator
-        vrfCoordinatorMock.addConsumer(subId, address(basketVrfConsumerProxy));
+        // 6. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
 
-        // 7. TODO: set basketsVrfConsumer via BasketManager::setBasketsVrfConsumer
+        // 7. TODO: set revenueShare via BasketManager::setRevenueShare -> SET REVENUE DISTRIBUTOR
 
         // 8. TODO: set revenueShare via BasketManager::setRevenueShare
 
@@ -118,19 +105,17 @@ contract DeployToMumbai is Script {
         console2.log("3. BasketVrfConsumer (proxy)        =", address(basketVrfConsumerProxy));
         console2.log("4. BasketVrfConsumer Implementation =", address(basketVrfConsumer));
         
-        console2.log("5. Mock Vrf Coordinator             =", address(vrfCoordinatorMock));
-        console2.log("6. Basket Implementation            =", address(basket));
+        console2.log("5. Basket Implementation            =", address(basket));
         
         vm.stopBroadcast();
     }
 
     /**
         == Logs ==
-        1. Mock Vrf Coordinator: 0x19d3746C662973E17C2a8658D958a977fbfdeb29
-        2. Basket Implementation: 0x86892455EB3F49307607aA006c15D11Af0ac7aA4
-        3. BasketManager Implementation: 0x1FA8f797A5D6a56aee856850aa701157EA53f57E
-        4. BasketManager Proxy: 0x1e44E0a4B8596E47E291f868A0485864AC7eE869
-        5. BasketVrfConsumer Implementation: 0x36b6240FD63D5A4fb095AbF7cC8476659C76071C
-        6. BasketVrfConsumer Proxy: 0x192ab3Dfee4e087C4F5a5cE54F3053fe4D0C277D
+        1. BasketManager (proxy)            = 0x7B6bb198e637073089214a46cC95430ACe572C0A
+        2. BasketManager Implementation     = 0x08c2a8c0A86A125cfAD0a2De3F50651237E4dE87
+        3. BasketVrfConsumer (proxy)        = 0xa0e1eDED3Bfe0D5A19ba83e0bC66DE267D7BAE32
+        4. BasketVrfConsumer Implementation = 0xDFA3E667E30F0b086a368F8bAA28602783746eE7
+        5. Basket Implementation            = 0xC19895627fB8e480Dc97732522e12E6e0A1770ec
     */
 }

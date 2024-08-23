@@ -10,16 +10,6 @@
 	path = lib/tnftv2-audit
 	url = git@github.com:TangibleTNFT/tnftv2-audit.git
 
-[submodule "lib/openzeppelin-contracts"]
-	path = lib/openzeppelin-contracts
-	branch = release-v5.0
-	url = git@github.com:OpenZeppelin/openzeppelin-contracts.git
-
-[submodule "lib/openzeppelin-contracts-upgradeable"]
-	path = lib/openzeppelin-contracts-upgradeable
-	branch = release-v5.0
-	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
-
 [submodule "lib/tangible-foundation-contracts"]
 	path = lib/tangible-foundation-contracts
 	url = git@github.com:TangibleTNFT/tangible-foundation-contracts.git

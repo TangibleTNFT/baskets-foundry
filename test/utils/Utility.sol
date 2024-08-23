@@ -15,7 +15,8 @@ contract Utility is Test{
 
     // ~ RPCs ~
 
-    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
 
 
     // ~ Actors ~
@@ -28,14 +29,24 @@ contract Utility is Test{
 
     address public constant ADMIN = address(bytes20(bytes("Admin")));
     address public constant REV_SHARE = address(bytes20(bytes("Revenue Share"))); // NOTE: temporary
+    address public constant GELATO_OPERATOR = address(bytes20(bytes("Gelato Vrf Operator")));
+
+    address public constant REBASE_INDEX_MANAGER = address(bytes20(bytes("Rebase Index Manager")));
+    address public constant REBASE_CONTROLLER = address(bytes20(bytes("Rebase Controller")));
 
 
     // ~ Constants ~
 
     IERC20Metadata public constant MUMBAI_USTB = IERC20Metadata(0xbFB1dB179d9710Ed05F6dfCEd279205156EA3684);
-
     IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x667269618f67f543d3121DE3DF169747950Deb13); // 0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636
     IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0xf46c460F5B2D33aC5c4cE2aA015c8B5c430231C5); // 0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F
+
+    IERC20Metadata public constant UNREAL_USDC = IERC20Metadata(0x2Fab7758c3efdf392e84e89ECe376952eb00aB2A);
+    IERC20Metadata public constant UNREAL_DAI  = IERC20Metadata(0x3F93beBAd7BA4d7A5129eA8159A5829Eacb06497);
+    IERC20Metadata public constant UNREAL_USTB = IERC20Metadata(0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD);
+
+    uint256 public constant MUMBAI_CHAIN_ID = 80001;
+    uint256 public constant UNREAL_CHAIN_ID = 18233;
 
     VRFCoordinatorV2Interface public constant MUMBAI_VRF_COORDINATOR = VRFCoordinatorV2Interface(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed);
     VRFCoordinatorV2Interface public constant POLYGON_VRF_COORDINATOR = VRFCoordinatorV2Interface(0xAE975071Be8F8eE67addBC1A82488F1C24858067);
@@ -149,6 +160,7 @@ interface ITangibleNFTExt is ITangibleNFT {
     function getFingerprintsSize() external view returns (uint256);
     function getFingerprints() external view returns (uint256[] memory);
     function addMetadata(uint256 tokenId, uint256[] calldata _features) external;
+    function removeMetadata(uint256 tokenId, uint256[] calldata _features) external;
     function fingerprintAdded(uint256) external returns (bool);
     function addFingerprints(uint256[] calldata fingerprints) external;
 }

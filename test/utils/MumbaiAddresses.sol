@@ -52,4 +52,4 @@ address constant Mumbai_MockVrfCoordinator     = 0x19d3746C662973E17C2a8658D958a
 
 // ~ Deployed Baskets ~
 
-address constant Mumbai_Basket_1 = address(0); // TODO: SET
+address constant Mumbai_Basket_1 = 0x2b7776269B785b9E2fC7E8b600652174Bc01d9Fc;

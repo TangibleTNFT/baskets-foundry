@@ -3,9 +3,6 @@ pragma solidity ^0.8.13;
 
 import {Script, console2} from "../../lib/forge-std/src/Script.sol";
 
-// local contracts
-import { VRFCoordinatorV2Mock } from "../../test/utils/VRFCoordinatorV2Mock.sol";
-
 // helper contracts
 import "../../test/utils/MumbaiAddresses.sol";
 import "../../test/utils/Utility.sol";
@@ -27,20 +24,19 @@ contract FulfillRedeem is Script {
     // ~ Script Configure ~
 
     // baskets
-    VRFCoordinatorV2Mock public vrfCoordinator = VRFCoordinatorV2Mock(Mumbai_MockVrfCoordinator);
+    //VRFCoordinatorV2Mock public vrfCoordinator = VRFCoordinatorV2Mock(Mumbai_MockVrfCoordinator);
     address public vrfConsumer = Mumbai_BasketVrfConsumer;
 
     // wallets
-    address immutable MUMBAI_DEPLOYER_ADDRESS = vm.envAddress("MUMBAI_DEPLOYER_ADDRESS");
-    uint256 immutable MUMBAI_DEPLOYER_PRIVATE_KEY = vm.envUint("MUMBAI_DEPLOYER_PRIVATE_KEY");
+    uint256 immutable DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
 
-    address deployerAddress;
     uint256 deployerPrivKey;
 
     function setUp() public {
+        vm.createSelectFork(MUMBAI_RPC_URL);
 
-        deployerAddress = MUMBAI_DEPLOYER_ADDRESS;
-        deployerPrivKey = MUMBAI_DEPLOYER_PRIVATE_KEY;
+        deployerPrivKey = DEPLOYER_PRIVATE_KEY;
     }
 
     function run() public {
@@ -48,7 +44,7 @@ contract FulfillRedeem is Script {
         vm.startBroadcast(deployerPrivKey);
 
         // 1. redeem from Basket
-        vrfCoordinator.fulfillRandomWords(requestId, vrfConsumer);
+        //vrfCoordinator.fulfillRandomWords(requestId, vrfConsumer);
 
         vm.stopBroadcast();
     }

@@ -6,9 +6,9 @@ import { Test, console2 } from "../lib/forge-std/src/Test.sol";
 // oz imports
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 // local
-import { BasketBeaconProxy } from "../src/proxy/beacon/BasketBeaconProxy.sol";
 import { ICounterContract } from "./utils/Utility.sol";
 
 
@@ -56,9 +56,9 @@ contract BeaconProxyTest is Test {
     // ~ Utility ~
 
     /// @notice Deploys new beacon.
-    function _deployNewBeaconProxy(uint256 _initCounterVar) internal returns (BasketBeaconProxy) {
+    function _deployNewBeaconProxy(uint256 _initCounterVar) internal returns (BeaconProxy) {
 
-        BasketBeaconProxy newBeacon = new BasketBeaconProxy(
+        BeaconProxy newBeacon = new BeaconProxy(
             address(beacon),
             abi.encodeWithSelector(CounterContract(address(0)).initialize.selector, 
                 _initCounterVar
@@ -74,22 +74,14 @@ contract BeaconProxyTest is Test {
     function test_beaconProxy() public {
 
         // Deploy 2 beacons with different init variables.
-        BasketBeaconProxy beaconProxy1 = _deployNewBeaconProxy(111);
-        BasketBeaconProxy beaconProxy2 = _deployNewBeaconProxy(222);
+        BeaconProxy beaconProxy1 = _deployNewBeaconProxy(111);
+        BeaconProxy beaconProxy2 = _deployNewBeaconProxy(222);
 
         emit log_address(address(beaconProxy1));
         emit log_address(address(beaconProxy2));
 
         // Verify beaconProxy1 and beaconProxy2 have different contract addresses.
         assertNotEq(address(beaconProxy1), address(beaconProxy2));
-
-        // Verify both new beacon proxies share the same beacon.
-        assertEq(beaconProxy1.getBeacon(), address(beacon));
-        assertEq(beaconProxy2.getBeacon(), address(beacon));
-
-        // Verify both new beacon proxies share the same implementation address.
-        assertEq(beaconProxy1.implementation(), address(counterContract));
-        assertEq(beaconProxy2.implementation(), address(counterContract));
 
         // Verify both beacons contain the correct init values for counter.
         assertEq(ICounterContract(address(beaconProxy1)).counter(), 111);

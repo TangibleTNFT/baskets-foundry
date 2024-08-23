@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IBasket } from "./IBasket.sol";
+import { ICurrencyCalculator } from "./ICurrencyCalculator.sol";
 
 /// @title IBasketManager interface defines the interface of the BasketManager contract.
 interface IBasketManager {
@@ -29,7 +30,11 @@ interface IBasketManager {
 
     function isBasket(address _basket) external returns (bool);
 
-    function basketsVrfConsumer() external returns (address);
+    function basketsVrfConsumer() external view returns (address);
 
-    function revenueShare() external returns (address);
+    function revenueDistributor() external view returns (address);
+
+    function rebaseController() external view returns (address);
+
+    function currencyCalculator() external view returns (ICurrencyCalculator);
 }

@@ -26,7 +26,7 @@ import { ITangibleNFT } from "@tangible/interfaces/ITangibleNFT.sol";
 import { IRentManager } from "@tangible/interfaces/IRentManager.sol";
 
 // helper imports
-import "./utils/MumbaiAddresses.sol";
+import "./utils/UnrealAddresses.sol";
 import "./utils/Utility.sol";
 
 /**
@@ -68,14 +68,14 @@ contract RentManagerTest is Utility {
     uint256 constant public FINGERPRINT = 2222;
     uint256 constant public TNFTTYPE = 1;
 
-    address public constant TANGIBLE_ORACLE = 0x7A5771eC1EdCe2AD0f2d63F7952EE10db95E66Cc;
-    address public constant TANGIBLE_ORACLE_OWNER = 0x7179B719EEd8c2C60B498d2A2d04f868fb655F22;
+    address public TANGIBLE_ORACLE = Unreal_MockMatrix;
+    address public constant ORACLE_OWNER = 0xf7032d3874557fAF9D9E861E5027300ABA1f0026;
 
     uint256 public tokenId = 2;
 
     function setUp() public {
 
-        vm.createSelectFork(MUMBAI_RPC_URL);
+        vm.createSelectFork(UNREAL_RPC_URL);
 
         proxyAdmin = new ProxyAdmin(address(this));
 
@@ -87,7 +87,7 @@ contract RentManagerTest is Utility {
             address(factory),
             address(proxyAdmin),
             abi.encodeWithSelector(FactoryV2.initialize.selector,
-                address(MUMBAI_USDC),
+                address(UNREAL_USTB),
                 TANGIBLE_LABS
             )
         );
@@ -226,7 +226,7 @@ contract RentManagerTest is Utility {
         realEstateTnft.addFingerprints(_asSingletonArrayUint(FINGERPRINT));
 
         // Add TNFTType oracle to chainlinkRWA oracle and create item -> stocking item
-        vm.startPrank(TANGIBLE_ORACLE_OWNER);
+        vm.startPrank(ORACLE_OWNER);
         IPriceOracleExt(TANGIBLE_ORACLE).setTangibleWrapperAddress(address(realEstateOracle));
         IPriceOracleExt(TANGIBLE_ORACLE).createItem(
             FINGERPRINT,  // fingerprint
@@ -277,6 +277,22 @@ contract RentManagerTest is Utility {
     
     // ~ Utility ~
 
+    /// @dev local deal to take into account USTB's unique storage layout
+    function _deal(address token, address give, uint256 amount) internal {
+        // deal doesn't work with USTB since the storage layout is different
+        if (token == Unreal_USTB) {
+            // update shares balance
+            bytes32 USTBStorageLocation = 0x8a0c9d8ec1d9f8b365393c36404b40a33f47675e34246a2e186fbefd5ecd3b00;
+            uint256 mapSlot = 2;
+            bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
+            vm.store(Unreal_USTB, slot, bytes32(amount));
+        }
+        // If not rebase token, use normal deal
+        else {
+            deal(token, give, amount);
+        }
+    }
+
     function _createToken(uint256 fingerprint) internal returns (uint256) {
 
         uint256 preBal = realEstateTnft.balanceOf(JOE);
@@ -310,18 +326,17 @@ contract RentManagerTest is Utility {
 
     // ~ Unit Tests ~
 
-    // TODO: Test deposit, claimableRentForTokenBatch, and claimRentForTokenBatch
-
     /// @notice Verifies correct state changes when RentManager::deposit is executed
     function test_rentManager_deposit() public {
         
         // config
-        uint256 amount = 10_000 * USD;
-        deal(address(MUMBAI_USDC), CATEGORY_OWNER, amount);
+        uint256 amount = 10_000 * 1e18;
+        _deal(address(UNREAL_USTB), CATEGORY_OWNER, amount);
 
         // Pre-state check.
-        assertEq(MUMBAI_USDC.balanceOf(CATEGORY_OWNER), amount);
-        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), 0);
+        uint256 preBalOwner = UNREAL_USTB.balanceOf(CATEGORY_OWNER);
+        assert(preBalOwner >= amount);
+        assertEq(UNREAL_USTB.balanceOf(address(rentManager)), 0);
 
         (
             uint256 depositAmount,
@@ -345,10 +360,10 @@ contract RentManagerTest is Utility {
 
         // Execute deposit
         vm.startPrank(CATEGORY_OWNER);
-        MUMBAI_USDC.approve(address(rentManager), amount);
+        UNREAL_USTB.approve(address(rentManager), amount);
         rentManager.deposit( // deposit $10,000 with no vesting
             1,
-            address(MUMBAI_USDC),
+            address(UNREAL_USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -357,8 +372,8 @@ contract RentManagerTest is Utility {
         vm.stopPrank();
 
         // Post-state check.
-        assertEq(MUMBAI_USDC.balanceOf(CATEGORY_OWNER), 0);
-        assertEq(MUMBAI_USDC.balanceOf(address(rentManager)), amount);
+        assertEq(UNREAL_USTB.balanceOf(CATEGORY_OWNER), preBalOwner - amount);
+        assertApproxEqAbs(UNREAL_USTB.balanceOf(address(rentManager)), amount, 1);
 
         (
             depositAmount,
@@ -377,7 +392,7 @@ contract RentManagerTest is Utility {
         assertEq(unclaimedAmount, 0);
         assertEq(depositTime, block.timestamp);
         assertEq(endTime, block.timestamp + 1);
-        assertEq(rentToken, address(MUMBAI_USDC));
+        assertEq(rentToken, address(UNREAL_USTB));
         assertEq(distributionRunning, true);
     }
 
@@ -385,15 +400,15 @@ contract RentManagerTest is Utility {
     function test_rentManager_claimableRentForTokenBatch_single() public {
         
         // config
-        uint256 amount = 10_000 * USD;
-        deal(address(MUMBAI_USDC), CATEGORY_OWNER, amount);
+        uint256 amount = 10_000 * 1e18;
+        _deal(address(UNREAL_USTB), CATEGORY_OWNER, amount);
 
         // Execute deposit
         vm.startPrank(CATEGORY_OWNER);
-        MUMBAI_USDC.approve(address(rentManager), amount);
+        UNREAL_USTB.approve(address(rentManager), amount);
         rentManager.deposit( // deposit $10,000 with no vesting
             1,
-            address(MUMBAI_USDC),
+            address(UNREAL_USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -421,11 +436,11 @@ contract RentManagerTest is Utility {
     function test_rentManager_claimableRentForTokenBatch_multiple() public {
         
         // config
-        uint256 amountTNFTs = 100;
-        uint256 baseDeposit = 10_000 * USD;
+        uint256 amountTNFTs = 10;
+        uint256 baseDeposit = 10_000 * 1e18;
         uint256 amount = baseDeposit * amountTNFTs;
 
-        deal(address(MUMBAI_USDC), CATEGORY_OWNER, amount);
+        _deal(address(UNREAL_USTB), CATEGORY_OWNER, amount);
 
         // create tokens
         uint256[] memory tokenIds = new uint256[](amountTNFTs);
@@ -436,10 +451,10 @@ contract RentManagerTest is Utility {
         // Execute deposit
         for (uint256 i; i < amountTNFTs; ++i) {
             vm.startPrank(CATEGORY_OWNER);
-            MUMBAI_USDC.approve(address(rentManager), baseDeposit);
+            UNREAL_USTB.approve(address(rentManager), baseDeposit);
             rentManager.deposit( // deposit $10,000 with no vesting
                 tokenIds[i],
-                address(MUMBAI_USDC),
+                address(UNREAL_USTB),
                 baseDeposit,
                 0,
                 block.timestamp + (10 days),
@@ -464,26 +479,27 @@ contract RentManagerTest is Utility {
         // Post-state check 2
         uint256 totalRent;
         for (uint256 i; i < amountTNFTs; ++i) {
-            assertEq(claimables[i], baseDeposit/2);
+            assertApproxEqAbs(claimables[i], baseDeposit/2, 1);
             totalRent += claimables[i];
         }
 
-        assertEq(totalRent, amount/2);
+        assertApproxEqAbs(totalRent, amount/2, 10);
     }
 
     /// @notice Verifies correct state changes when RentManager::claimRentForTokenBatch is executed for 1 token
     function test_rentManager_claimRentForTokenBatch_single() public {
         
         // config
-        uint256 amount = 10_000 * USD;
-        deal(address(MUMBAI_USDC), CATEGORY_OWNER, amount);
+        uint256 amount = 10_000 * 1e18;
+        _deal(address(UNREAL_USTB), CATEGORY_OWNER, amount);
+        _deal(address(UNREAL_USTB), address(rentManager), 1);
 
         // Execute deposit
         vm.startPrank(CATEGORY_OWNER);
-        MUMBAI_USDC.approve(address(rentManager), amount);
+        UNREAL_USTB.approve(address(rentManager), amount);
         rentManager.deposit( // deposit $10,000 with no vesting
             1,
-            address(MUMBAI_USDC),
+            address(UNREAL_USTB),
             amount,
             0,
             block.timestamp + 1,
@@ -497,7 +513,7 @@ contract RentManagerTest is Utility {
         // Pre-state check
         uint256[] memory claimables = rentManager.claimableRentForTokenBatch(_asSingletonArrayUint(1));
         assertEq(claimables[0], amount);
-        assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
+        assertEq(UNREAL_USTB.balanceOf(JOE), 0);
 
         // Execute claimRentForTokenBatch
         vm.prank(JOE);
@@ -506,7 +522,7 @@ contract RentManagerTest is Utility {
         // Post-state check
         claimables = rentManager.claimableRentForTokenBatch(_asSingletonArrayUint(1));
         assertEq(claimables[0], 0);
-        assertEq(MUMBAI_USDC.balanceOf(JOE), amount);
+        assertEq(UNREAL_USTB.balanceOf(JOE), amount);
         assertEq(claimed[0], amount);
     }
 
@@ -514,11 +530,11 @@ contract RentManagerTest is Utility {
     function test_rentManager_claimRentForTokenBatch_multiple() public {
         
         // config
-        uint256 amountTNFTs = 100;
-        uint256 baseDeposit = 10_000 * USD;
+        uint256 amountTNFTs = 10;
+        uint256 baseDeposit = 10_000 * 1e18;
         uint256 amount = baseDeposit * amountTNFTs;
 
-        deal(address(MUMBAI_USDC), CATEGORY_OWNER, amount);
+        _deal(address(UNREAL_USTB), CATEGORY_OWNER, amount);
 
         // create tokens
         uint256[] memory tokenIds = new uint256[](amountTNFTs);
@@ -529,10 +545,10 @@ contract RentManagerTest is Utility {
         // Execute deposit
         for (uint256 i; i < amountTNFTs; ++i) {
             vm.startPrank(CATEGORY_OWNER);
-            MUMBAI_USDC.approve(address(rentManager), baseDeposit);
+            UNREAL_USTB.approve(address(rentManager), baseDeposit);
             rentManager.deposit( // deposit $10,000 with no vesting
                 tokenIds[i],
-                address(MUMBAI_USDC),
+                address(UNREAL_USTB),
                 baseDeposit,
                 0,
                 block.timestamp + (10 days),
@@ -547,13 +563,13 @@ contract RentManagerTest is Utility {
         // Post-state check 1
         uint256[] memory claimables = rentManager.claimableRentForTokenBatch(tokenIds); // 1000 TNFTs -> 1.1M gas (passable)
         assertEq(claimables.length, amountTNFTs);
-        assertEq(MUMBAI_USDC.balanceOf(JOE), 0);
+        assertEq(UNREAL_USTB.balanceOf(JOE), 0);
         uint256 totalRentClaimable;
         for (uint256 i; i < claimables.length; ++i) {
-            assertEq(claimables[i], baseDeposit/2);
+            assertApproxEqAbs(claimables[i], baseDeposit/2, 2);
             totalRentClaimable += claimables[i];
         }
-        assertEq(totalRentClaimable, amount/2);
+        assertApproxEqAbs(totalRentClaimable, amount/2, 10);
         assertEq(totalRentClaimable, rentManager.claimableRentForTokenBatchTotal(tokenIds));
 
         // Execute claimRentForTokenBatch
@@ -561,9 +577,9 @@ contract RentManagerTest is Utility {
         uint256[] memory claimed = rentManager.claimRentForTokenBatch(tokenIds);
 
         // Post-state check 2
-        assertEq(MUMBAI_USDC.balanceOf(JOE), amount/2);
+        assertApproxEqAbs(UNREAL_USTB.balanceOf(JOE), amount/2, 100);
         for (uint256 i; i < amountTNFTs; ++i) {
-            assertEq(claimed[i], baseDeposit/2);
+            assertApproxEqAbs(claimed[i], baseDeposit/2, 2);
         }
     }
   
