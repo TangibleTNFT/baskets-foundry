@@ -9,13 +9,8 @@ import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC196
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // local contracts
-import { Basket } from "../../src/Basket.sol";
 import { WrappedBasketToken } from "../../src/wrapped/WrappedBasketToken.sol";
 import { WrappedBasketTokenSatellite } from "../../src/wrapped/WrappedBasketTokenSatellite.sol";
-import { IBasket } from "../../src/interfaces/IBasket.sol";
-import { BasketManager } from "../../src/BasketManager.sol";
-import { CurrencyCalculator } from "../../src/CurrencyCalculator.sol";
-import { BasketsVrfConsumer } from "../../src/BasketsVrfConsumer.sol";
 
 // helper contracts
 import "../../test/utils/UnrealAddresses.sol";

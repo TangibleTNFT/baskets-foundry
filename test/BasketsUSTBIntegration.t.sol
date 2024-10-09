@@ -354,6 +354,16 @@ contract BasketsUSTBIntegrationTest is Utility {
         basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
 
         // labels
+        _createLabels();
+    }
+
+
+    // -------
+    // Utility
+    // -------
+
+    /// @notice Creates labels for addresses. Makes traces easier to read.
+    function _createLabels() internal override {
         vm.label(address(factoryV2), "FACTORY");
         vm.label(address(realEstateTnft), "RealEstate_TNFT");
         vm.label(address(realEstateOracle), "RealEstate_ORACLE");
@@ -364,19 +374,10 @@ contract BasketsUSTBIntegrationTest is Utility {
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
         vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
-
         vm.label(address(this), "TEST_FILE");
         vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
-        vm.label(JOE, "JOE");
-        vm.label(NIK, "NIK");
-        vm.label(ALICE, "ALICE");
-        vm.label(BOB, "BOB");
+        super._createLabels();
     }
-
-
-    // -------
-    // Utility
-    // -------
 
     /// @dev local deal to take into account USTB's unique storage layout
     function _deal(address token, address give, uint256 amount) internal {

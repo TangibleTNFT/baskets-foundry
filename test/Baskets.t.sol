@@ -352,6 +352,16 @@ contract BasketsIntegrationTest is Utility {
         basket.updateRebaseIndexManager(REBASE_INDEX_MANAGER);
 
         // labels
+        _createLabels();
+    }
+
+
+    // -------
+    // Utility
+    // -------
+
+    /// @notice Creates labels for addresses. Makes traces easier to read.
+    function _createLabels() internal override {
         vm.label(address(factoryV2), "FACTORY");
         vm.label(address(realEstateTnft), "RealEstate_TNFT");
         vm.label(address(realEstateOracle), "RealEstate_ORACLE");
@@ -362,19 +372,10 @@ contract BasketsIntegrationTest is Utility {
         vm.label(address(currencyFeed), "CURRENCY_FEED");
         vm.label(address(notificationDispatcher), "NOTIFICATION_DISPATCHER");
         vm.label(address(basketVrfConsumer), "BASKET_VRF_CONSUMER");
-
         vm.label(address(this), "TEST_FILE");
         vm.label(TANGIBLE_LABS, "TANGIBLE_LABS");
-        vm.label(JOE, "JOE");
-        vm.label(NIK, "NIK");
-        vm.label(ALICE, "ALICE");
-        vm.label(BOB, "BOB");
+        super._createLabels();
     }
-
-
-    // -------
-    // Utility
-    // -------
 
     /// @notice This method adds feature metadata to a tokenId on a tnft contract
     function _addFeatureToCategory(address _tnft, uint256 _tokenId, uint256[] memory _features) public {

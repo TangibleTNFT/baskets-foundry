@@ -92,6 +92,14 @@ contract Utility is Test{
 
     // ~ Utility Functions ~
 
+    function _createLabels() internal virtual {
+        vm.label(JOE, "JOE");
+        vm.label(NIK, "NIK");
+        vm.label(ALICE, "ALICE");
+        vm.label(BOB, "BOB");
+        vm.label(CREATOR, "CREATOR");
+    }
+
     /// @notice Turns a single uint to an array of uints of size 1.
     function _asSingletonArrayUint(uint256 element) internal pure returns (uint256[] memory) {
         uint256[] memory array = new uint256[](1);
