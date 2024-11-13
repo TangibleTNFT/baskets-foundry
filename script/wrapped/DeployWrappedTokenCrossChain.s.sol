@@ -121,6 +121,16 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
                 mainChain: false
             }
         ));
+        allChains.push(NetworkData(
+            {
+                chainName: "blast", 
+                rpc_url: vm.envString("BLAST_RPC_URL"), 
+                lz_endpoint: BLAST_LZ_ENDPOINT_V1, 
+                chainId: BLAST_LZ_CHAIN_ID_V1, 
+                basket: address(0),
+                mainChain: false
+            }
+        ));
     }
 
     function run() public {
@@ -145,7 +155,7 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
 
             // set trusted remote address on all other chains for each token.
             for (uint256 j; j < len; ++j) {
-                if (i != j) {
+                if (i != j && allChains[i].chainId == BLAST_LZ_CHAIN_ID_V1) {
                     if (
                         !wrappedBasketToken.isTrustedRemote(
                             allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress, wrappedBasketTokenAddress)
