@@ -403,6 +403,19 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
+     * @notice This method allows a permissioned address to deposit a specified amount of rent into the basket.
+     * @dev The permissioned address is an address that can also withdraw. If msg.sender does not have permissions to
+     * withdraw, tx will revert.
+     * When rent is deposited, `totalRentValue` is incremented.
+     * @param _depositAmount Amount of rent to deposit.
+     */
+    function depositRent(uint256 _depositAmount) external nonReentrant onlyCanWithdraw {
+        emit RentTransferred(address(this), _depositAmount);
+        primaryRentToken.safeTransferFrom(msg.sender, address(this), _depositAmount);
+        totalRentValue += _depositAmount;
+    }
+
+    /**
      * @notice This method is used to quote a batch amount of basket tokens transferred to depositor if a specfied token is deposted.
      * @dev Does NOT include the amount of basket tokens subtracted for deposit fee.
      *      The amount of tokens quoted will be slightly different if the same tokens are deposited via batchDepositTNFT.
@@ -473,13 +486,13 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
     }
 
     /**
-     * @notice This method allows the factory owner to claim rent on behalf of the basket. 
+     * @notice This method allows the basket to claim rent from the RentManager. 
      * @dev This only moves assets from the RentManager to the basket. Basket rent value does not change.
-     * When rent is inside the basket vs in the RentManager, it makes performing _transfer rent much easier.
+     * When rent is inside the basket vs in the RentManager, it makes performing _transfer rent more gas efficient.
      * @param tnft TangibleNFT contract address of NFT.
      * @param tokenId TokenId of NFT.
      */
-    function claimRentForToken(address tnft, uint256 tokenId) external nonReentrant onlyFactoryOwner {
+    function claimRentForToken(address tnft, uint256 tokenId) external nonReentrant {
         IRentManager rentManager = _getRentManager(tnft);
         uint256 claimed = _claimRentForToken(rentManager, tokenId);
         if (claimed == 0) revert ClaimingError();
@@ -702,10 +715,7 @@ contract Basket is Initializable, RebaseTokenUpgradeable, IBasket, IRWAPriceNoti
      */
     function decimalsDiff() public view returns (uint256 diff) {
         diff = decimals() - primaryRentToken.decimals();
-        if (diff != 0) {
-            return 10 ** diff;
-        }
-        else return 1;
+        return 10 ** diff;
     }
 
 

@@ -606,6 +606,9 @@ contract BasketsUSTBIntegrationTest is Utility {
         string[] memory supportedCurrencies = basket.getSupportedCurrencies();
         assertEq(supportedCurrencies.length, 1);
         assertEq(supportedCurrencies[0], "GBP");
+
+        // verify decimalsDiff == 1
+        assertEq(basket.decimalsDiff(), 1);
     }
 
 
